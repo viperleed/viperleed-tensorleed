@@ -331,7 +331,7 @@ C  note TV = TVB in readbas
 C  read first energy, inner potential, momentum, reference t-matrix,
 C  reference amplitudes from Tensor file AMP
 
-      CALL INDATA(1,FORMIN,E,L1,CAF,NT0,XIST,VPIS,VPIO,VV,LMDAT)
+      CALL INDATA(1,FORMIN,E,L1,CAF,NT0,XIST,VPIS,VPIO,VV,LMDAT)                ! Note: Here we could save some computations if we used the read in LMAX (from L1DAT) as a cap for the loops over L&M.
 
       IF (E.lt.0.) THEN
         write(6,*) "First energy in Tensor file AMP was zero. Stopped."
@@ -407,7 +407,7 @@ C  write results to output file DELWV
 C  read next energy, inner potential, momentum, reference t-matrix,
 C  reference amplitudes from Tensor file AMP
 
-      CALL INDATA(1,FORMIN,E,L1,CAF,NT0,XIST,VPIS,VPIO,VV,LMDAT)
+      CALL INDATA(1,FORMIN,E,L1,CAF,NT0,XIST,VPIS,VPIO,VV,LMDAT)                ! Note: Here we could save some computations if we used the read in LMAX (from L1DAT) as a cap for the loops over L&M.
 
 C  terminate only if negative E value is read! Otherwise, re-enter energy loop.
 
