@@ -10,6 +10,8 @@ GCC_CFLAGS := -O3 -fno-finite-math-only
 INTEL_FFLAGS := -O3
 INTEL_CFLAGS := -O3
 
+eeasisss_mod_files := bessl.mod dimen.mod error.mod param.mod poten.mod radeq.mod radii.mod scatt.mod
+
 # Set the sha256 command to be used for checksum verification
 SHA256_CMD = sha256sum
 ifeq ($(shell uname), Darwin)
@@ -27,6 +29,7 @@ intel: eeasisss_code/imported_routines.f90 eeasisss_code/eeasisss.f90 correct_sh
 
 gcc: eeasisss_code/imported_routines.f90 eeasisss_code/eeasisss.f90 correct_sha256
 	$(gcc_fcomp) eeasisss_code/imported_routines.f90 eeasisss_code/eeasisss.f90 -o eeasisss $(GCC_FFLAGS)
+	rm $(eeasisss_mod_files)
 
 correct_sha256:
 	@IMPORTED_ROUTINES_ACTUAL_SHA256=`cat eeasisss_code/imported_routines.f90 | tr -d '\r' | $(SHA256_CMD)`; \
@@ -44,3 +47,4 @@ correct_sha256:
 
 clean: 
 	rm eeasisss
+	rm $(eeasisss_mod_files)
