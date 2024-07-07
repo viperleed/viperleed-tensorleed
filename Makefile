@@ -25,7 +25,7 @@ EEASISS_SHA256 := 919ebb06e72dff8f914b392d66fec6ffc2413b8f0f714db4b6682a7562784e
 
 intel: eeasisss_src/imported_routines.f90 eeasisss_src/eeasisss.f90 correct_sha256
 	$(intel_fcomp) eeasisss_src/imported_routines.f90 eeasisss_src/eeasisss.f90 -o eeasisss $(INTEL_FFLAGS)
-
+	rm $(eeasisss_mod_files)
 
 gcc: eeasisss_src/imported_routines.f90 eeasisss_src/eeasisss.f90 correct_sha256
 	$(gcc_fcomp) eeasisss_src/imported_routines.f90 eeasisss_src/eeasisss.f90 -o eeasisss $(GCC_FFLAGS)
@@ -45,6 +45,6 @@ correct_sha256:
 			exit 1 ;; \
 		esac
 
-clean: 
+clean:
 	rm eeasisss
 	rm $(eeasisss_mod_files)
