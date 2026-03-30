@@ -54,8 +54,8 @@ C  V. Blum v105: energy dependent inner potential now taken over from LEED
 C                calculation
 C  V. Blum v106: minor adjustments for TensErLEED; subroutines now in lib.search.f
 C  W. Meyer v107: MPI parallelised search loop for distributed memory clusters
-C  09.11.22
-C  A. Imre: replaced random C funktion with Fortran intrinsic.
+C  A. Imre   20220911: replaced random C function with Fortran intrinsic.
+C  M. Schmid 20260326: added 'smooth' R factor R_S
 
 **************************************************************************
 
@@ -253,7 +253,7 @@ C  IFORM states whether or not a delta amp file input is formatted
 C  PNUM is total number of parameters (including conc steps), must be equal MNPRMK
 C  STAFLA determines whether random or given start configuration is used
 C  WHICHG is flag to optimize for integer, half-order or total R-factor
-C  WHICHR decides whether R2 or RPe is used for optimization
+C  WHICHR decides whether 1=RPe, 2=R2 or 4=Rsmooth is used for optimization
 C  VARST is array containing number of grid points for each parameter
 C  PARTYP is array containing the number of different parameters in each file
 C  OUTINT forces output of current search data to SEADOC after OUTINT generations
@@ -545,9 +545,25 @@ C read data to be compared, either experimental or theoretical
          END IF
 C  end readin of exp. or theor. reference data
 
+C Modul 4: Readin control information for search algorithm
+C (before Modul 3 because we need WHICHR for Modul 3 -20260326 -ms)
+
+         CALL READSC(NDOM,NPLACES,NFILES,INFILE,NSURF,IFORM,PNUM,VARST,
+     +        NPRMK,NPRAS,PARTYP,NPS,PARIND,STAFLA,OUTINT,FILREL,WHICHG,
+     +        WHICHR,DATOUT,NFIL,NCONCS,CONC,DMISCH,MAXGEN,SEANAME,NPAR,
+     +        RMUT,INIT,NWSK)
+
+!     @michele-riva (2023-11-09)
+!        Allocate WSK, as by now we have the correct maximum number of
+!        items NWSK from the contents of VARST, which was filled in READSC.
+!        Notice that we only need it in the RANK==0 process as WSK is
+!        only used in SEA_RCD, which runs only in the RANK==0 process
+         allocate(WSK(NWSK))
+
 C Modul 3: PREPARE EXPERIMENTAL DATA FOR LATER USAGE
 
-         CALL PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,EINCR,VI,
+         CALL PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,WHICHR,
+     +        EINCR,VI,
      +        YE,NDATA,TSE,TSE2,TSEY2,XPL,YPL,AEP,NNN,NBE)
 
       END IF
@@ -586,24 +602,6 @@ C  Broadcast input data to other processes
       ENDDO
       ENDDO
       CALL MPI_BCAST(NBE,1,MPI_INTEGER,0,MPI_COMM_WORLD, IERR)
-
-C Modul 4: Readin control information for search algorithm
-
-      IF (RANK.EQ.0) THEN
-
-         CALL READSC(NDOM,NPLACES,NFILES,INFILE,NSURF,IFORM,PNUM,VARST,
-     +        NPRMK,NPRAS,PARTYP,NPS,PARIND,STAFLA,OUTINT,FILREL,WHICHG,
-     +        WHICHR,DATOUT,NFIL,NCONCS,CONC,DMISCH,MAXGEN,SEANAME,NPAR,
-     +        RMUT,INIT,NWSK)
-
-!     @michele-riva (2023-11-09)
-!        Allocate WSK, as by now we have the correct maximum number of
-!        items NWSK from the contents of VARST, which was filled in READSC.
-!        Notice that we only need it in the RANK==0 process as WSK is
-!        only used in SEA_RCD, which runs only in the RANK==0 process
-         allocate(WSK(NWSK))
-
-      ENDIF
 
 C     NPLACES = MNPLACES (commented out by F. Kraushofer and line "CALL MPI_BCAST(NPLACES,NDOM,MPI_INTEGER,0,MPI_COMM_WORLD,IERR)" added. 3.12.20)
 

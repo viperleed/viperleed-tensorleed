@@ -5,6 +5,8 @@ C  In line 617: changed limit to 1.E-8.
 C
 C  Output for gnuplot adapted to particular computer settings. LH
 C  INPUT formats expanded to allow for 9999 exp. and theo. beams  L.Hammer Mar. 2021
+C  Note: Y function output in YPEND and YSMOOTH is still limited to 999 beams
+C  Y_Smooth implementation (and nicer format of Y_Pendry) M. Schmid 2026
 C
 C-----------------------------------------------------------------------
 C  SUBROUTINE BINSRX FINDS A REQUIRED INTERPOLATION INTERVAL
@@ -1193,6 +1195,12 @@ C  Subroutine STRIP2 copies energies and intensities for a given geometry IS
 C------------------------------------------------------------------------
 C  SUBROUTINE SUM INTEGRATES BY THE SIMPLE TRAPEZOID RULE (AFTER
 C  ZANAZZI-JONA)
+C
+C  The input array has dimensions (NS,NBD,NGP).
+C  IS and IB are the first two indices (fixed).
+C  Integration runs only over the last index, from I1 to I2
+C  H is the step height.
+C  The output is written to S
       SUBROUTINE SUM(Y,NS,NBD,NGP,IS,IB,H,I1,I2,S)
       DIMENSION Y(NS,NBD,NGP)
       A=0.
@@ -1217,7 +1225,15 @@ C    1       A1
 C    2       A1**2
 C    3       (A1-C*A2)**2
 C    4       ABS(B1-C*B2)*ABS(A1-C*A2)/(ABS(A1)+EPS)
-
+C
+C  Input arrays A1,B1 have dimension (NS1,NBD1,NGP);
+C  arrays A2,B2 have dimension (NS2,NBD2,NGP).
+C  The first two indices are fixed: IS1,IB1 and IS2,IB2, respectively.
+C  The integrals run only over the last index (energy points)
+C  from IE1 to IE2 for A1,B1 and IE1+NV to IE2+NV for A2,B2.
+C  EINCR is the energy step, C is the exp/theor scale factor for R2 & RZJ,
+C  The function for integration is written into array Y and the integral (sum) to S
+C
       SUBROUTINE VARSUM(A1,A2,B1,B2,NS1,NS2,NBD1,NBD2,NGP,IS1,IS2,
      *                  IB1,IB2,IE1,IE2,NV,EINCR,EPS,C,NF,S,Y)
 
@@ -1230,43 +1246,44 @@ C  FOR ZANAZZI-JONA R-FACTOR INTERPOLATION ONTO 10-FOLD DENSER GRID
 C  IS MADE
       IF (NF.EQ.4) GO TO 100
       DO 50 IE=IE1,IE2
-      N=N+1
-      IES=IE+NV
-      GO TO (10,20,30),NF
-10    Y(N)=A1(IS1,IB1,IE)
-      GO TO 50
-20    Y(N)=A1(IS1,IB1,IE)**2
-      GO TO 50
-30    Y(N)=(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))**2
-      GO TO 50
+        N=N+1
+        IES=IE+NV
+        GO TO (10,20,30),NF
+10        Y(N)=A1(IS1,IB1,IE)
+        GO TO 50
+20        Y(N)=A1(IS1,IB1,IE)**2
+        GO TO 50
+30        Y(N)=(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))**2
+        GO TO 50
 50    CONTINUE
-      CALL SUM(Y,1,1,NGP,1,1,EINCR,1,N,S)
+      CALL SUM(Y,1,1,NGP,1,1,EINCR,1,N,S)                               !Why sum from 1 to N and not IE1 to IE2? -ms
       RETURN
+C  NF=4, ZANAZZI-JONA
 100   DO 110 IE=IE1,IE2
-      N=N+1
-      IES=IE+NV
-      Y(N)=FLOAT(N-1)*EINCR
-      Y1(N)=A1(IS1,IB1,IE)
-      Y2(N)=A2(IS2,IB2,IES)
-      Y3(N)=B1(IS1,IB1,IE)
-110   Y4(N)=B2(IS2,IB2,IES)
+        N=N+1
+        IES=IE+NV
+        Y(N)=FLOAT(N-1)*EINCR
+        Y1(N)=A1(IS1,IB1,IE)
+        Y2(N)=A2(IS2,IB2,IES)
+        Y3(N)=B1(IS1,IB1,IE)
+110     Y4(N)=B2(IS2,IB2,IES)
       DE=0.1*EINCR
       NN=10*(N-1)+1
       DO 120 IE=1,NN
-      X=FLOAT(IE-1)*DE
-      ITIL=0
-      ITIH=0
-      AA1=YVAL(X,Y1(1),Y,N,ITIL,ITIH)
-      ITIL=0
-      ITIH=0
-      AA2=YVAL(X,Y2(1),Y,N,ITIL,ITIH)
-      ITIL=0
-      ITIH=0
-      AB1=YVAL(X,Y3(1),Y,N,ITIL,ITIH)
-      ITIL=0
-      ITIH=0
-      AB2=YVAL(X,Y4(1),Y,N,ITIL,ITIH)
-120   YY(IE)=ABS(AB1-C*AB2)*ABS(AA1-C*AA2)/(ABS(AA1)+EPS)
+        X=FLOAT(IE-1)*DE
+        ITIL=0
+        ITIH=0
+        AA1=YVAL(X,Y1(1),Y,N,ITIL,ITIH)
+        ITIL=0
+        ITIH=0
+        AA2=YVAL(X,Y2(1),Y,N,ITIL,ITIH)
+        ITIL=0
+        ITIH=0
+        AB1=YVAL(X,Y3(1),Y,N,ITIL,ITIH)
+        ITIL=0
+        ITIH=0
+        AB2=YVAL(X,Y4(1),Y,N,ITIL,ITIH)
+120     YY(IE)=ABS(AB1-C*AB2)*ABS(AA1-C*AA2)/(ABS(AA1)+EPS)
       CALL SUM(YY,1,1,NGP,1,1,DE,1,NN,S)
       RETURN
       END
@@ -1307,39 +1324,134 @@ C  SUBROUTINE YPEND CALCULATES THE PENDRY Y FUNCTION
 C  Y = (A/AP) / ((A/AP)**2 + VI**2), WHERE AP/A IS THE LOGARITHMIC
 C  DERIVATIVE OF THE (TABULATED) FUNCTION A
 
+C  Arguments
+C  A(NS,NBD,NGP)     function value (1, beam#, energy points)
+C  AP(NS,NBD,NGP)    A Prime, derivative
+C  NS                   unused in search; always 1
+C  NBD                  Number of beams in array
+C  NGP                  max number of energy points
+C  IS                   unused in search; always 1
+C  NB                   Number of beams used
+C  NE(NBD)              Number of energy points for each beam
+C  E(NBD,NGP)           Energy values (only for printing)
+C  Y(NBD,NGP)           Y function output (beam, energy points)
+C  VI                   V0i/EnergyStep
+C  IPR                  Print Y function if IPR>=2
+
       SUBROUTINE YPEND(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,IPR)
 
       REAL A(NS,NBD,NGP),AP(NS,NBD,NGP)
       INTEGER NE(NBD)
       REAL E(NBD,NGP),Y(NBD,NGP)
 
-      DO 25 IB=1,NB
-      N=NE(IB)
-      IF (N.EQ.0) GO TO 25
-      DO 20 IE=1,N
-      AF=A(IS,IB,IE)
-      IF (ABS(AF).LT.1.E-7) GO TO 10
-      AF=AP(IS,IB,IE)/AF
-      Y(IB,IE)=AF/(1.+VI*VI*AF*AF)
-      GO TO 20
-10    APF=AP(IS,IB,IE)
-      IF (APF.GT.1.E-7) GO TO 15
-      Y(IB,IE)=0.
-      GO TO 20
-15    AF=AF/APF
-      Y(IB,IE)=AF/(AF*AF+VI*VI)
-20    CONTINUE
-25    CONTINUE
-      IF (IPR.LT.2) GO TO 50
-      DO 30 IB=1,NB
-      N=NE(IB)
-      IF (N.EQ.0) GO TO 30
-      WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
-40    FORMAT(26H PENDRY Y FUNCTION IN BEAM,1I3,/,100(5(1F7.2,1E13.4,3X),
-     1/))
-30    CONTINUE
-50    RETURN
+      DO IB=1,NB                                                        !for all beams
+        N=NE(IB)
+        IF (N.NE.0) THEN
+          DO IE=1,N                                                     !for all energies
+            AF=A(IS,IB,IE)
+            IF (ABS(AF).GE.1.E-7) THEN
+              AF=AP(IS,IB,IE)/AF                                        ! dln(I)/dE
+              Y(IB,IE)=AF/(1.+VI*VI*AF*AF)
+            ELSE                                                        !very low intensity
+              APF=AP(IS,IB,IE)
+              IF (ABS(APF).GE.1.E-7) THEN                               !'abs' was missing 20260324 -ms
+                AF=AF/APF
+                Y(IB,IE)=AF/(AF*AF+VI*VI)
+              ELSE
+                Y(IB,IE)=0.                                             !I'=0 && I=0: Y=0
+              END IF
+            END IF
+          END DO                                                        !for all energies
+        END IF                                                          !if (N.NE.0)
+      END DO                                                            !for all beams
+      IF (IPR.GE.2) THEN
+        DO IB=1,NB
+          N=NE(IB)
+          IF (N.NE.0) THEN
+            WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
+40          FORMAT(26H PENDRY Y FUNCTION IN BEAM,1I3,
+     1      /,1000(5(1F7.2,1E13.4,3X),
+     1      /))
+          END IF
+        END DO
+      END IF
+      RETURN
       END
+C-----------------------------------------------------------------------
+C  SUBROUTINE YSMOOTH CALCULATES THE Y FUNCTION OF THE SMOOTH R FACTOR
+C
+C  See Imre et al., J. Phys.: Condens. Matter 38, 105001.
+
+C  Arguments
+C  A(NS,NBD,NGP)     function value (1, beam#, energy points)
+C  AP(NS,NBD,NGP)    A Prime, derivative
+C  NS                   unused in search; always 1
+C  NBD                  Number of beams in array
+C  NGP                  max number of energy points
+C  IS                   unused in search; always 1
+C  NB                   Number of beams used
+C  NE(NBD)              Number of energy points for each beam
+C  E(NBD,NGP)           Energy values (only for printing)
+C  Y(NBD,NGP)           Y function output (beam, energy points)
+C  VI                   V0i/EnergyStep
+C  IPR                  Print Y function if IPR>=2
+
+      SUBROUTINE YSMOOTH(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,IPR)
+
+      REAL A(NS,NBD,NGP),AP(NS,NBD,NGP)
+      INTEGER NE(NBD)
+      REAL E(NBD,NGP),Y(NBD,NGP)
+
+      PARAMETER(ALPHA = 4.0, BETA = 0.15)
+
+      DO IB=1,NB                                                        !for all beams
+        N=NE(IB)
+        IF (N.NE.0) THEN
+          DO IE=1,N                                                     !for all energies
+            AF=A(IS,IB,IE)                                              !intensity value
+            IF (AF.LE.1.0E-10) THEN
+              AF=1.0E-10                                                !avoids division by 0 in I'/sqrt(I*I+...)
+            ENDIF
+            DERIV1=AP(IS,IB,IE)*VI;                                     !1st derivative*V0i
+C           For simplicity, we calculate the 2nd derivative DERIV2 from 3 points.
+C           This works well if the curves are sufficiently smooth
+C           At the borders, we take the nearest defined value (or 0 if less than 3 points in the curve)
+            DERIV2=0.0;
+            IF (IE.EQ.1) THEN
+              DERIV2=A(IS,IB,IE+2) + A(IS,IB,IE) - 2*A(IS,IB,IE+1)
+            ELSE IF (IE.LT.N) THEN
+              DERIV2=A(IS,IB,IE+1) + A(IS,IB,IE-1) - 2*AF
+            ELSE IF (IE.GE.3) THEN
+              DERIV2=A(IS,IB,IE) + A(IS,IB,IE-2) - 2*A(IS,IB,IE+1)
+            ENDIF
+            YDENSQ=AF*AF + 4*DERIV1*DERIV1;                             !square of the denominator of Y
+            IF (DERIV2.GT.1.0E-10) THEN                                 !min not 0 but 1e-10 to avoid overflow in division by I"
+              DERIV2=DERIV2*VI*VI                                       !2nd derivative*V0i*V0i
+              Y1 = ALPHA*AF/DERIV2 -
+     1             (0.5*ALPHA)*DERIV1*DERIV1/(DERIV2*DERIV2) + BETA
+              IF (Y1.GT.0) THEN
+                Y2=Y1/SQRT(1.0 + Y1*Y1)
+                YDENSQ=YDENSQ + Y2*Y2*DERIV2*DERIV2
+              END IF
+            END IF
+            Y(IB,IE)=2*DERIV1/SQRT(YDENSQ)
+          END DO                                                        !for all energies
+        END IF                                                          !if (N.NE.0)
+      END DO                                                            !for all beams
+      IF (IPR.GE.2) THEN
+        DO IB=1,NB
+          N=NE(IB)
+          IF (N.NE.0) THEN
+            WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
+40          FORMAT(26H SMOOTH Y FUNCTION IN BEAM,1I5,
+     1      /,1000(5(1F7.2,1E13.4,3X),
+     1      /))
+          END IF
+        END DO
+      END IF
+      RETURN
+      END
+
 C-----------------------------------------------------------------------
 C  FUNCTION YVAL INTERPOLATES
       FUNCTION YVAL(X, WORY, WORX, LENGTH,ITIL,ITIH)

@@ -5,16 +5,17 @@ C  Allocation error in subroutine RINTAV removed
 C  via introduction of a second field ATAV.       L.Hammer Oct. 2018
 C  OUTPUT expanded for error curve calculations   L.Hammer Mar. 2021
 C  INPUT formats expanded to allow for 9999 exp. and theo. beams  L.Hammer Mar. 2021
+C  R_Smooth added (see J. Phys.: Condens. Matter 38, 105001).     M.Schmid Mar. 2026
 C
 C##############################################################################
 C  R-FACTOR PROGRAM FOR COMPARING LEED EXPERIMENT AND THEORY
 C##############################################################################
 
-C  Three different R-factors (the R2-factor, the Zanazzi-Jona R-factor and the
-C  Pendry R-factor), together with their average can be produced. Experimental
-C  IV-curves from different experiments can be averaged together (the same
-C  energy values, but no energy limits are required). The input energies may be
-C  in any order.
+C  Four different R-factors (the R2-factor, the Zanazzi-Jona R-factor, Pendry's
+C  R factor and the Smooth R factor), together with their average can be produced.
+C  Experimental IV-curves from different experiments can be averaged together
+C  (the same energy values, but no energy limits are required).
+C  The input energies may be in any order.
 C  It is possible to specify gaps in the experimental IV-curves. These energy
 C  ranges will be ignored in the R-factor calculation. The gaps will also be
 C  taken into account in the processing of the experimenta data.
@@ -54,8 +55,8 @@ C    (van Hove-output format)
 C  - repeat last step until NS geometries have been read in
 C  - repeat last two steps until an END-OF-FILE is encountered
 C  - if END-OF-FILE is encountered read next set of theoretical data (skipping
-C    TEXT and beam information) in van Hoove-output format until LIMFIL sets of
-C    theoretical data have been read in
+C    TEXT and beam information) in van Hove-output format until LIMFIL sets of
+C    theoretical data have been read in.
 
 C******************************************************************************
 C  Limitations
@@ -70,6 +71,9 @@ C  cf purpose of quantity FAC in subroutine READE.
 C  include problem dependent parameter statements for dimensions
 
       INCLUDE "PARAM"
+
+C we support 4 R factors: R2, Zanazzi-Jona, Pendry, Smooth
+      PARAMETER (NRFACT = 4)
 
 C  variables in namelist NL1
 
@@ -95,7 +99,7 @@ C  PLOT  : for PLOT = 1 plots of the experimental data and the theoretical
 C          best-fit spectra are drawn
 C  GAP   : GAP = 1 indicates gaps in the experimental spectra
 
-      REAL EMIN, EMAX, EINCR, VI, V0RR, V01, V02
+      REAL EMIN, EMAX, EINCR, VI, V0RR, V01, V02, VINCR
       INTEGER LIMFIL, IPR, ISMOTH, EOT, GAP
 
 C  quantities that are not supplied in namelists or input formats for
@@ -126,12 +130,13 @@ C          8th geometry
 C  WB    : weights for different beams (counting by numbers NBEA), used to
 C          obtain R-factors averaged over beams (should not include weights for
 C          differing energy ranges, since these are already programmed in)   ! TODO: scrap, no weights
-C  WR    : WR(1), WR(2) and WR(3) are the weights of the R2-, the Zanazzi-Jona-
-C          and the Pendry-R-factor respectively used in obtaining the average
+C  WR    : WR(1), WR(2), WR(3), and WR(4) are the weights of the R2-, the Zanazzi-Jona-
+C          Pendry-, and Smooth R-factor respectively used in obtaining the average
 C          R-factor
+C          ViPErLEED sets the weight of the R factor actually used to 1, the others to 0.
 
       INTEGER NSSK (MNS)
-      REAL WB(MNBED), WR(3)
+      REAL WB(MNBED), WR(NRFACT)
 
 C  variables in namelist NL3
 
@@ -183,13 +188,16 @@ C  variables used for functions of experimental data
 C  AP,APP: working spaces for first and second derivative of current beam
 C  AEP   : first derivative of experimental beams
 C  AEPP  : second derivative of experimental beams
-C  YE    : Pendry Y-function of intensities for experimental beams
+C  YPE   : Pendry Y-function of intensities for experimental beams
+C  YSE   : Smooth Y-function of intensities for experimental beams
 C  TSE   : integral over intensities for experimental beams
 C  TSE2  : integral over squared intensities for experimental beams
-C  TSEY2 : integral over squared Pendry Y-function for experimental beams
+C  TSEYP2: integral over squared Pendry Y-function for experimental beams
+C  TSEYS2: integral over squared Smooth Y-function for experimental beams
 
       REAL AP(MNGP), APP(MNGP), AEP(MNBED,MNGP), AEPP(MNBED,MNGP)
-      REAL YE(MNBED,MNGP), TSE2(MNBED), TSE(MNBED), TSEY2(MNBED)
+      REAL YPE(MNBED,MNGP), YSE(MNBED,MNGP), TSE2(MNBED), TSE(MNBED)
+      REAL TSEYP2(MNBED), TSEYS2(MNBED)
 
 C  variables for reading, averaging and interpolating theoretical intensities
 
@@ -215,18 +223,21 @@ C  ET    : energy grid for theoretical beams of current geometry
       INTEGER SYM(MNBTD), NBT
       REAL AM, AT(MNBTD,MNGP), ET(MNBTD,MNGP)
 
-C  variables used for functions of experimental data
+C  variables used for functions of theoretical data
 
 C  NET   : no of energy grid points of theoretical beams after interpolating
 C  ATP   : first derivative of theoretical beams
 C  ATPP  : second derivative of theoretical beams
-C  YT    : Pendry Y-function of intensities for theoretical beams
+C  YPT   : Pendry Y-function of intensities for theoretical beams
+C  YST   : Smooth Y-function of intensities for theoretical beams
 C  TST   : integral over intensities for theoretical beams
-C  TSTY2 : integral over squared Pendry Y-function for theoretical beams
+C  TSTYP2: integral over squared Pendry Y-function for theoretical beams
+C  TSTYS2: integral over squared Smooth Y-function for theoretical beams
 
       INTEGER NET(MNBTD)
       REAL ATP(MNBTD,MNGP), ATPP(MNBTD,MNGP)
-      REAL YT(MNBTD,MNGP), TST(MNBTD), TSTY2(MNBTD)
+      REAL YPT(MNBTD,MNGP), YST(MNBTD,MNGP), TST(MNBTD)
+      REAL TSTYP2(MNBTD), TSTYS2(MNBTD)
 
 C  loop variables (geometry loop, inner potential loop, beam loop)
 
@@ -265,14 +276,16 @@ C  variables used for integrals over experimental and theoretical intensities
 C  EPSE  : maximum of first derivative of experimental intensity
 C  SS,SU : integral of experimental or theoretical intensity in the region
 C          below NE1 or NT1 (SS) or above NE2 or NT2 (SU)
-C  SS2,SU2:same as SS and SU2 for integral over squared intensities
-C  SSY2,SUY2:same as SS and SU2 for integral over squared Pendry Y-function
-C  SG,SGY2:integral over theoretical intensitiy (SG) or theoretical Pendry
-C          Y-function (SGY2) in the range of a gap
+C  SS2,SU2: same as SS and SU2 for integral over squared intensities
+C  SSYP2,SUYP2: same as SS and SU2 for integral over squared Pendry Y-function
+C  SSYS2,SUYS2: same as SS and SU2 for integral over squared Smooth Y-function
+C  SG,SGYP2,SGYS2:integral over theoretical intensitiy (SG) or theoretical Pendry or Smooth
+C          Y-function (SGYP2, SGYS2) in the range of a gap
 C  SE,ST : integral over experimental or theoretical intensity in common energy
 C          range
-C  SE2,ST2:same as SE and ST for integral over squared intensities
-C  SEY2,STY2:same as SE and ST for integral over squared Pendry Y-function
+C  SE2,ST2: same as SE and ST for integral over squared intensities
+C  SEYP2,STYP2: same as SE and ST for integral over squared Pendry Y-function
+C  SEYS2,STYS2: same as SE and ST for integral over squared Smooth Y-function
 C  C     : normalization factor experiment/theory
 C  SEM,STM:cumulative integral over experimental or theoretical intensities in
 C          common energy range, differentiated for integer and fractional beams
@@ -280,26 +293,29 @@ C  S2,SG2: integral over (exp-C*theo)**2 in common energy range (S2) or gap
 C          region (SG2)
 C  SRZJ,SGZJ:integral for Zanazzi-Jona R-factor in common energy range (SRZJ)
 C          or gap region (SGZJ)
-C  SY2   : integral over (expY -C*theoY)**2 in common energy range
+C  SYP2, SYS2: integral over (expY -C*theoY)**2 in common energy range for Pendry & Smooth
 
       REAL EPSE
-      REAL SS, SU, SS2, SU2, SSY2, SUY2, SG, SGY2
-      REAL SE, ST, SE2, ST2, SEY2, STY2
-      REAL C, SEM(2), STM(2), S2, SG2, SRZJ, SGZJ, SY2
+      REAL SS, SU, SS2, SU2, SSYP2, SUYP2
+      REAL SSYS2, SUYS2, SG, SGYP2, SGYS2
+      REAL SE, ST, SE2, ST2, SEYP2, STYP2, SEYS2, STYS2
+      REAL C, SEM(2), STM(2), S2, SG2, SRZJ, SGZJ, SYP2, SYS2
 
 C  variables for R-factors
 
 C  R2    : R2 R-factor for all beams
 C  RRZJ  : Zanazzi-Jona R-factor for all beams
 C  RPE   : Pendry R-factor for all beams
-C  RAZ,RAN:dividend and divisor of Pendry R-factor for current geometry
+C  RSM   : Smooth R-factor for all beams
+C  RAZP,RANP: dividend and divisor of Pendry R-factor for current geometry
+C  RAZS,RANS: dividend and divisor of Smooth R-factor for current geometry
 C  RAVB  : weighted average over all R-factors for all beams
 C  ERANG : total common energy range for current geometry
-C  AR    : R-factors (R2, Zanazzi-Jona, Pendry) averaged over all beams
+C  AR    : R-factors (R2, Zanazzi-Jona, Pendry, Smooth) averaged over all beams
 C  RAV   : average R-factor for current geometry
-C  RAZM,RANM,ARM,ERANGM,RAVM:same as RAZ, RAN, AR, ERANG, RAV differentiated
-C          for all integer and fractional beams
-C  CIFE,CIFT:relation between fractional and integer beam intensities for
+C  RAZMP,RANMP,RAZMS,RANMS,ARM,ERANGM,RAVM: same as RAZP, RANP, RAZS, RANS, AR, ERANG, RAV 
+C          separately for all integer and fractional beams
+C  CIFE,CIFT: relation between fractional and integer beam intensities for
 C          experimental and theoretical data, respectively
 C  BRAV  : best average R-factor
 C  BGRAV : best average R-factor of a geometry
@@ -311,9 +327,10 @@ C          best average R-factor geometry
 C  BCIFT : same as BCIFE for theoretical beam intensities
 C  NSB   : geometry index of best average R-factor geometry
 
-      REAL R2(MNBED), RRZJ(MNBED), RPE(MNBED), RAVB(MNBED)
-      REAL RAZ, RAN, RAZM(2), RANM(2)
-      REAL ERANG, ERANGM(2), AR(3), ARM(3,2), RAV, RAVM(2)
+      REAL R2(MNBED), RRZJ(MNBED), RPE(MNBED), RSM(MNBED), RAVB(MNBED)
+      REAL RAZP, RANP, RAZS, RANS
+      REAL RAZMP(2), RANMP(2), RAZMS(2), RANMS(2)
+      REAL ERANG, ERANGM(2), AR(NRFACT), ARM(NRFACT,2), RAV, RAVM(2)
       REAL CIFE, CIFT , BRAV, BGRAV, BRAVB(MNBED), BV0, BCIFE, BCIFT
       INTEGER NSB
 
@@ -371,9 +388,11 @@ C  default values in namelist NL2
       DO IS = 1,MNS
         NSSK(IS) = 0
       ENDDO
-      WR(1) = 0.                                                         201103
-      WR(2) = 0.                                                         201103
-      WR(3) = 1.                                                         201103
+C Weights for the R factors. Default R_P
+      WR(1) = 0.                                                        ! R_2
+      WR(2) = 0.                                                        ! R_ZJ
+      WR(3) = 1.                                                        ! R_P
+      WR(4) = 0.                                                        ! R_S
 
 C  default values in namelist NL3
 
@@ -443,6 +462,22 @@ C  read list of geometries to be skipped and weights for the R-factor averages
       READ(8,NL2)
 C      WRITE(6,NL2)
 
+C Calculate sum of R-factor weights. Note that ViPErLEED supplies only 3 WR values
+C for compatibility with old versions. Therefore, if sum=0, assume the newly added
+C WR(4)=1, i.e. we use the smoot R factor R_S
+
+      WRSUM=0.
+      DO I=1,NRFACT
+        WRSUM=WRSUM+WR(I)
+      ENDDO
+      IF (WRSUM.EQ.0) THEN
+        WR(4)=1
+        WRSUM=1
+      ENDIF
+
+C DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG
+      write(6,*) 'WRSUM=',WRSUM,'WR=',WR
+
 C  NSS will be number of geometries remaining after skipping
 
       NSS = 0
@@ -485,7 +520,7 @@ C  average data from different experiments and order by increasing energy
      *           NGAP,EG1,EG2,NG1,NG2)
 
       IGAP = 0
-      DO IB = 1,NBE
+      DO IB = 1,NBE                                                     !for all exp beams
 
         IF (GCOUNT(IB).EQ.0) THEN
 
@@ -670,39 +705,42 @@ C  derivative for the section after the last gap
         ENDIF
         IGAP = IGAP + GCOUNT(IB)
 
-      ENDDO
+      ENDDO                                                             !for all exp beams IB
 
-C  produce Pendry Y-function for experimental data
+C  produce Pendry & smooth Y-function for experimental data
 
-      CALL YPEND(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YE,VI,IPR)
+      CALL YPEND(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YPE,VI,IPR)
+      CALL YSMOOTH(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YSE,VI,IPR)
 
 C  produce some integrals over experimental data
 
-      DO IB = 1,NBE
+      DO IB = 1,NBE                                                     !for all exp beams
 
         IE2 = NEE(IB)
         IF (IE2.GT.0) THEN
 
           TSE(IB)  = 0.
           TSE2(IB) = 0.
-          TSEY2(IB)= 0.
+          TSEYP2(IB)= 0.
+          TSEYS2(IB)= 0.
 
-          CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,
+          CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,     !integral over I: TSE
      *                EINCR,0.,0.,1,TSE(IB),YPL)
 
           IF (WR(1).GT.1.E-6) THEN
-            CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,
+            CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,   !integral over squared I: TSE2
      *                  EINCR,0.,0.,2,TSE2(IB),YPL)
           ENDIF
 
-          IF (WR(3).GT.1.E-6) THEN
-            CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,
-     *                  EINCR,0.,0.,2,TSEY2(IB),YPL)
+          IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+            CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,  !integral over squared Y_Pendry: TSEYP2
+     *                  EINCR,0.,0.,2,TSEYP2(IB),YPL)
+            CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,  !integral over squared Y_Smooth; TSEYS2
+     *                  EINCR,0.,0.,2,TSEYS2(IB),YPL)
           ENDIF
-
         ENDIF
 
-      ENDDO
+      ENDDO                                                             !for all exp beams IB
 
       CLOSE(8)           !! REMEMBER TO CLOSE IN BRANCH, BETTER: MOVE HIGHER UP
 
@@ -731,7 +769,7 @@ C  perform domain averaging and check for too high theoretical intensities
         CALL MAXINT(ATSAV,NSS,NBTD,IB,NETI,AM)                             121280
 
         IF (AM.GT.1.) THEN                                               121280
-          WRITE(6,28)IB,AM                                              121280
+          WRITE(6,28)IB,AM                                               121280
  28       FORMAT(1H ,//,29H MAX INTENSITY IN THEOR BEAM ,1I3,            121280
      *           12H IS SUSPECT(,1E13.5,25H)- **** STOP PROGRAM ****)    121280
           STOP
@@ -789,7 +827,8 @@ C  produce 1st and 2nd derivative of theoretical spectra
 
 C  produce Pendry Y-function of theoretical data
 
-      CALL YPEND(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YT,VI,IPR)
+      CALL YPEND(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YPT,VI,IPR)
+      CALL YSMOOTH(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YST,VI,IPR)
 
 C  produce some integrals over theoretical data
 
@@ -801,8 +840,10 @@ C  produce some integrals over theoretical data
           CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,
      *                EINCR,0.,0.,1,TST(IB),YPL)
 
-          CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,
-     *                EINCR,0.,0.,2,TSTY2(IB),YPL)
+          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,    !integral over squared Y_theor
+     *                EINCR,0.,0.,2,TSTYP2(IB),YPL)
+          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,
+     *                EINCR,0.,0.,2,TSTYS2(IB),YPL)
 
         ENDIF
       ENDDO
@@ -821,19 +862,23 @@ C  start loop over inner potential values
 
 C  initialize some variables
 
-      DO IR = 1,3
+      DO IR = 1,NRFACT
         AR(IR) = 0.
         DO IMIT = 1,2                                                    260187
           ARM(IR,IMIT) = 0.                                              260187
           ARM(IR,IMIT) = 0.                                              260187
         ENDDO
       ENDDO
-      RAZ = 0.
-      RAN = 0.
+      RAZP = 0.
+      RANP = 0.
+      RAZS = 0.
+      RANS = 0.
       ERANG  = 0.
       DO IMIT = 1,2                                                      260187
-        RAZM(IMIT) = 0.                                                  260187
-        RANM(IMIT) = 0.                                                  260187
+        RAZMP(IMIT) = 0.                                                 260187
+        RANMP(IMIT) = 0.                                                 260187
+        RAZMS(IMIT) = 0.                                                 260187
+        RANMS(IMIT) = 0.                                                 260187
         ERANGM(IMIT) = 0.                                                260187
         RAVM(IMIT) = 0.                                                  260187
         SEM(IMIT) = 0.
@@ -849,6 +894,7 @@ C  start loop over (experimental) beams (or theoretical beams)
       R2(IBE)   = 0.
       RRZJ(IBE) = 0.
       RPE(IBE)  = 0.
+      RSM(IBE)  = 0.
       RAVB(IBE) = 0.
       NEMIN(IBE) = 1
       NEMAX(IBE) = MNGP
@@ -868,7 +914,7 @@ C  ascertain corresponding theoretical beam and skip beams if necessary
  70   FORMAT(9H*BEAM NO.,1I3,10H IN EXP. (,5A4,20H), WHICH IS BEAM NO.,
      *       1I3,12H IN THEORY (,2F6.3,1H))
 
-C  another initialisation of variables
+C  another initialisation of variables: all, integer or fractional
 
       KMIT = MITTEL(IBT)                                                 201103
 
@@ -953,10 +999,12 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
       SS   = 0.
       SS2  = 0.
-      SSY2 = 0.
+      SSYP2 = 0.
+      SSYS2 = 0.
       SU   = 0.
       SU2  = 0.
-      SUY2 = 0.
+      SUYP2 = 0.
+      SUYS2 = 0.
 
       IF (NE1.GT.1) THEN
 
@@ -968,9 +1016,11 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
      *                EINCR,0.,0.,2,SS2,YPL)
         ENDIF
 
-        IF (WR(3).GT.1.E-6) THEN
-        CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,
-     *              EINCR,0.,0.,2,SSY2,YPL)
+        IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+          CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,   ! integral over squared exp Y function below: SSYP2
+     *              EINCR,0.,0.,2,SSYP2,YPL)
+          CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,
+     *              EINCR,0.,0.,2,SSYS2,YPL)
         ENDIF
 
       ENDIF
@@ -985,33 +1035,41 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
      *              EINCR,0.,0.,2,SU2,YPL)
         ENDIF
 
-        IF (WR(3).GT.1.E-6) THEN
-          CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,
-     *                EINCR,0.,0.,2,SUY2,YPL)
+        IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+          CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,  ! integral over squared exp Y function above: SUYP2
+     *                EINCR,0.,0.,2,SUYP2,YPL)
+          CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,
+     *                EINCR,0.,0.,2,SUYS2,YPL)
         ENDIF
 
       ENDIF
 
       SE   = TSE(IBE) - SS - SU
       SE2  = TSE2(IBE) - SS2 - SU2
-      SEY2 = TSEY2(IBE) - SSY2 - SUY2
+      SEYP2 = TSEYP2(IBE) - SSYP2 - SUYP2
+      SEYS2 = TSEYS2(IBE) - SSYS2 - SUYS2
       SEST(IBE) = SE
 
       SS   = 0.
-      SSY2 = 0.
+      SSYP2 = 0.
+      SSYS2 = 0.
       SG   = 0.
-      SGY2 = 0.
+      SGYP2 = 0.
+      SGYS2 = 0.
       SU   = 0.
-      SUY2 = 0.
+      SUYP2 = 0.
+      SUYS2 = 0.
 
       IF (NT1.NE.1) THEN
 
         CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,
      *              EINCR,0.,0.,1,SS,YPL)
 
-        IF (WR(3).GT.1.E-6) THEN
-          CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,
-     *                EINCR,0.,0.,2,SSY2,YPL)
+        IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,   ! integral over squared theor Y function below: SSYP2
+     *                EINCR,0.,0.,2,SSYP2,YPL)
+          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,
+     *                EINCR,0.,0.,2,SSYS2,YPL)
         ENDIF
 
       ENDIF
@@ -1023,9 +1081,11 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
           CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NGT1(IGC),
      *                NGT2(IGC),0,EINCR,0.,0.,1,SG,YPL)
 
-          IF (WR(3).GT.1.E-6) THEN
-            CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,
-     *                  NGT1(IGC),NGT2(IGC),0,EINCR,0.,0.,2,SGY2,YPL)
+          IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+            CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,         ! integral over squared theor Y function in gap: SGYP2
+     *                  NGT1(IGC),NGT2(IGC),0,EINCR,0.,0.,2,SGYP2,YPL)
+            CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,
+     *                  NGT1(IGC),NGT2(IGC),0,EINCR,0.,0.,2,SGYS2,YPL)
           ENDIF
 
         ENDDO
@@ -1037,15 +1097,18 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
         CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,
      *              EINCR,0.,0.,1,SU,YPL)
 
-        IF (WR(3).GT.1.E-6) THEN
-          CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,
-     *                EINCR,0.,0.,2,SUY2,YPL)
+        IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
+          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,  ! integral over squared theor Y function above: SUYP2
+     *                EINCR,0.,0.,2,SUYP2,YPL)
+          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,
+     *                EINCR,0.,0.,2,SUYS2,YPL)
         ENDIF
 
       ENDIF
 
       ST   = TST(IBT) - SS - SG - SU
-      STY2 = TSTY2(IBT) - SSY2 - SGY2 - SUY2
+      STYP2 = TSTYP2(IBT) - SSYP2 - SGYP2 - SUYP2
+      STYS2 = TSTYS2(IBT) - SSYS2 - SGYS2 - SUYS2
       STST(IBT) = ST
 
 C  calculate normalization factor experiment/theory
@@ -1066,7 +1129,10 @@ C  produce integrals involving both, experiment and theory
       SG2  = 0.
       SRZJ = 0.
       SGZJ = 0.
-      SGY2 = 0.
+      SYP2 = 0.                                                         ! 20260324 Was missing in previous version -ms
+      SYS2 = 0.
+      SGYP2 = 0.
+      SGYS2 = 0.
 
       IF (WR(1).GT.1.E-6) THEN
 
@@ -1101,16 +1167,20 @@ C  produce integrals involving both, experiment and theory
 
       ENDIF
 
-      IF (WR(3).GT.1.E-6) THEN
+      IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
 
-        CALL VARSUM(YE,YT,YE,YE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1,NE2,
-     *              NEET,EINCR,0.,1.,3,SY2,YPL)
+        CALL VARSUM(YPE,YPT,YPE,YPE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1, ! squared Y difference exp-theory: SYP2
+     *              NE2,NEET,EINCR,0.,1.,3,SYP2,YPL)
+        CALL VARSUM(YSE,YST,YSE,YSE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1,
+     *              NE2,NEET,EINCR,0.,1.,3,SYS2,YPL)
 
         IF (GCOUNT(IBE).NE.0) THEN
 
           DO IGC = IGAP+1,IGAP+GCOUNT(IBE)
-            CALL VARSUM(YE,YT,YE,YE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,
-     *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,1.,3,SGY2,YPL)
+            CALL VARSUM(YPE,YPT,YPE,YPE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT, ! squared Y difference exp-theory in gap: SGYP2
+     *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,1.,3,SGYP2,YPL)
+            CALL VARSUM(YSE,YST,YSE,YSE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,
+     *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,1.,3,SGYS2,YPL)
           ENDDO
 
         ENDIF
@@ -1119,14 +1189,15 @@ C  produce integrals involving both, experiment and theory
 
       S2   = S2 - SG2
       SRZJ = SRZJ - SGZJ
-      SY2  = SY2 - SGY2
+      SYP2  = SYP2 - SGYP2
+      SYS2  = SYS2 - SGYS2
 
 C  produce R-factors (all are normalized to about 1 for anticorrelated curves,
 C  ie for (SIN(E))**2 compared with (COS(E))**2 over one period)
 
       EET(IBE) = WB(IBE) * EET(IBE)
 
-C  R-factor based on integral of (exp - C*theo)**2
+C  R-factor R2 based on integral of (exp - C*theo)**2
 
       IF (WR(1).GT.1.E-6) THEN
 
@@ -1150,29 +1221,32 @@ C  reduced R-factor according to Zanazzi-Jona (mult. by 0.5)
 
       ENDIF
 
-C  R-factor according to Pendry (mult. by 0.5)
+C  R_Pendry and R_Smooth (mult. by 0.5)
 
-      IF (WR(3).GT.1.E-6) THEN
+      IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
 
-        RPE(IBE) = SY2 / (SEY2 + STY2)
-        print*, "nume", IBE, SY2
-        print*, "deno", IBE, (SEY2 + STY2)
-        RAZ = RAZ + WB(IBE) * SY2
-        RAN = RAN + WB(IBE) * (SEY2 + STY2)
-        IF (KMIT.NE.0) THEN                                              201103
-          RAZM(KMIT) = RAZM(KMIT) + WB(IBE) * SY2                        260187
-          RANM(KMIT) = RANM(KMIT) + WB(IBE) * (SEY2 + STY2)              260187
+        RPE(IBE) = SYP2 / (SEYP2 + STYP2)
+        RSM(IBE) = SYS2 / (SEYS2 + STYS2)
+C        print*, "nume", IBE, SYP2                                      ! 20260324 debug output numerator,deno of R_P commented out -ms
+C        print*, "deno", IBE, (SEYP2 + STYP2)
+        RAZP = RAZP + WB(IBE) * SYP2                                    ! numerator and denominator sums for overall R
+        RANP = RANP + WB(IBE) * (SEYP2 + STYP2)
+        RAZS = RAZS + WB(IBE) * SYS2
+        RANS = RANS + WB(IBE) * (SEYS2 + STYS2)
+        IF (KMIT.NE.0) THEN                                             ! integer/fractional beams
+          RAZMP(KMIT) = RAZMP(KMIT) + WB(IBE) * SYP2                     260187
+          RANMP(KMIT) = RANMP(KMIT) + WB(IBE) * (SEYP2 + STYP2)          260187
+          RAZMS(KMIT) = RAZMS(KMIT) + WB(IBE) * SYS2                     260187
+          RANMS(KMIT) = RANMS(KMIT) + WB(IBE) * (SEYS2 + STYS2)          260187
         ENDIF                                                            260187
 
       ENDIF
 
 C  average over above R-factors for current beam   ! TODO: scrap
+C  Note that ViPErLEED reads the average, not the individual R factors -ms
 
-      WS=0.
-      DO I=1,3
-        WS=WS+WR(I)
-      ENDDO
-      RAVB(IBE) = (WR(1)*R2(IBE) + WR(2)*RRZJ(IBE) + WR(3)*RPE(IBE))/WS
+      RAVB(IBE) = (WR(1)*R2(IBE) + WR(2)*RRZJ(IBE) +
+     *             WR(3)*RPE(IBE) + WR(4)*RSM(IBE))/WRSUM
       ERANG = ERANG + EET(IBE)
       IF (KMIT.NE.0) THEN                                                201103
          ERANGM(KMIT) = ERANGM(KMIT) + EET(IBE)                          260187
@@ -1182,13 +1256,15 @@ C  average over above R-factors for current beam   ! TODO: scrap
 
 C  write R-factor averages for current beam to output
 
-      WRITE(6,115)                                                      040280
-      WRITE(6,120) V0,EET(IBE),R2(IBE),RRZJ(IBE),RPE(IBE),RAVB(IBE)
+      WRITE(6,115)
+     *       '   V0        EET    R_2    R_ZJ   R_P    R_S     RAV'
+      WRITE(6,120)
+     *       V0,EET(IBE),R2(IBE),RRZJ(IBE),RPE(IBE),RSM(IBE),RAVB(IBE)
       WRITE(7,80) (BENAME(I,IBE),I=1,5),IBE,D12,V0R,EMIN,EMAX,
      *               EET(IBE),RAVB(IBE)
 
-115   FORMAT(45H   V0        EET     R2    RRZJ    RPE    RAV)
-120   FORMAT(1H ,1F7.2,1F10.4,4F7.4)
+115   FORMAT(a)
+120   FORMAT(1H , 1F7.2, 1F10.4, 5F7.4)
 
       IGAP = IGAP + GCOUNT(IBE)
 
@@ -1210,19 +1286,24 @@ C  calculate average R-factor RAV for current geometry
         ENDDO
       ENDDO
 
-      IF (WR(3).GT.1E-6) THEN
-        AR(3) = RAZ/RAN
+      IF (WR(3).GT.1E-6 .OR. WR(4).GT.1E-6) THEN
+        AR(3) = RAZP/RANP                                               ! R_Pendry
+        AR(4) = RAZS/RANS                                               ! R_Smooth
         DO IMIT = 1,2
-          IF (RANM(IMIT).NE.0) THEN
-            ARM(3,IMIT) = RAZM(IMIT)/RANM(IMIT)                          260187
+          IF (RANMP(IMIT).NE.0) THEN
+            ARM(3,IMIT) = RAZMP(IMIT)/RANMP(IMIT)                       ! R_Pendry
+          ENDIF
+          IF (RANMS(IMIT).NE.0) THEN
+            ARM(4,IMIT) = RAZMS(IMIT)/RANMS(IMIT)                       ! R_Smooth
           ENDIF
         ENDDO
       ENDIF
 
-      RAV = (WR(1)*AR(1) + WR(2)*AR(2) + WR(3)*AR(3)) / WS
+      RAV = (WR(1)*AR(1) + WR(2)*AR(2) +
+     *       WR(3)*AR(3) + WR(4)*AR(4)) / WRSUM
       DO IMIT = 1,2
         RAVM(IMIT) = (WR(1)*ARM(1,IMIT) + WR(2)*ARM(2,IMIT) +
-     *                WR(3)*ARM(3,IMIT)) / WS
+     *                WR(3)*ARM(3,IMIT) + WR(4)*ARM(4,IMIT)) / WRSUM
       ENDDO
 
 C  calculate relation fractional beams/integer beams for experiment and theory
@@ -1235,16 +1316,16 @@ C  calculate relation fractional beams/integer beams for experiment and theory
 C  write R-factors for current geometry to output
 
       IF (NINT.NE.0) THEN
-        WRITE(6,120) V0,ERANGM(1),(ARM(I,1),I=1,3),RAVM(1)
+        WRITE(6,120) V0,ERANGM(1),(ARM(I,1),I=1,NRFACT),RAVM(1)
         WRITE(7,125) -1,D12,V0R,EMIN,EMAX,ERANGM(1),RAVM(1)              141290
       ENDIF
 
       IF (NFRAC.NE.0) THEN
-        WRITE(6,120) V0,ERANGM(2),(ARM(I,2),I=1,3),RAVM(2)
+        WRITE(6,120) V0,ERANGM(2),(ARM(I,2),I=1,NRFACT),RAVM(2)
         WRITE(7,126) -1,D12,V0R,EMIN,EMAX,ERANGM(2),RAVM(2)              141290
       ENDIF
 
-      WRITE(6,120) V0,ERANG    ,(AR(I),I=1,3), RAV
+      WRITE(6,120) V0,ERANG    ,(AR(I),I=1,NRFACT), RAV
       WRITE(7,127)  0,D12,V0R,EMIN,EMAX,ERANG,RAV                        141290
 
       IF (NFRAC.NE.0.AND.NINT.NE.0) THEN

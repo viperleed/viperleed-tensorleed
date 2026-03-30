@@ -94,7 +94,6 @@ C  The generations of physicists to come in the future, boldy going where
 C  no LEED analysis has gone before, will be indebted to you eternally.
 
 *************************************************************************
-
 C
 
       PROGRAM SEARCH
@@ -253,7 +252,7 @@ C  IFORM states whether or not a delta amp file input is formatted
 C  PNUM is total number of parameters (including conc steps), must be equal MNPRMK
 C  STAFLA determines whether random or given start configuration is used
 C  WHICHG is flag to optimize for integer, half-order or total R-factor
-C  WHICHR decides whether R2 or RPe is used for optimization
+C  WHICHR decides whether 1=RPe, 2=R2 or 4=Rsmooth is used for optimization
 C  VARST is array containing number of grid points for each parameter
 C  PARTYP is array containing the number of different parameters in each file
 C  OUTINT forces output of current search data to SEADOC after OUTINT generations
@@ -537,19 +536,18 @@ C read data to be compared, either experimental or theoretical
 
 C  end readin of exp. or theor. reference data
 
-
-C Modul 3: PREPARE EXPERIMENTAL DATA FOR LATER USAGE
-
-      CALL PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,
-     +            EINCR,VI,YE,NDATA,TSE,TSE2,TSEY2,XPL,YPL,AEP,NNN,NBE)
-
-
 C Modul 4: Readin control information for search algorithm
+C (before Modul 3 because we need WHICHR for Modul 3 -20260326 -ms)
 
       CALL READSC(NDOM,NPLACES,NFILES,INFILE,NSURF,IFORM,
      +            PNUM,VARST,NPRMK,NPRAS,PARTYP,NPS,PARIND,STAFLA,
      +            OUTINT,FILREL,WHICHG,WHICHR,DATOUT,NFIL,NCONCS,CONC,
      +            DMISCH,MAXGEN,SEANAME,NPAR,RMUT,INIT,NWSK)
+
+C Modul 3: PREPARE EXPERIMENTAL DATA FOR LATER USAGE
+
+      CALL PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,WHICHR,
+     +            EINCR,VI,YE,NDATA,TSE,TSE2,TSEY2,XPL,YPL,AEP,NNN,NBE)
 
 ! @michele-riva (2023-11-09)
 !     Allocate WSK, as by now we have the correct maximum number of

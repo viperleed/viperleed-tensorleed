@@ -23,6 +23,9 @@ C
 C  Allocation error in Subroutine RINTAV removed via introduction
 C  of additional fields ATAV and PQ1.        Oct. 2018 L. Hammer
 C
+C  R factor Rsmooth added, see J. Phys.: Condens. Matter 38, 105001.
+C  More comments                             Mar. 2026 M. Schmid
+C
 C**********************************************************************************
 C
 C  Please read the comment in search.f, v1.7 .
@@ -33,9 +36,11 @@ C                              SUBROUTINES                                 C
 C                                                                          C
 CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
 
-C  Subroutine r-factor computes either R2 or R-Pe and optimizes for
-C  inner potential V0R using the total, integer or half-order
-C  r-factor depending on flag WHICHG
+C  Subroutine RFAKTOR computes R_Pendry, R2 or Rsmooth and optimizes for
+C  inner potential V0r using the total, integer or half-order
+C  (depending on flag WHICHG) R factor
+C  R-factor type is determined by WHICHR:
+C    1=Pendry, 2=R2, 3=unused reserved for ZJ, 4=Smooth
 
       SUBROUTINE RFAKTOR(ATSMK,NSS,NBTD,NBMD,NETI,PQ,KAV,SYM,ESMK,
      +                   IPR,AE,
@@ -63,61 +68,49 @@ CVB  Include global parameters for dimension statements etc.
       DIMENSION YT(NBTD,NDATA),ATP(NBTD,NDATA),TSTY2(NBTD)
 
 CVB  for R2:
-
       REAL AE
       DIMENSION AE(NBED,NDATA)
 
       REAL TST
       DIMENSION TST(NBTD)
-
 CVB
-
       REAL EINCR,VI,RPE,RAV,EE,EET,YE
       DIMENSION RPE(NBED),EE(NBED,NDATA),EET(NBED)
       DIMENSION YE(NBED,NDATA)
       REAL ARM(2),ARPEM(2),ERANGM(2),RAZZM(2),RANNM(2),RAVPM(2)
       REAL XRPEM(2)
-
 CVB  for R2:
-
       REAL R2(NBED)
       REAL AR2M(2)
-
 CVB
-
       REAL BV0,BRGES,BRINS,BRHAS,TSEY2
       DIMENSION BV0(NPS),BRGES(NPS),BRINS(NPS),BRHAS(NPS),TSEY2(NBED)
       DIMENSION BENAME(5,NBED)
-
 CVB  for R2:
-
       REAL TSE,TSE2
       DIMENSION TSE(NBED),TSE2(NBED)
-
 CVB
-
       REAL BARAV
       INTEGER IS
-
 
       OVLG=0.
 
 C  PERFORM DOMAIN-AVERAGING
       CALL RINTAV(ATSMK,NSS,NBTD,NETI,PQ,PQAV,KAV,SYM,NBT,ESMK,IPR,ATAV)
 
-
-C  CHECK FOR TOO HIGH THEOR. INTENS.
+C  CHECK FOR TOO HIGH THEOR. INTENS. (we expect values <=1)
       DO 28 IB=1,NBT
-      CALL MAXINT(ATAV,NSS,NBTD,IB,NETI,AM,NDATT)
+        CALL MAXINT(ATAV,NSS,NBTD,IB,NETI,AM,NDATT)
 
-       IF (AM.LE.1.) GO TO 28
-       WRITE(6,29)IB,AM
+        IF (AM.LE.1.) GO TO 27
+          WRITE(6,29)IB,AM
 29    FORMAT(1H ,///,29H MAX. INTENS. IN THEOR. BEAM ,1I5,12H IS SUSPECT
      1(,1E13.5,29H)- ****** STOP PROGRAM ******)
 
-      write(0,29)IB,AM
+          WRITE(0,29)IB,AM                                              ! error message to stderr (0)
 
-      STOP
+          STOP
+27      CONTINUE
 28    CONTINUE
 
 C Initialize some values
@@ -134,54 +127,29 @@ C  INTERPOLATE THEOR. DATA ONTO WORKING GRID
 
       CALL INTPOL(AT,1,NBTD,NET,1,NBT,ET,EINCR,IPR,XPL,YPL)
 
-CVB
-
-      IF (WHICHR.eq.1) THEN
-
-CVB
-
-C  PRODUCE 1ST AND 2ND DERIVATIVE OF THEORY
-
-      CALL DER(AT,NET,1,NBTD,1,NBT,ATP,EINCR)
-
-C  PRODUCE PENDRY Y FUNCTION FOR THEORY
-
-      CALL YPEND(AT,ATP,1,NBTD,1,NBT,NET,ET,YT,VI,IPR)
-
-CVB
-
+      IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                            !for RPendry, Rsmooth
+C       PRODUCE 1st DERIVATIVE OF THEORY
+        CALL DER(AT,NET,1,NBTD,1,NBT,ATP,EINCR)
+        IF (WHICHR.eq.1) THEN
+C         PRODUCE PENDRY or Rsmooth Y FUNCTION FOR THEORY
+          CALL YPEND(AT,ATP,1,NBTD,1,NBT,NET,ET,YT,VI,IPR)
+        ELSE
+          CALL YSMOOTH(AT,ATP,1,NBTD,1,NBT,NET,ET,YT,VI,IPR)
+        END IF
       END IF
-
-CVB
 
 C  PRODUCE SOME INTEGRALS OVER THEOR. DATA
 
       DO 50 IB=1,NBT
-
-      IE2=NET(IB)
-
-      IF (IE2.EQ.0) GO TO 50
-
-CVB  for R2
-
-      IF (WHICHR.eq.2) THEN
-
-      CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IB,1,1,IE2,0,EINCR,
-     10.,0.,1,TST(IB),YPL)
-
-CVB
-
-CVB
-      ELSE IF (WHICHR.eq.1) THEN
-CVB
-
-      CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IB,1,1,IE2,0,EINCR,
-     10.,0.,2,TSTY2(IB),YPL)
-
-CVB
-      END IF
-CVB
-
+        IE2=NET(IB)
+        IF (IE2.EQ.0) GO TO 50
+        IF (WHICHR.eq.2) THEN                                           !for R2
+          CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IB,1,1,IE2,0,EINCR,
+     1    0.,0.,1,TST(IB),YPL)
+        ELSE IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                     !for RPendry, Rsmooth
+          CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IB,1,1,IE2,0,EINCR,
+     1    0.,0.,2,TSTY2(IB),YPL)
+        END IF
 50    CONTINUE
 
 C  START LOOP OVER INNER POTENTIAL VALUES
@@ -195,12 +163,8 @@ C      WRITE(6,60) V0
 60    FORMAT(34H0THEOR. INNER POTENTIAL SHIFTED BY,1F7.2,3H EV)
                 V0R=-V0RR+V0
 CVB for R2:
-
       AR2 = 0.
-
 CVB
-
-
       ARPE=0.
       ARAV=0.
       ERANG=0.
@@ -210,13 +174,9 @@ CVB
       RAVP=0.
 
       DO 132 I=1,2                                                       260187
-
 CVB  for R2:
-
          AR2M(I)=0.
-
 CVB
-
          ERANGM(I)=0.                                                    260187
          ARPEM(I)=0.                                                     260187
          RAZZM(I)=0.                                                     260187
@@ -225,8 +185,9 @@ CVB
 132   CONTINUE                                                           260187
 
       DO 62 IB=1,NBTD
-      NST1(IB)=0
-62    NST2(IB)=0
+        NST1(IB)=0
+        NST2(IB)=0
+62    CONTINUE
 
       ICO=0
 
@@ -295,160 +256,110 @@ C  BE REDUCED ACCORDINGLY
 
 CVB
       IF (WHICHR.eq.2) THEN
-CVB
+CVB     for R2:
+C       quantities for normalisation (SE) and quadratic integrals (SE2)
+        SS=0.
+        SU=0.
+        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
+     1  0.,0.,1,SS,YPL)
+        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
+     1  0.,0.,1,SU,YPL)
 
-CVB  for R2:
+        SE=TSE(IBE)-SS-SU
 
-C    quantities for normalisation (SE) and quadratic integrals (SE2)
+        SS2 = 0.
+        SU2 = 0.
+        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
+     1  0.,0.,2,SS2,YPL)
+        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
+     1  0.,0.,2,SU2,YPL)
 
-      SS=0.
-      SU=0.
+        SE2=TSE2(IBE)-SS2-SU2
 
-      CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
-     10.,0.,1,SS,YPL)
+      ELSE IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                       !RPendry or Rsmooth
 
-      CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
-     10.,0.,1,SU,YPL)
+        SSY2=0.
+        SUY2=0.
+        CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
+     1  0.,0.,2,SSY2,YPL)
+        CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
+     1  0.,0.,2,SUY2,YPL)
 
-      SE=TSE(IBE)-SS-SU
-
-      SS2 = 0.
-      SU2 = 0.
-
-      CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
-     10.,0.,2,SS2,YPL)
-
-      CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
-     10.,0.,2,SU2,YPL)
-
-      SE2=TSE2(IBE)-SS2-SU2
-
-CVB
-
-CVB
-      ELSE IF (WHICHR.eq.1) THEN
-CVB
-
-      SSY2=0.
-      SUY2=0.
-
-      CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,1,NE1,0,EINCR,
-     10.,0.,2,SSY2,YPL)
-
-      CALL VARSUM(YE,AE,AE,AE,1,1,NBED,1,1,1,IBE,1,NE2,NE,0,EINCR,
-     10.,0.,2,SUY2,YPL)
-
-      SEY2=TSEY2(IBE)-SSY2-SUY2
-
-CVB
+        SEY2=TSEY2(IBE)-SSY2-SUY2
       END IF
-CVB
 
-CVB
       IF (WHICHR.eq.2) THEN
-CVB
+CVB     for R2: produce quantities for normalisation
+        SS=0.
+        SU=0.
+        CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,1,NT1,0,EINCR,
+     1  0.,0.,1,SS,YPL)
 
-CVB  for R2: produce quantities for normalisation
+        CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,NT2,NT,0,EINCR,
+     1  0.,0.,1,SU,YPL)
 
-      SS=0.
-      SU=0.
+        ST=TST(IBT)-SS-SU
+C       normalisation factor needed in integral for R2
+        C = SE/ST
+      ELSE IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                       !RPendry or Rsmooth
 
-      CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,1,NT1,0,EINCR,
-     10.,0.,1,SS,YPL)
+        SSY2=0.
+        SUY2=0.
+        CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,1,NT1,0,EINCR,
+     1  0.,0.,2,SSY2,YPL)
+        CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,NT2,NT,0,EINCR,
+     1  0.,0.,2,SUY2,YPL)
 
-      CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,NT2,NT,0,EINCR,
-     10.,0.,1,SU,YPL)
-
-      ST=TST(IBT)-SS-SU
-
-C    normalisation factor needed in integral for R2
-
-      C = SE/ST
-
-CVB
-
-CVB
-      ELSE IF (WHICHR.eq.1) THEN
-CVB
-
-      SSY2=0.
-      SUY2=0.
-
-      CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,1,NT1,0,EINCR,
-     10.,0.,2,SSY2,YPL)
-
-      CALL VARSUM(YT,AT,AT,AT,1,1,NBTD,1,1,1,IBT,1,NT2,NT,0,EINCR,
-     10.,0.,2,SUY2,YPL)
-
-      STY2=TSTY2(IBT)-SSY2-SUY2
-
-CVB
+        STY2=TSTY2(IBT)-SSY2-SUY2
       END IF
-CVB
 
 C  PRODUCE INTEGRALS INVOLVING BOTH EXP. AND THEORY
 
       NV=NT1-NE1
 
 CVB
-      IF (WHICHR.eq.2) THEN
-CVB
+      IF (WHICHR.eq.2) THEN                                             !for R2
+        CALL VARSUM(AE,AT,AE,AE,1,1,NBED,NBTD,1,1,IBE,IBT,NE1,NE2,
+     1  NV,EINCR,0.,C,5,S2,YPL)
 
-CVB  for R2:
+C       R-FACTOR BASED ON INTEGRAL OF (EXP-C*TH)**2
+        R2(IBE)=S2/SE2
+        AR2=AR2+WB(IBE)*EET(IBE)*R2(IBE)
 
-      CALL VARSUM(AE,AT,AE,AE,1,1,NBED,NBTD,1,1,IBE,IBT,NE1,NE2,
-     1NV,EINCR,0.,C,5,S2,YPL)
+      ELSE IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                       !RPendry or Rsmooth
 
-C  R-FACTOR BASED ON INTEGRAL OF (EXP-C*TH)**2
+        CALL VARSUM(YE,YT,YE,YE,1,1,NBED,NBTD,1,1,IBE,IBT,NE1,NE2,
+     1  NV,EINCR,0.,1.,5,SY2,YPL)
 
-      R2(IBE)=S2/SE2
-      AR2=AR2+WB(IBE)*EET(IBE)*R2(IBE)
+C       R-FACTOR ACCORDING TO PENDRY (MULT. BY 0.5)
 
-CVB
+        RPE(IBE)=1.0*SY2/(SEY2+STY2)                                    !R factor of beam 
 
-CVB
-      ELSE IF (WHICHR.eq.1) THEN
-CVB
+        ARPE=ARPE+WB(IBE)*EET(IBE)*RPE(IBE)
+        RAZZ=RAZZ+SY2*WB(IBE)                                           !numerator
+        RANN=RANN+SEY2*WB(IBE)+STY2*WB(IBE)                             !denominator
 
-      CALL VARSUM(YE,YT,YE,YE,1,1,NBED,NBTD,1,1,IBE,IBT,NE1,NE2,
-     1NV,EINCR,0.,1.,5,SY2,YPL)
-
-C  R-FACTOR ACCORDING TO PENDRY (MULT. BY 0.5)
-
-      RPE(IBE)=1.0*SY2/(SEY2+STY2)
-
-      ARPE=ARPE+WB(IBE)*EET(IBE)*RPE(IBE)
-      RAZZ=RAZZ+SY2*WB(IBE)
-      RANN=RANN+SEY2*WB(IBE)+STY2*WB(IBE)
-
-CVB
       END IF
-CVB
 
-CVB  KMIT is identification of beam group - only use these values
-C  if beamgroup is valid, i.e 1 or 2
+CVB   KMIT is identification of beam group (integer/superstructure)
+C      - only use these values if beamgroup is valid, i.e 1 or 2
 
-      IF ((KMIT .GT. 0).AND.(KMIT .LE. 2)) THEN                           260187
+      IF ((KMIT .GT. 0).AND.(KMIT .LE. 2)) THEN                          260187
+CVB     for R2:
+        AR2M(KMIT)=AR2M(KMIT)+WB(IBE)*EET(IBE)*R2(IBE)
 
-CVB  for R2:
-
-         AR2M(KMIT)=AR2M(KMIT)+WB(IBE)*EET(IBE)*R2(IBE)
-
-CVB
-
-         ARPEM(KMIT)=ARPEM(KMIT)+WB(IBE)*EET(IBE)*RPE(IBE)              260187
-         RAZZM(KMIT)=RAZZM(KMIT)+SY2*WB(IBE)                            260187
-         RANNM(KMIT)=RANNM(KMIT)+SEY2*WB(IBE)+STY2*WB(IBE)              260187
-
+CVB     for RPendry or Rsmooth
+        ARPEM(KMIT)=ARPEM(KMIT)+WB(IBE)*EET(IBE)*RPE(IBE)                260187
+        RAZZM(KMIT)=RAZZM(KMIT)+SY2*WB(IBE)                              260187
+        RANNM(KMIT)=RANNM(KMIT)+SEY2*WB(IBE)+STY2*WB(IBE)                260187
       ENDIF
-
 
       ERANG=ERANG+WB(IBE)*EET(IBE)
       OVLG=OVLG+EET(IBE)
 
       IF ((KMIT .GT. 0).AND.(KMIT .LE. 2)) THEN                          260187
-         ERANGM(KMIT)=ERANGM(KMIT)+WB(IBE)*EET(IBE)                     260187
-      ENDIF                                                             260187
+         ERANGM(KMIT)=ERANGM(KMIT)+WB(IBE)*EET(IBE)                      260187
+      ENDIF                                                              260187
 
       OVL=EET(IBE)   ! unused
 C       WRITE(7,4444) (BENAME(I,IBE),I=1,3),IBE,D12,V0R,
@@ -460,66 +371,40 @@ C     * EMIN,EMAX,OVL,RPE(IBE)
 C  END OF LOOP OVER BEAMS
 
 CVB  for R2:
-
       AR2 = AR2/ERANG
-
 CVB
-
       AR=ARPE/ERANG
 
 C  now do all averaging procedures for beam groups
 
-      DO 137 I=1,2                                                      260187
-
-        IF (ERANGM(I) .LT. 0.0001) THEN
-
-        ARM(I)=5.
-        AR2M(I)=5.
-
+      DO 137 I=1,2                                                       260187
+        IF (ERANGM(I) .LT. 0.0001) THEN                                 !invalid energy range
+          ARM(I)=5.
+          AR2M(I)=5.
         ELSE
-
 CVB  for R2:
-
-        AR2M(I) = AR2M(I)/ERANGM(I)
-
+          AR2M(I) = AR2M(I)/ERANGM(I)
 CVB
-
-        ARM(I)=ARPEM(I)/ERANGM(I)                                       260187
-
+          ARM(I)=ARPEM(I)/ERANGM(I)                                      260187
         END IF
-
-137   CONTINUE                                                          260187
+137   CONTINUE                                                           260187
 
       OVL=ERANG
       XRPE=AR
-
 CVB
-      IF (WHICHR.eq.1) THEN
-CVB
-
+      IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN                            !RPendry, Rsmooth: sum numerator/sum denominator
         RAVP=RAZZ/RANN
-
-CVB
       ELSE
-
         RAVP = 5.0
-
       END IF
 CVB
-
       DO 142 I=1,2                                                       260187
-
         XRPEM(I)=ARM(I)                                                  260187
-
-                   IF(RANNM(I) .LT. 0.0001) THEN
-
-                   RAVPM(I)=5.0
-
-                   ELSE
-
-                   RAVPM(I)=RAZZM(I)/RANNM(I)                            260187
-
-               END IF
+        IF(RANNM(I) .LT. 0.0001) THEN
+          RAVPM(I)=5.0
+        ELSE
+          RAVPM(I)=RAZZM(I)/RANNM(I)                                     260187
+        END IF
 
 142   CONTINUE                                                           260187
 
@@ -537,7 +422,7 @@ C  over integer beams, RAVPM(2) is r-factor over half-order beams
 
 C  use variable AR as current rfactor
 
-      IF (WHICHR.eq.1) THEN
+      IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN
 
         IF (WHICHG.eq.1) THEN
           AR=RAVPM(1)
@@ -568,7 +453,7 @@ C  inner potential)
         BARAV=AR
         BV0(IPOP)=-V0RR+V0  ! TODO: avoid use of IPOP by writing to some fixed variable, pass BV0(IPOP) from search
 
-        IF (WHICHR.eq.1) THEN
+        IF (WHICHR.eq.1 .or. WHICHR.eq.4) THEN
 
           BRGES(IPOP)=RAVP
           BRINS(IPOP)=RAVPM(1)
@@ -859,6 +744,7 @@ C
       DIMENSION BRHAS(NPS)
       DIMENSION BV0(NPS)
       character*60 text1, text2, text3, text
+      character*3  rName                                                !'R_P', 'R_2', or 'R_S'
       integer NDOM, NPRAS(NDOM), IDOM, KDOM
       real DMISCH
       integer PMISCH(MNDOM,MPS)
@@ -941,48 +827,29 @@ cas     +IFILE=1,NFIL(IPLACE)),('C',IPLACE,IPLACE,',')),IPLACE=1,MNPLACES)
       write(4,*)
 
       IF (WHICHR.eq.1) THEN
-
-        IF (WHICHG.eq.1) THEN
-
-          write(4,'(A34,I7,A4,F10.8)')
-     +    'Average RPe-INTEGER of GENERATION ',
-     +    IGEN,' :  ',AVERNEW
-
-        ELSE IF (WHICHG.eq.2) THEN
-
-          write(4,'(A34,I7,A4,F10.8)')
-     +    'Average RPe-FRACTIONALS of GENERATION ',
-     +    IGEN,' :  ',AVERNEW
-
-        ELSE
-
-          write(4,'(A26,I7,A4,F10.8)')
-     +    'Average RPe of GENERATION ',
-     +    IGEN,' :  ',AVERNEW
-
-        ENDIF
-
+        rName='R_P'
       ELSE IF (WHICHR.eq.2) THEN
+        rName='R_2'
+      ELSE IF (WHICHR.eq.4) THEN
+        rName='R_S'
+      ELSE
+        rName='R??'
+      END IF
 
-        IF (WHICHG.eq.1) THEN
-
-          write(4,'(A33,I7,A4,F10.8)')
-     +    'Average R2-INTEGER of GENERATION ',
+      IF (WHICHG.eq.1) THEN
+        write(4,'(A,A,A,I7,A4,F10.8)')
+     +    'Average ',rName,'-INTEGER of GENERATION ',
      +    IGEN,' :  ',AVERNEW
 
-        ELSE IF (WHICHG.eq.2) THEN
-
-          write(4,'(A33,I7,A4,F10.8)')
-     +    'Average R2-FRACTIONALS of GENERATION ',
+      ELSE IF (WHICHG.eq.2) THEN
+        write(4,'(A,A,A,I7,A4,F10.8)')
+     +    'Average ',rName,'-FRACTIONALS of GENERATION ',
      +    IGEN,' :  ',AVERNEW
 
-        ELSE
-
-          write(4,'(A25,I7,A4,F10.8)')
-     +    'Average R2 of GENERATION ',
+      ELSE
+        write(4,'(A,A,A,I7,A4,F10.8)')
+     +    'Average ',rName,' of GENERATION ',
      +    IGEN,' :  ',AVERNEW
-
-        ENDIF
 
       ENDIF
 
@@ -1008,7 +875,7 @@ C  Dimension statements
       integer NPRAS(NDOM), MAXGEN
 
 C  WHICHG determines which beam group to use
-C  WHICHR determines whether RPe or R2 are used
+C  WHICHR determines whether RPe(1), R2(2) or Rsmooth(4) are used
 C  DATOUT determines whether to store and print R(struct) data
 
       INTEGER NPAR
@@ -1103,7 +970,7 @@ C --- Schleife ueber alle Domaenen
           READ(21,'(I5)') FILREL(IDOM,IPLACE)
           READ(21,'(I5)') NFIL(IDOM,IPLACE)
 
-          if (NFIL(IDOM,IPLACE).gt.NFILES) then                                 ! AMI: this is an error message and is sent to stderr (0)
+          if (NFIL(IDOM,IPLACE).gt.NFILES) then                         ! AMI: this is an error message and is sent to stderr (0)
             write(0,*) "Parameter MNFILES smaller than number of ",
      +                 "delta amplitude storage files required for"
             write(0,*) "site no. ",IPLACE," in domain no. ", IDOM,"."
@@ -1152,7 +1019,7 @@ CVB  error check for MNCONCS done here instead of CheckVal for the sake
 C    of clarity
 
           IF (NCONC.gt.MNCONCS) THEN
-            write(0,*) "Parameter MNCONCS too small!"                           ! AMI: this is an error message and is sent to stderr (0)
+            write(0,*) "Parameter MNCONCS too small!"                   ! AMI: this is an error message and is sent to stderr (0)
             STOP
           END IF
 
@@ -1215,8 +1082,9 @@ cvb      write(6,'(5000i4)') (NPRAS(IDOM), IDOM = 1, NDOM)
 C
 C #######################################################################
 ! AMI March 2022: This subroutine deals with the experimental data preparation
+! -ms March 2026: Added WHICHR to arguments: whether to calculate Y_P or Y_S
 
-      SUBROUTINE PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,
+      SUBROUTINE PREEXP(AE,EE,NBED,NEE,BENAME,NBEA,IPR,ISMOTH,WHICHR,
      +                  EINCR,VI,YE,NDATA,TSE,TSE2,TSEY2,XPL,YPL,
      +                  AEP,NNN,NBE)
 
@@ -1224,6 +1092,7 @@ C  Declaration of global variables
 
       INTEGER IPR
       INTEGER ISMOTH
+      INTEGER WHICHR
       INTEGER NDATA
       INTEGER NBED
       INTEGER NBE
@@ -1273,8 +1142,12 @@ C  INTERPOLATE EXP. DATA TO WORKING GRID (MULTIPLES OF EINCR EV)
 C  PRODUCE 1ST DERIVATIVE OF EXPERIMENTAL DATA
       CALL DER(AE,NEE,1,NBED,1,NBE,AEP,EINCR)
 
-C  PRODUCE PENDRY Y FUNCTION FOR EXP. DATA
-      CALL YPEND(AE,AEP,1,NBED,1,NBE,NEE,EE,YE,VI,IPR)
+C PRODUCE PENDRY (or SMOOTH) Y FUNCTION FOR EXP. DATA
+      IF (WHICHR.eq.1) THEN
+        CALL YPEND(AE,AEP,1,NBED,1,NBE,NEE,EE,YE,VI,IPR)
+      ELSE
+        CALL YSMOOTH(AE,AEP,1,NBED,1,NBE,NEE,EE,YE,VI,IPR)
+      ENDIF
 
       DO 20 IB=1,NBE
       IE2=NEE(IB)
@@ -1292,7 +1165,7 @@ CVB  for R2 :
       CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,1,1,IB,1,1,IE2,0,EINCR,
      10.,0.,2,TSE2(IB),YPL)
 
-CVB  for RPe:
+CVB  for RPe & Rsmooth sum of squared Y functions (for denominator):
 
       TSEY2(IB)=0.
 
@@ -1361,7 +1234,7 @@ C  THE NUMBER OF CURVES AVERAGED TOGETHER CHANGES)
       READ(12,35)NEE(IB),FAC
 35    FORMAT(1I4,1E13.4)
 
-      IF (NEE(IB).gt.MNDATA) THEN                                               ! AMI: this is an error message and is sent to stderr (0)
+      IF (NEE(IB).gt.MNDATA) THEN                                       ! AMI: this is an error message and is sent to stderr (0)
         write(0,*) "Exp. beam no. ",IB," contains more data points",
      +             " than dimension MNDATA allows for!"
         write(0,*) "Please correct!"
@@ -1591,41 +1464,141 @@ C-----------------------------------------------------------------------
 !
 !
 C  SUBROUTINE YPEND CALCULATES THE PENDRY Y FUNCTION
-C  Y = (A/AP) / ((A/AP)**2 + VI), WHERE AP/A IS THE LOGARITHMIC ! AP == a prime
+C  Y = (A/AP) / ((A/AP)**2 + VI), WHERE AP/A IS THE LOGARITHMIC
 C  DERIVATIVE OF THE (TABULATED) FUNCTION A
+C
+C  Arguments
+C  A(NS,NBD,MNDATA)     function value (1, beam#, energy points)
+C  AP(NS,NBD,MNDATA)    A Prime, derivative
+C  NS                   unused in search; always 1
+C  NBD                  Number of beams in array
+C  IS                   unused in search; always 1
+C  NB                   Number of beams used
+C  NE(NBD)              Number of energy points for each beam
+C  E(NBD,MNDATA)        Energy values (only for printing)
+C  Y(NBD,MNDATA)        Y function output (beam, energy points)
+C  VI                   V0i/EnergyStep
+C  IPR                  Print Y function if IPR>=2
+C
+C  Parameter from 'PARAM' file
+C  MNDATA               max number of energy points (in EXPBEAMS)
+C  
       SUBROUTINE YPEND(A,AP,NS,NBD,IS,NB,NE,E,Y,VI,IPR)
 
       INCLUDE "PARAM"
 
       DIMENSION A(NS,NBD,MNDATA),AP(NS,NBD,MNDATA),NE(NBD),E(NBD,MNDATA)
       DIMENSION Y(NBD,MNDATA)
-C     LEVEL 2, A,AP,E,Y
-      DO 25 IB=1,NB
-      N=NE(IB)
-      IF (N.EQ.0) GO TO 25
-      DO 20 IE=1,N
-      AF=A(IS,IB,IE)
-      IF (ABS(AF).LT.1.E-7) GO TO 10
-      AF=AP(IS,IB,IE)/AF
-      Y(IB,IE)=AF/(1.+VI*VI*AF*AF)
-      GO TO 20
-10    APF=AP(IS,IB,IE)
-      IF (APF.GT.1.E-7) GO TO 15
-      Y(IB,IE)=0.
-      GO TO 20
-15    AF=AF/APF
-      Y(IB,IE)=AF/(AF*AF+VI*VI)
-20    CONTINUE
-25    CONTINUE
-      IF (IPR.LT.2) GO TO 50
-      DO 30 IB=1,NB
-      N=NE(IB)
-      IF (N.EQ.0) GO TO 30
-      WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
-40    FORMAT(26H PENDRY Y FUNCTION IN BEAM,1I5,/,1000(5(1F7.2,1E13.4,3X),
-     1/))
-30    CONTINUE
-50    RETURN
+
+      DO IB=1,NB                                                        !for all beams
+        N=NE(IB)
+        IF (N.NE.0) THEN
+          DO IE=1,N                                                     !for all energies
+            AF=A(IS,IB,IE)
+            IF (ABS(AF).GE.1.E-7) THEN
+              AF=AP(IS,IB,IE)/AF                                        ! dln(I)/dE
+              Y(IB,IE)=AF/(1.+VI*VI*AF*AF)
+            ELSE                                                        !very low intensity
+              APF=AP(IS,IB,IE)
+              IF (ABS(APF).GE.1.E-7) THEN                               !'abs' was missing 20260324 -ms
+                AF=AF/APF
+                Y(IB,IE)=AF/(AF*AF+VI*VI)
+              ELSE
+                Y(IB,IE)=0.                                             !I'=0 && I=0: Y=0
+              END IF
+            END IF
+          END DO                                                        !for all energies
+        END IF                                                          !if (N.NE.0)
+      END DO                                                            !for all beams
+      IF (IPR.GE.2) THEN
+        DO IB=1,NB
+          N=NE(IB)
+          IF (N.NE.0) THEN
+            WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
+40          FORMAT(26H PENDRY Y FUNCTION IN BEAM,1I5,
+     1      /,1000(5(1F7.2,1E13.4,3X),
+     1      /))
+          END IF
+        END DO
+      END IF
+      RETURN
+      END
+C-----------------------------------------------------------------------
+C  SUBROUTINE YSMOOTH CALCULATES THE Y FUNCTION OF THE SMOOTH R FACTOR
+C
+C  See Imre et al., J. Phys.: Condens. Matter 38, 105001.
+C
+C  Arguments
+C  A(NS,NBD,MNDATA)     function value (1, beam#, energy points)
+C  AP(NS,NBD,MNDATA)    A Prime, derivative
+C  NS                   unused in search; always 1
+C  NBD                  Number of beams in array
+C  IS                   unused in search; always 1
+C  NB                   Number of beams used
+C  NE(NBD)              Number of energy points for each beam
+C  E(NBD,MNDATA)        Energy values (only for printing)
+C  Y(NBD,MNDATA)        Y function output (beam, energy points)
+C  VI                   V0i/EnergyStep
+C  IPR                  Print Y function if IPR>=2
+C
+C  Parameter from 'PARAM' file
+C  MNDATA               max number of data points (in EXPBEAMS)
+C  
+      SUBROUTINE YSMOOTH(A,AP,NS,NBD,IS,NB,NE,E,Y,VI,IPR)
+
+      INCLUDE "PARAM"
+
+      DIMENSION A(NS,NBD,MNDATA),AP(NS,NBD,MNDATA),NE(NBD),E(NBD,MNDATA)
+      DIMENSION Y(NBD,MNDATA)
+
+      PARAMETER(ALPHA = 4.0, BETA = 0.15)
+
+      DO IB=1,NB                                                        !for all beams
+        N=NE(IB)
+        IF (N.NE.0) THEN
+          DO IE=1,N                                                     !for all energies
+            AF=A(IS,IB,IE)                                              !intensity value
+            IF (AF.LE.1.0E-10) THEN
+              AF=1.0E-10                                                !avoids division by 0 in I'/sqrt(I*I+...)
+            ENDIF
+            DERIV1=AP(IS,IB,IE)*VI;                                     !1st derivative*V0i
+C           For simplicity, we calculate the 2nd derivative DERIV2 from 3 points.
+C           This works well if the curves are sufficiently smooth
+C           At the borders, we take the nearest defined value (or 0 if less than 3 points in the curve)
+            DERIV2=0.0;
+            IF (IE.EQ.1) THEN
+              DERIV2=A(IS,IB,IE+2) + A(IS,IB,IE) - 2*A(IS,IB,IE+1)
+            ELSE IF (IE.LT.N) THEN
+              DERIV2=A(IS,IB,IE+1) + A(IS,IB,IE-1) - 2*AF
+            ELSE IF (IE.GE.3) THEN
+              DERIV2=A(IS,IB,IE) + A(IS,IB,IE-2) - 2*A(IS,IB,IE+1)
+            ENDIF
+            YDENSQ=AF*AF + 4*DERIV1*DERIV1;                             !square of the denominator of Y
+            IF (DERIV2.GT.1.0E-10) THEN                                 !min not 0 but 1e-10 to avoid overflow in division by I"^2
+              DERIV2=DERIV2*VI*VI                                       !2nd derivative*V0i*V0i
+              Y1 = ALPHA*AF/DERIV2 -
+     1             (0.5*ALPHA)*DERIV1*DERIV1/(DERIV2*DERIV2) + BETA
+              IF (Y1.GT.0) THEN
+                Y2=Y1/SQRT(1.0 + Y1*Y1)
+                YDENSQ=YDENSQ + Y2*Y2*DERIV2*DERIV2
+              END IF
+            END IF
+            Y(IB,IE)=2*DERIV1/SQRT(YDENSQ)
+          END DO                                                        !for all energies
+        END IF                                                          !if (N.NE.0)
+      END DO                                                            !for all beams
+      IF (IPR.GE.2) THEN
+        DO IB=1,NB
+          N=NE(IB)
+          IF (N.NE.0) THEN
+            WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
+40          FORMAT(26H SMOOTH Y FUNCTION IN BEAM,1I5,
+     1      /,1000(5(1F7.2,1E13.4,3X),
+     1      /))
+          END IF
+        END DO
+      END IF
+      RETURN
       END
 C-----------------------------------------------------------------------
 ! AMI March 2022: to be superceeded by new interpolation and R-factor
@@ -1860,17 +1833,12 @@ C
 C     LEVEL 2, A1,A2,B1,B2
 
 CVB  check whether integration limits are equal
-
       IF (IE1.eq.IE2) THEN
-
         S=0.
-
         RETURN
-
       END IF
 
 CVB
-
       N=0
 
 C  FOR ZANAZZI-JONA R-FACTOR INTERPOLATION ONTO 10-FOLD DENSER GRID
@@ -1879,27 +1847,28 @@ C  IS MADE
       IF (NF.EQ.6) GO TO 100
 
       DO 80 IE=IE1,IE2
-      N=N+1
-      IES=IE+NV
-      GO TO (10,20,30,40,50,60),NF
-10    Y(N)=A1(IS1,IB1,IE)
-      GO TO 70
-20    Y(N)=A1(IS1,IB1,IE)**2
-      GO TO 70
-30    Y(N)=ABS(A1(IS1,IB1,IE))
-      GO TO 70
-40    Y(N)=ABS(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))
-      GO TO 70
-50    Y(N)=(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))**2
-      GO TO 70
-60    Y(N)=ABS(B1(IS1,IB1,IE)-C*B2(IS2,IB2,IES))*
-     1     ABS(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))/
+        N=N+1
+        IES=IE+NV
+        GO TO (10,20,30,40,50,60),NF
+10        Y(N)=A1(IS1,IB1,IE)
+        GO TO 70
+20        Y(N)=A1(IS1,IB1,IE)**2
+        GO TO 70
+30        Y(N)=ABS(A1(IS1,IB1,IE))
+        GO TO 70
+40        Y(N)=ABS(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))
+        GO TO 70
+50        Y(N)=(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))**2
+        GO TO 70
+60      Y(N)=ABS(B1(IS1,IB1,IE)-C*B2(IS2,IB2,IES))*
+     1       ABS(A1(IS1,IB1,IE)-C*A2(IS2,IB2,IES))/
      2        (ABS(A1(IS1,IB1,IE))+EPS)
-70    CONTINUE
+70      CONTINUE
 80    CONTINUE
       CALL INTSUM(Y,1,1,1,1,EINCR,1,N,S)
       RETURN
 
+C  NF=6, ZANAZZI-JONA
 100   DO 110 IE=IE1,IE2
       N=N+1
       IES=IE+NV
@@ -2187,46 +2156,31 @@ C  Subroutine HeadDoc writes header for output file
       Subroutine HeadDoc(WHICHR,WHICHG)
 
       INTEGER WHICHR,WHICHG
+      CHARACTER*3 rName                                                 !'R_P', 'R_2' or 'R_S'
 
       WRITE(4,*)
 
       IF (WHICHR.eq.1) THEN
-
-        IF (WHICHG.eq.1) THEN
-
-          WRITE(4,*) "R-factor minimum search using",
-     &               " integer beam RPe for optimization."
-
-        ELSE IF (WHICHG.eq.2) THEN
-
-          WRITE(4,*) "R-factor minimum search using ",
-     &               "half-order beam RPe for optimization."
-
-        ELSE
-
-          WRITE(4,*) "R-factor minimum search using ",
-     &               "RPe for all beams for optimization."
-
-        ENDIF
-
+        rName='R_P'
       ELSE IF (WHICHR.eq.2) THEN
+        rName='R_2'
+      ELSE IF (WHICHR.eq.4) THEN
+        rName='R_S'
+      ELSE
+        rName='R??'
+      END IF
 
-        IF (WHICHG.eq.1) THEN
+      IF (WHICHG.eq.1) THEN
+        WRITE(4,*) "R-factor minimum search using ",
+     &               "integer-beam ",rName," for optimization."
 
-          WRITE(4,*) "R-factor minimum search using ",
-     &               "integer beam R2 for optimization."
+      ELSE IF (WHICHG.eq.2) THEN
+        WRITE(4,*) "R-factor minimum search using ",
+     &               "fractional-beam ",rName," for optimization."
 
-        ELSE IF (WHICHG.eq.2) THEN
-
-          WRITE(4,*) "R-factor minimum search using ",
-     &               "half-order beam R2 for optimization."
-
-        ELSE
-
-          WRITE(4,*) "R-factor minimum search using ",
-     &               "R2 for all beams for optimization."
-
-        ENDIF
+      ELSE
+        WRITE(4,*) "R-factor minimum search using ",
+     &               rName," for all beams for optimization."
 
       ENDIF
 
@@ -2348,7 +2302,7 @@ C  open current delta amplitude file
 
           ELSE
 
-            write(0,*) 'Illegal format for file ',                              ! AMI: this is an error message and is sent to stderr (0)
+            write(0,*) 'Illegal format for file ',                      ! AMI: this is an error message and is sent to stderr (0)
      +           INFILE(IDOM,IPLACE,IFILE)
             STOP
 
@@ -2409,7 +2363,7 @@ C  NT0 is a known quantity here so it must be kept!
 
             IF ((CHECK.gt.1.0e-09).or.(INT0.ne.NT0)) THEN
 
-              WRITE(0,*) 'Improper file combination!'                           ! AMI: this is an error message and is sent to stderr (0)
+              WRITE(0,*) 'Improper file combination!'                   ! AMI: this is an error message and is sent to stderr (0)
               STOP
 
             END IF
@@ -2508,13 +2462,14 @@ C  if energy is within range save it in array ESMK
 
             ELSE IF (EeV.gt.(EMAX + 1.E-4)) THEN
 
-              write(6,*) 'EeV = ', EeV, '     EMAX + 1.E-4 = ', EMAX + 1.E-4
+              write(6,*) 'EeV = ', EeV, '     EMAX + 1.E-4 = ',
+     +               EMAX + 1.E-4
               write(6,*) 'EeV.gt.(EMAX + 1.E-4)'
               GO TO 2227
 
             ELSE IF (IDATT.gt.NDATT) THEN
 
-              write(0,*) 'Insufficient dimension MNDATT!!'                      ! AMI: this is an error message and is sent to stderr (0)
+              write(0,*) 'Insufficient dimension MNDATT!!'              ! AMI: this is an error message and is sent to stderr (0)
 
               STOP
 
@@ -2534,7 +2489,7 @@ C  check validity of read energy
 
                 IF (CHECK.gt.1.E-4) THEN
 
-                  write(0,*) 'Illegal energy read in input file',               ! AMI: this is an error message and is sent to stderr (0)
+                  write(0,*) 'Illegal energy read in input file',       ! AMI: this is an error message and is sent to stderr (0)
      +            CNTFIL
 
                   STOP
@@ -3034,17 +2989,17 @@ C  files.
 
       IF (NBTD.ne.MNBTD) THEN
 
-        write(0,*) 'NBTD in WEXPEL or MNBTD wrong!'                             ! AMI: this is an error message and is sent to stderr (0)
+        write(0,*) 'NBTD in WEXPEL or MNBTD wrong!'                     ! AMI: this is an error message and is sent to stderr (0)
         STOP
 
       ELSE IF (NBED.ne.MNBED) THEN
 
-        write(0,*) 'NBED in WEXPEL or MNBED wrong!'                             ! AMI: this is an error message and is sent to stderr (0)
+        write(0,*) 'NBED in WEXPEL or MNBED wrong!'                     ! AMI: this is an error message and is sent to stderr (0)
         STOP
 
       END IF
 
-      IF (PNUM.NE.MNPRMK) THEN                                                  ! AMI: this is an error message and is sent to stderr (0)
+      IF (PNUM.NE.MNPRMK) THEN                                          ! AMI: this is an error message and is sent to stderr (0)
 
          write(0,'("PNUM:",I3,"MNPRMK:",I5)') PNUM, MNPRMK
 
@@ -3080,7 +3035,7 @@ C  check consistency of inner potential values from READRF and ReadFile
 
       VPIAV = VPIAV/REAL(DATTNO)
 
-      IF ((ABS(VI)-ABS(VPIAV)*HARTREE).gt.1.0e-04) THEN                         ! AMI: this is an error message and is sent to stderr (0)
+      IF ((ABS(VI)-ABS(VPIAV)*HARTREE).gt.1.0e-04) THEN                 ! AMI: this is an error message and is sent to stderr (0)
 
         write(0,*)
      +  "Average optical potential value in rf.info is incorrect:"
@@ -3090,7 +3045,7 @@ C  check consistency of inner potential values from READRF and ReadFile
 
       END IF
 
-c      IF ((ABS(V0RR)-ABS(VV)*HARTREE).gt.1.0e-04) THEN                         ! AMI: this is an error message and is sent to stderr (0)
+c      IF ((ABS(V0RR)-ABS(VV)*HARTREE).gt.1.0e-04) THEN                 ! AMI: this is an error message and is sent to stderr (0)
 c
 c        write(0,*) 'Inner potential value in WEXPEL file is incorrect!'
 c        STOP
