@@ -1,12 +1,8 @@
 ViPErLEED is a package for LEED-IV calculations and measurements.
-Copyright (c) 2019-2023, ViPErLEED Developers.
+Copyright (c) 2019-2026, ViPErLEED Developers.
 
-The ViPErLEED project is described in detail in these publications:
-- Tleedm: TODO
-- Electronics: TODO
-- SpotTracker: TODO
 If you find ViPErLEED useful in your research, the authors appreciate
-acknowledgement by citation in resulting publications.
+acknowledgment by citation in resulting publications (see CITATION.bib).
 
 
 The ViPErLEED project aims to provide free and open software.
@@ -16,25 +12,20 @@ repository. See below for details. For inquiries or questions, please
 contact the ViPErLEED developers under <info@viperleed.org>.
 
 All files in this repository authored by the ViPErLEED developers are
-licensed under the the GNU General Public License version 3 (GPLv3; see
-below for license text). This explicitly includes the TensErLEED manager
-(tleedm), ViPErLEED utility scripts, the ViPErLEED GUI, the ViPErLEED
-electronics control software, the ViPErLEED electronics firmware,
-schematics for the ViPErLEED electronics and the ViPErLEED
-documentation. Changes to the TensErLEED source code made by the
-ViPErLEED authors, which are clearly marked as such, are similarly
-licensed under GPLv3 or later.
-The ViPErLEED Spot tracker is licensed under ... TODO Michael
+licensed under the the GNU General Public License version 3 or later (GPLv3;
+see below for license text). Changes to the TensErLEED source code made by
+the ViPErLEED authors, by V. Blum, and by K. Heinz are also released under
+GPLv3.
 
 NOT COVERED under GPLv3 are:
-- All parts of TensErLEED not authored by the ViPErLEED team
+- All parts of TensErLEED not authored by the ViPErLEED team, V. Blum, or K. Heinz
 - EEASISSS
-- BEAMGEN (TODO remove after merge branch)
 
 The ViPErLEED developers have obtained permission by the authors to use
 and distribute these codes as part of ViPErLEED.
-Due to licensing issues, others may not redistribute TensErLEED,
-EEASISSS and ... without permission by the original authors.
+Due to licensing issues, others may not redistribute the contents of this
+repository that are not covered by GPLv3 without permission by the original
+authors.
 
 # TensErLEED
 
@@ -47,9 +38,9 @@ original article in resulting publications:
 Computer Physics Communications User License:
 https://www.elsevier.com/about/policies/open-access-licenses/elsevier-user-license/cpc-license
 
-All marked changes made to the TensErLEED source code by the
-ViPErLEED authors are licensed under GPLv3. The copyright to these
-changes remains with the ViPErLEED authors.
+All changes made to the TensErLEED source code by the ViPErLEED authors are
+licensed under GPLv3. The copyright to these changes remains with the ViPErLEED
+authors.
 The ViPErLEED developers took over development and maintenance of
 TensErLEED in version >=1.61.
 
@@ -59,7 +50,7 @@ Elastic Electron-Atom Scattering in Solids and Solid Surfaces (EEASISSS)
 is written and maintained by John O. Rundgren (jru@KTH.se) and used by
 ViPErLEED with permission by the author.
 
-The author appreciates acknowledgement in publications by citation of
+The author appreciates acknowledgment in publications by citation of
 the relevant works:
 - J. Rundgren, B. E. Sernelius, and W. Moritz, _Low-Energy Electron
   Diffraction with Signal Electron Carrier-Wave Wavenumber Modulated by
@@ -75,14 +66,14 @@ the relevant works:
 # Local-density-functional calculations of the energy of atoms
 
 The program "Local-density-functional calculations of the energy of
-atoms" (viperleed/tensorleed/atomic_density_files/atomic.f) was written
+atoms" (atomic_density_files/atomic.f) was written
 by Eric L. Shirley (NIST). The ViPErLEED authors have obtained
 permission from the author to include the program in the ViPErLEED
 package and release it under GPLv3 (or later). The copyright remains
 with the author.
 
 If you find this program useful in your research, the author appreciates
-acknowledgement by including the following attribution in resulting
+acknowledgment by including the following attribution in resulting
 publications:
 - Eric L. Shirley, PhD Thesis, University of Illinois at Urbana-Champaign, 1991
 
