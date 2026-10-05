@@ -475,9 +475,6 @@ C WR(4)=1, i.e. we use the smoot R factor R_S
         WRSUM=1
       ENDIF
 
-C DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG
-      write(6,*) 'WRSUM=',WRSUM,'WR=',WR
-
 C  NSS will be number of geometries remaining after skipping
 
       NSS = 0
@@ -710,7 +707,7 @@ C  derivative for the section after the last gap
 C  produce Pendry & smooth Y-function for experimental data
 
       CALL YPEND(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YPE,VI,IPR)
-      CALL YSMOOTH(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YSE,VI,IPR)
+      CALL YSMOOTH(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YSE,VI,EINCR,IPR)
 
 C  produce some integrals over experimental data
 
@@ -828,7 +825,7 @@ C  produce 1st and 2nd derivative of theoretical spectra
 C  produce Pendry Y-function of theoretical data
 
       CALL YPEND(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YPT,VI,IPR)
-      CALL YSMOOTH(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YST,VI,IPR)
+      CALL YSMOOTH(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YST,VI,EINCR,IPR)
 
 C  produce some integrals over theoretical data
 
