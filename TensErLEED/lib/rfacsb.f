@@ -332,7 +332,10 @@ C     LEVEL 2, ET,EE
       END
 C-------------------------------------------------------------------------------
 C  Subroutine DER calculates 1st derivative (after Zanazzi-Jona) of input
-C  function Y (tabulated).
+C  function Y (tabulated on NE points with step H), by NE:
+C  NE >= 23: 7-point central formula, 4-point one-sided at 3 end points;
+C  3 <= NE <= 22: central differences, 3-point one-sided at end points;
+C  NE = 2: two-point difference; NE = 1: derivative set to zero.
 
       SUBROUTINE DER(Y,NE,Y1,H)
 
@@ -362,7 +365,11 @@ C  function Y (tabulated).
           Y1(J) = (Y(J+1) - Y(J-1)) / (2.*H)
         ENDDO
         Y1(1) = (-3.*Y(1) + 4.*Y(2) - Y(3)) / (2.*H)
-        Y1(JF+1) = (-3.*Y(JF+1) + 4.*Y(JF) - Y(JF-1)) / (2.*H)
+        Y1(JF+1) = (3.*Y(JF+1) - 4.*Y(JF) + Y(JF-1)) / (2.*H)
+
+      ELSE IF (NE.EQ.1) THEN
+
+        Y1(1) = 0.
 
       ELSE
 
