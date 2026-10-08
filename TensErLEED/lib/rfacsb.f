@@ -1388,10 +1388,12 @@ C-----------------------------------------------------------------------
 C  SUBROUTINE YSMOOTH CALCULATES THE Y FUNCTION OF THE SMOOTH R FACTOR
 C
 C  See Imre et al., J. Phys.: Condens. Matter 38, 105001.
+C  Note: the output Y is 2*V0i times Y_S of the paper. The constant
+C  factor cancels in R_S (same V0i for experiment and theory).
 
 C  Arguments
 C  A(NS,NBD,NGP)     function value (1, beam#, energy points)
-C  AP(NS,NBD,NGP)    A Prime, derivative
+C  AP(NS,NBD,NGP)    A Prime, derivative dA/dE (per eV, from DER)
 C  NS                   unused in search; always 1
 C  NBD                  Number of beams in array
 C  NGP                  max number of energy points
@@ -1400,10 +1402,11 @@ C  NB                   Number of beams used
 C  NE(NBD)              Number of energy points for each beam
 C  E(NBD,NGP)           Energy values (only for printing)
 C  Y(NBD,NGP)           Y function output (beam, energy points)
-C  VI                   V0i/EnergyStep
+C  VI                   V0i (eV)
+C  EINCR                Energy step of the grid (eV)
 C  IPR                  Print Y function if IPR>=2
 
-      SUBROUTINE YSMOOTH(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,IPR)
+      SUBROUTINE YSMOOTH(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,EINCR,IPR)
 
       REAL A(NS,NBD,NGP),AP(NS,NBD,NGP)
       INTEGER NE(NBD)
@@ -1423,17 +1426,18 @@ C  IPR                  Print Y function if IPR>=2
 C           For simplicity, we calculate the 2nd derivative DERIV2 from 3 points.
 C           This works well if the curves are sufficiently smooth
 C           At the borders, we take the nearest defined value (or 0 if less than 3 points in the curve)
-            DERIV2=0.0;
-            IF (IE.EQ.1) THEN
+            IF (N.LT.3) THEN
+              DERIV2=0.0
+            ELSE IF (IE.EQ.1) THEN
               DERIV2=A(IS,IB,IE+2) + A(IS,IB,IE) - 2*A(IS,IB,IE+1)
             ELSE IF (IE.LT.N) THEN
               DERIV2=A(IS,IB,IE+1) + A(IS,IB,IE-1) - 2*AF
-            ELSE IF (IE.GE.3) THEN
-              DERIV2=A(IS,IB,IE) + A(IS,IB,IE-2) - 2*A(IS,IB,IE+1)
+            ELSE
+              DERIV2=A(IS,IB,IE) + A(IS,IB,IE-2) - 2*A(IS,IB,IE-1)
             ENDIF
             YDENSQ=AF*AF + 4*DERIV1*DERIV1;                             !square of the denominator of Y
             IF (DERIV2.GT.1.0E-10) THEN                                 !min not 0 but 1e-10 to avoid overflow in division by I"
-              DERIV2=DERIV2*VI*VI                                       !2nd derivative*V0i*V0i
+              DERIV2=DERIV2*(VI/EINCR)**2                               !2nd derivative (per eV^2)*V0i*V0i
               Y1 = ALPHA*AF/DERIV2 -
      1             (0.5*ALPHA)*DERIV1*DERIV1/(DERIV2*DERIV2) + BETA
               IF (Y1.GT.0) THEN
