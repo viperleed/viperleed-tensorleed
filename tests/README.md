@@ -70,6 +70,25 @@ The suite checks that the refactored code reproduces the baseline. These rules k
 - **Reference data** (frozen inputs and `expected/` outputs under `cases/`, `cases/BASELINE.txt`, `tier2/systems/*/expected.toml`) is the ground truth. It changes only (a) for a deliberate bug fix or behaviour change, or (b) when a tolerance is shown to be too tight for legitimate floating-point reordering (see above). Inputs are frozen: only the expected outputs are regenerated (procedure under [Checking a TensErLEED fix](#checking-a-tenserleed-fix-pull-requests)); the regeneration commit contains only the new data, and the PR that changes reference data states why.
 - **Known debug failures** (`known_debug_failures.toml`, see [Debug build](#debug-build)). A run may stay in the suite although the baseline debug build fails on it only if the failure is a bounds-check artefact of a declaration: a dummy array is declared smaller than the indices used, while the actual array is large enough, so no memory outside it is touched. The run must finish cleanly with every other check (`-fcheck=all,no-bounds -ffpe-trap=invalid,zero,overflow`), and its outputs from that build must equal the release outputs, i.e. the input shows no undefined behaviour. Inputs that trigger real out-of-bounds accesses or other undefined behaviour (e.g. more than one gap per beam) are not tested for exact values; they are documented under [Known baseline issues](#known-baseline-issues). To add an entry, give `case`, `run`, a `match` regex for the debug failure (on the message with the stderr tail, naming the source file and the array), a `reason` with the routine, the declaration and `file:line`, and a `spec_ref` pointing to the description in this README, and describe the issue under Known baseline issues. When a change fixes a listed failure, its test fails with "DID NOT RAISE"; that change removes the entry.
 
+## Checking a TensErLEED fix (pull requests)
+
+For a PR that changes `TensErLEED/`, on a clean clone (Python ≥ 3.11 with numpy, pytest, pytest-xdist, e.g. the `tl-tests` env; gfortran, BLAS/LAPACK):
+
+```bash
+# baseline tree: the pin before the fix; create it before re-pinning (or set baseline_tl_root, see local.toml.example)
+git worktree add --detach ../tl-baseline "$(sed -n 's/^commit: //p' tests/cases/BASELINE.txt)"
+pytest tests -m tier1 -n 6 --baseline-tl-root ../tl-baseline   # unit + tier 1
+pytest tests -m debug -n 6                                      # debug build
+pytest tests -m tier2 -n 2      # if viperleed's results can change (needs viperleed, see Tier 2)
+pytest tests -m perf --baseline-tl-root ../tl-baseline         # if performance can change, machine quiet
+```
+
+`--tl-root` defaults to the clone itself. The perf A/B runs against this pre-fix tree, so create it before the PR re-pins (below): afterwards `cases/BASELINE.txt` names the fix, and an A/B against that tree compares the fix with itself. On a PR that has already re-pinned, the pre-fix pin is the one at the merge base with master: `git show "$(git merge-base HEAD origin/master)":tests/cases/BASELINE.txt`.
+
+If the fix changes outputs on purpose (see [Rules](#rules-tolerances-reference-data-known-debug-failures)), commit the fix and pin it as the new baseline (`BASELINE_COMMIT` in `generate/baseline_tree.py`; the generators refuse other commits). The inputs are frozen, so regenerate only the expected outputs, on the committed inputs (commands under [Regenerating](#regenerating-cases-and-expected-outputs)): `make_expected.py`, and for tier 2 `make_tier2_expected.py --skip-freeze` in an environment with viperleed installed, with a `tests/local.toml` (`baseline_tl_root` here a checkout of the fix with `eeasisss` built, not the pre-fix tree used for perf; `generate_workroot`). Then `git status` and `git diff --stat` must show only `generate/baseline_tree.py`, `cases/BASELINE.txt`, `expected/` files of the affected runs and `tier2/systems/*/expected.toml`; the PR states why each output changed. Any other change (inputs, `tolerances.toml`, `known_debug_failures.toml`) needs its own justification under the Rules. A rebase gives the fix a new hash: pin and regenerate again. Merge the PR with a merge commit, not squashed: CI checks out the pinned commit from `cases/BASELINE.txt`, and a squashed fix commit is no longer reachable once the PR branch is deleted.
+
+CI (`.github/workflows/tests.yml`) runs unit + tier 1 and debug on pushes to `master` and `refactor/f90`, on pull requests and when started manually (Ubuntu 26.04, gfortran 15, reference BLAS/LAPACK). Tier 2, perf and benchmark do not run in CI; run them locally where they apply and report the result in the PR.
+
 ## Build contract
 
 `harness/build.py` builds a program from a TL tree and caches the executable in `tests/.build-cache/<program>-<hash>/` (git-ignored). An executable from another tree state or other flags is never reused. The hash covers:
