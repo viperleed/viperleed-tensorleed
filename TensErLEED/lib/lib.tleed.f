@@ -302,7 +302,7 @@ C  Subroutines are included in alphabetical order
         AMP2(I) = temp              ! Current beam from vacuum
      +            * TA(I, IIN)      ! Transmitted into beam I at top layer
         AMP1(I) = CZ
-        AMP0(N) = CZ
+        AMP0(I) = CZ
       ENDDO
 
 !     Now each beam is multiple-scattered between the top and rest. AMP2(I)
