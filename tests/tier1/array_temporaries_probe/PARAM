@@ -1,0 +1,2 @@
+      INTEGER NP
+      PARAMETER (NP=4)
