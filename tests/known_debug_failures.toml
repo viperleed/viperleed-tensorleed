@@ -1,0 +1,94 @@
+# Runs that fail with the baseline debug build (-O0 -g -fcheck=all
+# -ffpe-trap=invalid,zero,overflow). For each, test_debug_build.py requires
+# (1) the debug build to fail with an error matching 'match' (regex on the
+#     failure message incl. the stderr tail) -- once the refactor fixes it,
+#     the test fails ("DID NOT RAISE") and this list must be updated;
+# (2) the same run to finish cleanly with all checks except bounds
+#     (-fcheck=all,no-bounds), so new FP traps etc. in these paths are caught.
+# Line numbers refer to baseline v2.1.0.
+# What qualifies for this list and how to add or remove an entry:
+# tests/README.md, 'Rules'.
+
+[[failure]]
+case = "ir100_2x1_o"
+run = "E050_L06"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003, called from ref-calc.f:1294): index 46 > 37"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ir100_2x1_o"
+run = "E118_L07"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ir100_2x1_o"
+run = "E110-122_L07"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ag100_rfactor"
+run = "zj"
+match = "rfacsb\\.f.*\\n.*array 'y'"
+reason = "SUM declares Y(1,1,NGP) but VARSUM passes YY(10*NGP) with up to 10*(N-1)+1 points (rfacsb.f:1216, from rfacsb.f:1294); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues"
+
+[[failure]]
+case = "ag100_rfactor_gaps"
+run = "explicit_gap"
+match = "rfacsb\\.f.*\\n.*array 'bm'"
+reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+
+[[failure]]
+case = "ag100_rfactor_gaps"
+run = "auto_gap"
+match = "rfacsb\\.f.*\\n.*array 'a'"
+reason = "GRID declares A(NGP) with NGP undefined in the caller (rfacsb.f:631, rfactor.f:603); fails for every auto-detected gap"
+spec_ref = "tests/README.md, known baseline issues (GRID)"
+
+[[failure]]
+case = "ag100_rfactor_paths"
+run = "r2_gap"
+match = "rfacsb\\.f.*\\n.*array 'bm'"
+reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+
+[[failure]]
+case = "ag100_rfactor_paths"
+run = "zj_gap"
+match = "rfacsb\\.f.*\\n.*array 'bm'"
+reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+
+[[failure]]
+case = "cu111"
+run = "E050_L05"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ir100_2x1_o_thick"
+run = "E050_L06"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ir100_2x1_o_thick"
+run = "E118_L07"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
+
+[[failure]]
+case = "ir100_2x1_o_thick"
+run = "E110-122_L07"
+match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (OUTXIST)"

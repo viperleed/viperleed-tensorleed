@@ -3,3 +3,10 @@
 *.mod
 eeasisss
 eeasisss.exe
+
+# test suite
+tests/.build-cache/
+tests/.build-cache.locks/
+tests/**/__pycache__/
+tests/.pytest_cache/
+tests/local.toml
