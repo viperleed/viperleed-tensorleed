@@ -1335,7 +1335,7 @@ C  NB                   Number of beams used
 C  NE(NBD)              Number of energy points for each beam
 C  E(NBD,NGP)           Energy values (only for printing)
 C  Y(NBD,NGP)           Y function output (beam, energy points)
-C  VI                   V0i/EnergyStep
+C  VI                   V0i (eV)
 C  IPR                  Print Y function if IPR>=2
 
       SUBROUTINE YPEND(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,IPR)

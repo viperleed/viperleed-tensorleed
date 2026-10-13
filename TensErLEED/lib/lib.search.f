@@ -1477,7 +1477,7 @@ C  NB                   Number of beams used
 C  NE(NBD)              Number of energy points for each beam
 C  E(NBD,MNDATA)        Energy values (only for printing)
 C  Y(NBD,MNDATA)        Y function output (beam, energy points)
-C  VI                   V0i/EnergyStep
+C  VI                   V0i (eV)
 C  IPR                  Print Y function if IPR>=2
 C
 C  Parameter from 'PARAM' file
