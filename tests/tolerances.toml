@@ -1,0 +1,90 @@
+# Numerical tolerances per output file pattern: a float a matches the expected b if
+#   |a-b| <= rtol*|b| + atol_frac*S + atol + ulps*ulp(b)
+# where ulp(b) is b's unit in the last printed digit and S is the largest |float| of the
+# file (scale = "file", default) or of b's line (scale = "line");
+# scale = "tensor": per WRITE block of a T_* file (see that table; kept as is
+# by calibrate_tolerances.py, checked by check_noise_variants.py).
+# Patterns are matched with fnmatch against the output file name; the first match wins.
+# Optional: atol, ulps, scale, skip_lines (1-based), ignore_line_patterns (regexes),
+# file_cap (the scaled part is at most file_cap * max |float| of the file),
+# exact_f_decimals (floats printed in F format with <= this many decimals match exactly),
+# exact_columns (1-based positions of tokens in a line, or "odd"/"even", that match exactly).
+# Calibrated by tests/generate/calibrate_tolerances.py (see README, 'Tolerances'):
+#   date 2026-10-05, baseline -O2 vs variants '-O0', '-O1', '-O3', '-O2 -march=native', '-O2 -fno-fast-math' (gfortran; ifort not available).
+# 'insensitive' = share of non-zero expected values for which a 1 % change passes.
+# Loosen only with evidence of pure floating-point reordering (README, 'Rules').
+
+[numeric."fd.out"]
+# print-level noise, max 6.0 ulps; insensitive 8.4 %
+# energy, AP and beam list (F format, <= 5 decimals): exact
+rtol = 0.0e+00
+atol_frac = 0.0e+00
+ulps = 18
+exact_f_decimals = 5
+
+[numeric."amp.out"]
+# per line: the absolute part is atol_frac * max |amplitude| of the line
+# (10 x the FMA noise), capped at file_cap * max |float| of the file (the
+# file-scale rule, whose scale is the energy). Energy, AP and the beam list
+# (F format, <= 5 decimals) must match exactly and do not count for the line max.
+rtol = 1.0e-06
+atol_frac = 2.0e-04
+ulps = 2
+scale = "line"
+file_cap = 2.3e-07
+exact_f_decimals = 5
+
+[numeric."T_*"]
+# per WRITE block: the absolute part is sections[s] * max |value| of the
+# block (header, t-matrix CAF, XIST vector, k-vector line, one ALM vector), capped at
+# file_cap * max |value| of the file (the file-scale rule, so never looser).
+# sections = 10 x the largest noise of any variant (FMA) relative to the block max.
+# Layout checked by harness/tensor.py.
+rtol = 1.0e-06
+atol_frac = 0.0
+ulps = 2
+scale = "tensor"
+file_cap = 1.9e-04
+sections = { hdr = 0.0, kvec = 0.0, tmat = 1.2e-6, xist = 1.4e-4, alm = 3.0e-4 }
+
+[numeric."ROUT"]
+# one unit in the last digit of R; insensitive 17.0 %
+rtol = 0.0e+00
+atol_frac = 0.0e+00
+atol = 1.5e-04
+
+[numeric."ROUTSHORT"]
+# one unit in the last digit of R; insensitive 0.0 %
+rtol = 0.0e+00
+atol_frac = 0.0e+00
+atol = 1.5e-04
+
+[numeric."*.column"]
+# print-level noise, max 1.0 ulps; insensitive 0.3 %
+# energies (odd columns): exact
+rtol = 0.0e+00
+atol_frac = 0.0e+00
+ulps = 3
+exact_columns = ["odd"]
+
+[tier2]
+# R factors in R_OUT / Errors_*.csv are printed with 4 decimals; displacements,
+# V0 shifts with 2-4 decimals. Calibration (-O0 vs -O2): see README.
+r_atol = 1.5e-4       # one unit in the last digit of an R factor
+other_atol = 1.0e-6   # displacements, V0 shifts: exact
+viperleed_version = "0.14.1"   # tier 2 stops if the installed viperleed differs
+
+[perf]
+cpu_rel_threshold = 0.10
+rss_rel_threshold = 0.02
+rss_abs_floor_kb = 1024   # allowed RSS increase = max(rss_rel_threshold * baseline, rss_abs_floor_kb)
+repetitions = 5
+sample_cpu_s = 0.1        # short runs are repeated so that one CPU sample takes at least this long
+case_sample_cpu_s = 0.6   # ... and so that the samples of all runs of a case (CPU gate) take this long
+sizing_runs = 3           # baseline executions whose median CPU time sizes `inner` (executions per sample)
+min_sizing_cpu_s = 1e-3   # floor on that median, so that a run below timer resolution gives a finite inner
+max_inner = 500           # upper limit on inner
+benchmark_repetitions = 3 # samples per run in -m benchmark (large runs, no inner repetition)
+
+[debug]
+min_rtol = 1e-3           # debug-build outputs are compared with rtol = max(rtol, min_rtol), a sanity check only

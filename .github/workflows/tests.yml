@@ -1,0 +1,44 @@
+# TensErLEED test suite (tests/README.md): unit + tier 1 and the debug build.
+# Tier 2 (needs viperleed), perf and benchmark (need a quiet machine) are not run here.
+name: tests
+
+on:
+  push:
+    branches: [master, refactor/f90]
+  pull_request:
+  workflow_dispatch:  # manual runs, e.g. on a fork branch
+
+# A newer push to the same branch or pull request cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tier1-debug:
+    runs-on: ubuntu-latest
+    # Ubuntu 26.04: gfortran 15 is the default compiler, as for the tolerance calibration
+    container: ubuntu:26.04
+    timeout-minutes: 30
+    steps:
+      - name: Install toolchain
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git make gcc gfortran libblas-dev liblapack-dev \
+            python3 python3-numpy python3-pytest python3-pytest-xdist
+          gfortran --version | head -n 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # the baseline commit is checked out below
+      - name: Check out the baseline tree
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git worktree add --detach "$RUNNER_TEMP/baseline" \
+            "$(sed -n 's/^commit: //p' tests/cases/BASELINE.txt)"
+      - name: Unit + tier 1
+        run: python3 -m pytest tests -m tier1 -n 4 --baseline-tl-root "$RUNNER_TEMP/baseline"
+      - name: Debug build
+        run: python3 -m pytest tests -m debug -n 4

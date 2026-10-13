@@ -1,0 +1,20 @@
+# Machine-specific settings for the test suite. Copy to tests/local.toml
+# (git-ignored) and adapt, or set the environment variables instead (they take
+# precedence). See tests/harness/paths.py.
+
+# Baseline TensErLEED tree (TL_TEST_BASELINE): reference for the perf and
+# benchmark A/B tests, the build unit tests and the generators. For the
+# generators it must be at the baseline commit and contain a working
+# eeasisss (see README, 'Regenerating cases').
+baseline_tl_root = "/path/to/viperleed-tensorleed-fix"
+
+# Generators only:
+# viperleed's example systems (TL_TEST_VIPERLEED_EXAMPLES)
+viperleed_examples = "/path/to/viperleed/doc/_static/example_systems"
+# work directories of the viperleed runs (TL_TEST_GENERATE_WORKROOT)
+generate_workroot = "/path/to/tl-generate-work"
+
+# Tier 2: command that runs viperleed (TL_TEST_VIPERLEED_CMD; pytest
+# --viperleed-cmd overrides both). Default: viperleed on PATH. Example for a
+# conda environment that is not active:
+# viperleed_cmd = "conda run --no-capture-output -n <env> viperleed"
