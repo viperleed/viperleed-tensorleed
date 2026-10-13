@@ -1,0 +1,6 @@
+= Vibration Amplitudes
+Ag_surf = Ag 0.09, Pd 0.09
+Ag_def = Ag 0.069, Pd 0.069
+= Occupations
+Ag_surf = Ag 0.7, Pd 0.3
+Ag_def = Ag 1.0, Pd 0.0

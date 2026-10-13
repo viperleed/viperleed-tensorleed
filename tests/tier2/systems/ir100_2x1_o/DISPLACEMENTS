@@ -1,0 +1,5 @@
+= GEO_DELTA
+O_ads z = -0.06 0.06 0.02
+Ir_surf z = -0.06 0.06 0.02
+= VIB_DELTA
+O_ads = -0.02 0.02 0.01
