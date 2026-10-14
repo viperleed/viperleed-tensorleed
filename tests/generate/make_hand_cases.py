@@ -10,6 +10,23 @@ stays the same and only the input form differs:
   order along the surface normal (+x). SRTLAY has to re-sort them. The
   site type and the tensor file name of each sublayer move with it, so the
   structure and the tensor files are those of the source case.
+- ag100_psformat2: the phase shifts of ag100 in the alternative format
+  read by READIN for PSFORMAT = 2 ('Rundgren_v1.7' in the FIN). Format 1 gives,
+  for each energy (Hartree, F7.4), the phase shifts of each element on two
+  lines of 10F7.4; format 2 gives, for each element, two header lines and
+  one line per energy with the energy in eV (F8.3) and up to 20 phase
+  shifts (F8.4). The phase shifts are copied digit for digit; the energies
+  are converted with the HARTREE constant of TensErLEED (27.211396 eV) and
+  rounded to 0.001 eV, so after READIN divides them by HARTREE they differ
+  from the format-1 values by up to 2e-5 Hartree, and the outputs differ
+  slightly from those of ag100.
+  The format-2 header holds the inner-potential parameters (format 202:
+  PSL1, EM, C1..C8). ref-calc uses EM to choose the formula for the inner
+  potential: EM = 0 selects V = WORKFN - max(C1 + C2/sqrt(E + WORKFN + C3),
+  C4), the formula format-1 runs use (EM is never set there), so EM = 0
+  and C1..C4 are those of the format-1 header. C5..C8 only enter for EM > 0
+  and are 0. PSL1 is read but never used; it is set to the number of phase
+  shifts per energy. The title line (PAR1) is only printed.
 
 Writes tests/cases/<program>/<case>/{case.toml, inputs/}; the expected
 outputs come from make_expected.py. With --check, the cases are derived
@@ -86,6 +103,59 @@ def permute_sublayers(fin, ltype, order):
     return "\n".join(lines)
 
 
+HARTREE = 27.211396   # eV, as in TensErLEED's GLOBAL
+
+
+def phase_shifts_to_format2(fin):
+    """Rewrite the phase-shift block of a ref-calc FIN from PSFORMAT 1 to 2."""
+    lines = fin.split("\n")
+    ifmt = next(i for i, l in enumerate(lines) if l.split()[1:2] == ["PSFORMAT"])
+    if lines[ifmt][:3] != "  1":
+        raise ValueError("phase shifts are not in format 1")
+    head = ifmt + 2
+    nel = int(lines[head][:3])
+    c4, c1, c2, c3 = (float(lines[head][4 + 8 * k:12 + 8 * k]) for k in range(4))
+    end = next(i for i in range(head, len(lines)) if lines[i].startswith("---"))
+    block = lines[head + 1:end]
+    per_energy = 1 + 2 * nel
+    if len(block) % per_energy:
+        raise ValueError("phase-shift block is not NPSI x (energy + NEL x 2 lines)")
+    energies, shifts = [], [[] for _ in range(nel)]
+    for k in range(0, len(block), per_energy):
+        energies.append(float(block[k]))
+        for iel in range(nel):
+            text = block[k + 1 + 2 * iel] + block[k + 2 + 2 * iel]
+            shifts[iel].append([text[j:j + 7] for j in range(0, len(text), 7)])
+    nps = len(shifts[0][0])
+    if nps > 20 or any(len(s) != nps for el in shifts for s in el):
+        raise ValueError("unexpected number of phase shifts per energy")
+    new = [f"{nel:3d}" + " " * 42 + "NEL",
+           f"{'Ag(100)':<8}{'phase shifts of tl-test ag100, Rundgren_v1.7 layout':<70}",
+           f"{'':3}{nps:3d}{'':2}{0.0:6.2f}{'':1}" + "".join(f"{c:7.2f}" for c in (c1, c2, c3, c4))
+           + f"{'':2}{0.0:7.2f}" + "".join(f"{0.0:8.4f}" for _ in range(3))]
+    for iel in range(nel):
+        new += [f"element {iel + 1}",
+                "  E (eV)" + "".join(f"{f'l={l}':>8}" for l in range(nps))]
+        new += [f"{e * HARTREE:8.3f}" + "".join(f"{float(p):8.4f}" for p in ps)
+                for e, ps in zip(energies, shifts[iel])]
+    lines[ifmt] = "  2" + lines[ifmt][3:]
+    lines[head:end] = new
+    return "\n".join(lines)
+
+
+def ag100_psformat2():
+    case, source = "ag100_psformat2", "ag100"
+    runs = _source_runs("refcalc", source, ["E045_L06", "E141_L08"])
+    for run in runs:
+        path, fin = run["stdin"]
+        run["stdin"] = (path, phase_shifts_to_format2(_retitle(fin, source, case)))
+    return {"program": "refcalc", "name": case,
+            "description": "Ag(100) as ag100, phase shifts in the alternative format "
+                           "(PSFORMAT = 2, energies in eV)",
+            "covers": ["bravais", "psformat-2", "tensors"],
+            "runs": runs}
+
+
 def ir100_2x1_o_unsorted():
     case, source = "ir100_2x1_o_unsorted", "ir100_2x1_o"
     runs = _source_runs("refcalc", source, ["E118_L07", "E110-122_L07"])
@@ -99,7 +169,7 @@ def ir100_2x1_o_unsorted():
             "runs": runs}
 
 
-CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted,)}
+CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2)}
 
 
 def write_case(spec, cases_dir):

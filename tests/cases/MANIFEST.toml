@@ -33,6 +33,8 @@ refcalc = [
     "ir100_2x1_o_thick/E110-122_L07",
     "ir100_2x1_o_unsorted/E118_L07",
     "ir100_2x1_o_unsorted/E110-122_L07",
+    "ag100_psformat2/E045_L06",
+    "ag100_psformat2/E141_L08",
 ]
 rfactor = [
     "ag100_rfactor/pendry",
