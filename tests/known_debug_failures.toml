@@ -20,14 +20,14 @@ spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 case = "ir100_2x1_o"
 run = "E118_L07"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 
 [[failure]]
 case = "ir100_2x1_o"
 run = "E110-122_L07"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 
 [[failure]]
@@ -97,12 +97,12 @@ spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 case = "ir100_2x1_o_unsorted"
 run = "E118_L07"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 
 [[failure]]
 case = "ir100_2x1_o_unsorted"
 run = "E110-122_L07"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003): index 52 > 51"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003); declaration artefact"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
