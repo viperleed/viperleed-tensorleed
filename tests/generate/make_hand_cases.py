@@ -9,7 +9,9 @@ stays the same and only the input form differs:
   ir100_2x1_o (O, Ir, Ir) are listed as Ir, Ir, O, i.e. not in ascending
   order along the surface normal (+x). SRTLAY has to re-sort them. The
   site type and the tensor file name of each sublayer move with it, so the
-  structure and the tensor files are those of the source case.
+  structure and the tensor files are those of the source case: the
+  expected outputs of E118_L07 and E110-122_L07 equal those of the source
+  case apart from the title line.
   Run E118_L07_three_heights also raises the Ir N=2 sublayer
   (RAISED_IR_X) and lists the sublayers as Ir N=2, O, Ir N=3: three
   distinct heights, highest first, so that SRTLAY has to move two
@@ -23,8 +25,9 @@ stays the same and only the input form differs:
   shifts (F8.4). The phase shifts are copied digit for digit; the energies
   are converted with the HARTREE constant of TensErLEED (27.211396 eV) and
   rounded to 0.001 eV, so after READIN divides them by HARTREE they differ
-  from the format-1 values by up to 2e-5 Hartree, and the outputs differ
-  slightly from those of ag100.
+  from the format-1 values by up to 2e-5 Hartree. fd.out is identical to
+  that of ag100 apart from the title line; amp.out and the T_* files
+  differ slightly (own expected outputs).
   The format-2 header holds the inner-potential parameters (format 202:
   PSL1, EM, C1..C8). ref-calc uses EM to choose the formula for the inner
   potential: EM = 0 selects V = WORKFN - max(C1 + C2/sqrt(E + WORKFN + C3),
