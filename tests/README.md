@@ -153,6 +153,7 @@ The viperleed generators keep their work directories in `generate_workroot` and 
 | `ag100_mix` | `ELEMENT_MIX Ag = Ag Pd`, surface site 0.7 Ag / 0.3 Pd (two non-zero concentrations, ATA) |
 | `ir100_2x1_o` | composite layers (NSUB > 1), 2 beam sets, 2 elements, LMAX 6–8 |
 | `ir100_2x1_o_thick` | Ir(100)-(2×1)-O with other layer cuts: O alone, then one layer of two Ir planes (4 sublayers with pairwise equal interplanar vectors: `NGEQ` copy in `SRTLAY`/`GHMAT`), and a bulk layer of two Ir planes (composite layer with bulk periodicity under a (2×1) overlayer: `ref-calc.f` `LAY = 2` branch, `RTINV_SIMPLE` substrate lattice sums) |
+| `ir100_2x1_o_unsorted` | `ir100_2x1_o` with the sublayers of the composite top layer listed as Ir, Ir, O instead of O, Ir, Ir (out of order along +x: `SRTLAY` re-sorting, `NORD` mapping back to the input order for the tensor files); derived by `make_hand_cases.py`, 2 runs (E118, E110-122). Outputs equal those of `ir100_2x1_o` except the title line |
 | `cu111` | Cu(111)-(1×1), hexagonal cell, ABC stacking, LMAX 5–7, 50–140 eV: the bulk repeat vector has a lateral shift whose mirror image is the other hollow, so in-plane sign errors (e.g. in `DBLGAS`) are not equivalent as on fcc(100). Defined in `generate/systems.py` (no viperleed example), beams from an `IVBEAMS` file |
 
 Each ref-calc case has 4 runs: lowest energy at the lowest LMAX, a middle energy at a middle LMAX, the highest energy at the highest LMAX (each as viperleed assigns LMAX per energy), and 4 consecutive energies at one LMAX.
@@ -239,7 +240,7 @@ Known baseline failures are listed in `tests/known_debug_failures.toml`. For eac
 1. the debug build to fail with exactly the known error (regex `match` on the message with the stderr tail). When the refactor fixes it, the test fails ("DID NOT RAISE") and the list has to be updated deliberately;
 2. the same run to finish cleanly with all checks except bounds (`-fcheck=all,no-bounds -ffpe-trap=…`). So new FP traps or other check failures in these paths are still caught: an injected division by zero in `GAPIN` fails this check (a plain `xfail` would pass it).
 
-Baseline status: 31 clean, 12 known failures. These are 7 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 12 run clean without bounds checks. The 7 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
+Baseline status: 31 clean, 14 known failures. These are 9 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 2, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 14 run clean without bounds checks. The 9 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
 
 ## Performance (A/B)
 

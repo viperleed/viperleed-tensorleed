@@ -165,3 +165,10 @@ def test_check_only_modes_refuse_wrong_commit(module, args, work, repo, tmp_path
     monkeypatch.setattr(gen, work, _must_not_run(work))
     with pytest.raises(GeneratorError, match="not the baseline"):
         gen.main([*args, "--workroot", str(tmp_path)])
+
+
+def test_hand_cases_match_their_derivation():
+    """The committed hand-made cases are what make_hand_cases.py derives
+    from the inputs of their source cases."""
+    import make_hand_cases
+    assert make_hand_cases.main(["--check"]) == 0
