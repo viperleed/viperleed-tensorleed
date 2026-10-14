@@ -176,7 +176,7 @@ Baseline = TensErLEED v2.1.0 (`22e3998`, with the ADREF2T, YSMOOTH and DER fixes
 
 ### ref-calc
 
-- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Seven tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
+- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Ten tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
 
 ### rfactor
 
@@ -232,7 +232,7 @@ Line coverage of all tier-1 runs on the baseline (`generate/coverage_report.py -
 
 Covered by cases not in the measurement above: composite bulk layer (`ref-calc.f` 1058-1079, `RTINV_SIMPLE` substrate branch) and the `NGEQ` copy in `GHMAT` (`ir100_2x1_o_thick`); `COMNEI` for theory beyond the experiment, permuted `IBP` with `MITTEL` differing, `RINTAV` weights 2 and 8, R2 and ZJ inside gaps (`ag100_rfactor_paths`).
 
-Covered by hand-made cases (`generate/make_hand_cases.py`, not in the measurement above; checked with `coverage_report.py --lines`): `SRTLAY` 4561-4578 (`ir100_2x1_o_unsorted`: sublayers out of order along +x, re-sorted with one move when the two Ir sublayers at equal height are listed before O, and with two moves when three distinct heights are listed highest, lowest, middle; the order of sublayers at equal height, i.e. whether the sort is stable (`.GE.` vs `.GT.`), does not show in the outputs and is not tested), `READIN` `PSFORMAT = 2` 3674-3703 except its two error stops (`ag100_psformat2`), `READT` except the beam-count error stop and `COLUMN` with `NORM = 2` (`ag100_rfactor_hand`).
+Covered by hand-made cases (`generate/make_hand_cases.py`, not in the measurement above; checked with `coverage_report.py --lines`): `SRTLAY` 4561-4578 (`ir100_2x1_o_unsorted`: sublayers out of order along +x, re-sorted with one move when the two Ir sublayers at equal height are listed before O, and with two moves when three distinct heights are listed highest, lowest, middle; the order of sublayers at equal height, i.e. whether the sort is stable (`.GE.` vs `.GT.`), does not show in the outputs and is not tested), `READIN` `PSFORMAT = 2` 3674-3703 except its two error stops (`ag100_psformat2`), `READT` except the beam-count error stop (its `ELSE IF (NEE(K).EQ.0)` guard is never false: the pseudo-experiment has zeros only before a beam's first non-zero point, as real theory output does, so zeros after the onset are untested) and `COLUMN` with `NORM = 2` (`ag100_rfactor_hand`).
 
 Covered by `ag100_rfactor_short` (not in the measurement above): every `DER` branch except NE = 1, i.e. NE = 2 (`rfacsb.f` 374-377), 3 ≤ NE ≤ 22 (361-368) and NE = 23 at the threshold (345). The NE = 1 branch (370-372) cannot be reached through rfactor: a 1-point beam fails the bounds check in `COMNEI` (`rfacsb.f:317`) first.
 
