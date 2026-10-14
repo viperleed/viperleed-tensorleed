@@ -224,6 +224,8 @@ def pseudo_experiment(spectrum, geometry):
 def ag100_rfactor_hand():
     case, source = "ag100_rfactor_hand", "ag100_rfactor"
     (pendry,) = _source_runs("rfactor", source, ["pendry"])
+    path, spectrum = pendry["stdin"]
+    pendry["stdin"] = (path, _retitle(spectrum, source, case))
     (mns,) = _source_runs("rfactor", "ag100_rfactor_errors", ["mns"])
     _, wexpel = pendry["files"]["WEXPEL"]
     head, _ = edit_wexpel(wexpel, source, case, EOT=1)

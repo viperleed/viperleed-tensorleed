@@ -1,4 +1,4 @@
-tl-test ag100_rfactor                                                           
+tl-test ag100_rfactor_hand                                                      
 
       BEAM            IBE   D12     V0R    EMIN    EMAX     OVL     RAV
 *( 1  0)*               1  0.0001   -3.00   45.00  216.05    159.00  1.2038
