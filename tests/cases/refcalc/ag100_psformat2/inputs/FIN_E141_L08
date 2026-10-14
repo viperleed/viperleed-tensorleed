@@ -64,7 +64,7 @@ tl-test ag100_psformat2
   2                                          PSFORMAT  1: Rundgren_v1.6; 2: Rundgren_v1.7
   1                                          IFORM - formatted input and output
   2                                          NEL
-Ag(100) phase shifts of tl-test ag100, Rundgren_v1.7 layout                   
+        phase shifts of tl-test ag100_psformat2, Rundgren_v1.7 layout         
     19    0.00   -0.12 -66.10  12.46 -10.85     0.00  0.0000  0.0000  0.0000
 element 1
   E (eV)     l=0     l=1     l=2     l=3     l=4     l=5     l=6     l=7     l=8     l=9    l=10    l=11    l=12    l=13    l=14    l=15    l=16    l=17    l=18

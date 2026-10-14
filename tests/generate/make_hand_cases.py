@@ -109,7 +109,11 @@ def permute_sublayers(fin, ltype, order):
 
 
 def phase_shifts_to_format2(fin):
-    """Rewrite the phase-shift block of a ref-calc FIN from PSFORMAT 1 to 2."""
+    """Rewrite the phase-shift block of a ref-calc FIN from PSFORMAT 1 to 2.
+
+    The title of the phase shifts (PAR1, read as A8, A70 after a blank PAR0)
+    names the title of the FIN.
+    """
     lines = fin.split("\n")
     ifmt = next(i for i, l in enumerate(lines) if l.split()[1:2] == ["PSFORMAT"])
     if lines[ifmt][:3] != "  1":
@@ -132,7 +136,7 @@ def phase_shifts_to_format2(fin):
     if nps > 20 or any(len(s) != nps for el in shifts for s in el):
         raise ValueError("unexpected number of phase shifts per energy")
     new = [f"{nel:3d}" + " " * 42 + "NEL",
-           f"{'Ag(100)':<8}{'phase shifts of tl-test ag100, Rundgren_v1.7 layout':<70}",
+           f"{'':8}{f'phase shifts of {lines[0].strip()}, Rundgren_v1.7 layout':<70}",
            f"{'':3}{nps:3d}{'':2}{0.0:6.2f}{'':1}" + "".join(f"{c:7.2f}" for c in (c1, c2, c3, c4))
            + f"{'':2}{0.0:7.2f}" + "".join(f"{0.0:8.4f}" for _ in range(3))]
     for iel in range(nel):
