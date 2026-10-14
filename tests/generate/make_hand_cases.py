@@ -27,6 +27,14 @@ stays the same and only the input form differs:
   and C1..C4 are those of the format-1 header. C5..C8 only enter for EM > 0
   and are 0. PSL1 is read but never used; it is set to the number of phase
   shifts per energy. The title line (PAR1) is only printed.
+- ag100_rfactor_hand: the pendry run of ag100_rfactor, edited in WEXPEL.
+  pseudo_exp sets EOT = 1, so rfactor reads the experiment with READT as a
+  pseudo-experiment in the layout of a theory spectrum: one geometry of the
+  ag100_rfactor_errors spectrum (PSEUDO_EXP_GEOMETRY) replaces the
+  experimental data after the title. The (2 0) and (2 1) beams start with
+  zero intensities (not yet emerging), which READT skips. norm_max sets
+  NORM = 2, so exp.column and theo.column are normalised to the highest
+  intensity of each beam instead of the integral.
 
 Writes tests/cases/<program>/<case>/{case.toml, inputs/}; the expected
 outputs come from make_expected.py. With --check, the cases are derived
@@ -56,7 +64,9 @@ def _source_runs(program, source, run_names):
         run = runs[name]
         out.append({"name": name, "outputs": run["outputs"],
                     "stdin": (run["stdin"], (case_dir / run["stdin"]).read_text()),
-                    "param": (run["param"], (case_dir / run["param"]).read_text())})
+                    "param": (run["param"], (case_dir / run["param"]).read_text()),
+                    "files": {key: (path, (case_dir / path).read_text())
+                              for key, path in run.get("files", {}).items()}})
     return out
 
 
@@ -103,6 +113,10 @@ def permute_sublayers(fin, ltype, order):
     return "\n".join(lines)
 
 
+# ag100_rfactor_hand/pseudo_exp: geometry of the ag100_rfactor_errors spectrum
+# used as the pseudo-experiment (1: layer 1 displaced by -0.06 A; the
+# ag100_rfactor spectrum is geometry 4, no displacement)
+PSEUDO_EXP_GEOMETRY = 1
 HARTREE = 27.211396   # eV, as in TensErLEED's GLOBAL
 
 
@@ -169,7 +183,65 @@ def ir100_2x1_o_unsorted():
             "runs": runs}
 
 
-CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2)}
+def edit_wexpel(wexpel, source, case, **values):
+    """Retitle an rfactor WEXPEL and set namelist values.
+
+    Returns the lines up to and including the title (the line after the &NL3
+    block) and the experimental data after it, as two strings.
+    """
+    for key, value in values.items():
+        wexpel, n = re.subn(rf"(?m)^(\s*{key}=\s*)[^,\n]*,", rf"\g<1>{value},", wexpel)
+        if n != 1:
+            raise ValueError(f"expected one '{key}=' line in WEXPEL, found {n}")
+    lines = wexpel.split("\n")
+    i_nl3 = lines.index(" &NL3")
+    i_title = lines.index(" &END", i_nl3) + 1
+    if lines[i_title] != f" tl-test {source}":
+        raise ValueError(f"unexpected title line {lines[i_title]!r}")
+    lines[i_title] = f" tl-test {case}"
+    return "\n".join(lines[:i_title + 1]) + "\n", "\n".join(lines[i_title + 1:])
+
+
+def pseudo_experiment(spectrum, geometry):
+    """One geometry of a theory spectrum, in the layout READT reads.
+
+    The theory spectrum (title, number of beams, beam lines, then for each
+    energy one record per geometry: energy, geometry number, intensities) is
+    the layout of READT without its title line. Only the records of
+    `geometry` are kept.
+    """
+    lines = spectrum.split("\n")
+    nbeams = int(lines[1])
+    out = lines[1:2 + nbeams]
+    for line in lines[2 + nbeams:]:
+        if line.strip() and round(float(line[7:14]) * 1e4) == geometry:
+            out += [line, ""]
+    if len(out) == 1 + nbeams:
+        raise ValueError(f"no records of geometry {geometry}")
+    return "\n".join(out) + "\n"
+
+
+def ag100_rfactor_hand():
+    case, source = "ag100_rfactor_hand", "ag100_rfactor"
+    (pendry,) = _source_runs("rfactor", source, ["pendry"])
+    (mns,) = _source_runs("rfactor", "ag100_rfactor_errors", ["mns"])
+    _, wexpel = pendry["files"]["WEXPEL"]
+    head, _ = edit_wexpel(wexpel, source, case, EOT=1)
+    pseudo = {**pendry, "name": "pseudo_exp", "files": {"WEXPEL": (
+        "inputs/WEXPEL_pseudo_exp",
+        head + pseudo_experiment(mns["stdin"][1], PSEUDO_EXP_GEOMETRY))}}
+    head, data = edit_wexpel(wexpel, source, case, NORM=2)
+    norm_max = {**pendry, "name": "norm_max",
+                "files": {"WEXPEL": ("inputs/WEXPEL_norm_max", head + data)}}
+    return {"program": "rfactor", "name": case,
+            "description": "Ag(100) rfactor as ag100_rfactor pendry: a pseudo-experiment "
+                           "(another geometry of the error calculation), plot "
+                           "normalisation to the highest intensity",
+            "covers": ["pseudo-experiment", "plot-norm-max"],
+            "runs": [pseudo, norm_max]}
+
+
+CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2, ag100_rfactor_hand)}
 
 
 def write_case(spec, cases_dir):
@@ -186,6 +258,11 @@ def write_case(spec, cases_dir):
             path, text = run[key]
             (case_dir / path).write_text(text)
             toml.append(f'{key} = "{path}"')
+        if run["files"]:
+            for path, text in run["files"].values():
+                (case_dir / path).write_text(text)
+            toml.append("files = { " + ", ".join(f'{key} = "{path}"'
+                                                for key, (path, _) in run["files"].items()) + " }")
         toml += ["outputs = [" + ", ".join(f'"{o}"' for o in run["outputs"]) + "]", ""]
     (case_dir / "case.toml").write_text("\n".join(toml))
 
