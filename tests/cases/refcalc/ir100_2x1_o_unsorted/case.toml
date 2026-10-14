@@ -14,3 +14,9 @@ name = "E110-122_L07"
 stdin = "inputs/FIN_E110-122_L07"
 param = "inputs/PARAM_L07"
 outputs = ["fd.out", "amp.out", "T_*"]
+
+[[runs]]
+name = "E118_L07_three_heights"
+stdin = "inputs/FIN_E118_L07_three_heights"
+param = "inputs/PARAM_L07"
+outputs = ["fd.out", "amp.out", "T_*"]
