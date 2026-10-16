@@ -181,8 +181,7 @@ def test_check_only_modes_refuse_wrong_commit(module, args, work, repo, tmp_path
 
 
 def test_hand_cases_match_their_derivation():
-    """The committed hand-made cases are what make_hand_cases.py derives
-    from the inputs of their source cases."""
+    """The committed hand-made cases are what make_hand_cases derives from their sources."""
     assert make_hand_cases.main(["--check"]) == 0
 
 
@@ -199,11 +198,13 @@ SAME_AS_SOURCE = [
 def _differ_beyond_title(case_dir, source_dir, runs, files):
     """Expected files of `runs` that differ between two cases apart from line 1."""
     def body(path):
+        """Text of a file after its title line, None if the file is missing."""
         return path.read_text().split("\n", 1)[1] if path.is_file() else None
     differ = []
     for run in runs:
         ours, theirs = case_dir / "expected" / run, source_dir / "expected" / run
-        names = files or sorted({p.name for p in ours.iterdir()} | {p.name for p in theirs.iterdir()})
+        names = files or sorted({p.name for p in ours.iterdir()}
+                                | {p.name for p in theirs.iterdir()})
         differ += [f"{run}/{name}" for name in names
                    if body(ours / name) is None or body(ours / name) != body(theirs / name)]
     return differ
@@ -212,10 +213,12 @@ def _differ_beyond_title(case_dir, source_dir, runs, files):
 @pytest.mark.parametrize("case, source, runs, files", SAME_AS_SOURCE,
                          ids=[c for c, *_ in SAME_AS_SOURCE])
 def test_hand_case_outputs_equal_source(case, source, runs, files):
+    """A hand-made case has the expected files of its source case apart from the title."""
     assert _differ_beyond_title(CASES_DIR / case, CASES_DIR / source, runs, files) == []
 
 
 def test_changed_expected_line_breaks_identity(tmp_path):
+    """The identity check notices a change in a single expected line."""
     case, source, runs, files = SAME_AS_SOURCE[0]
     for name in (case, source):
         shutil.copytree(CASES_DIR / name / "expected", tmp_path / name / "expected")

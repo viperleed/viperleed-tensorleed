@@ -96,6 +96,7 @@ def permute_sublayers(fin, ltype, order):
     n = len(order)
 
     def permute(first):
+        """Reorder the n lines starting at index `first` according to `order`."""
         block = lines[first:first + n]
         lines[first:first + n] = [block[k - 1] for k in order]
 
@@ -174,6 +175,7 @@ def phase_shifts_to_format2(fin):
 
 
 def ag100_psformat2():
+    """Spec of ag100_psformat2: the phase shifts of ag100 in PSFORMAT 2."""
     case, source = "ag100_psformat2", "ag100"
     runs, inputs = _source_runs("refcalc", source, ["E045_L06", "E141_L08"])
     for run in runs:
@@ -187,6 +189,7 @@ def ag100_psformat2():
 
 
 def ir100_2x1_o_unsorted():
+    """Spec of ir100_2x1_o_unsorted: ir100_2x1_o with out-of-order sublayers."""
     case, source = "ir100_2x1_o_unsorted", "ir100_2x1_o"
     runs, inputs = _source_runs("refcalc", source, ["E118_L07", "E110-122_L07"])
     for run in runs:
@@ -233,6 +236,7 @@ def pseudo_experiment(spectrum):
 
 
 def ag100_rfactor_hand():
+    """Spec of ag100_rfactor_hand: a pseudo-experiment and max-normalised plots."""
     case, source = "ag100_rfactor_hand", "ag100_rfactor"
     (pendry,), inputs = _source_runs("rfactor", source, ["pendry"])
     inputs[pendry["stdin"]] = set_first_line_title(inputs[pendry["stdin"]], f"tl-test {case}")
@@ -271,10 +275,12 @@ def _differences(spec, derived_root):
 
 
 def main(argv=None):
+    """Write the hand-made cases, or with --check compare them with the committed ones."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--only", nargs="+", choices=sorted(CASES))
     parser.add_argument("--check", action="store_true",
-                        help="derive into a temporary directory and compare with the committed cases")
+                        help="derive into a temporary directory and compare with the "
+                             "committed cases")
     args = parser.parse_args(argv)
     specs = [CASES[name]() for name in (args.only or CASES)]
     if not args.check:
