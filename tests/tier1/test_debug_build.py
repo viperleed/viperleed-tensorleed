@@ -49,13 +49,14 @@ def _compare_relaxed(case, run, workdir):
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("min_rtol,ok", [(1e-3, True), (1e-4, False)])
-def test_relaxed_rtol_from_config(min_rtol, ok, monkeypatch, tmp_path):
+def test_relaxed_rtol_from_config(min_rtol, ok, mocker, tmp_path):
     # ROUT: rtol 0, atol 1.5e-4; a relative deviation of 5e-4 passes only with min_rtol 1e-3
     (tmp_path / "exp").mkdir()
     (tmp_path / "exp" / "ROUT").write_text("R = 1.0000\n")
     (tmp_path / "ROUT").write_text("R = 1.0005\n")
-    monkeypatch.setitem(globals(), "expected_outputs", lambda c, r: [tmp_path / "exp" / "ROUT"])
-    monkeypatch.setitem(globals(), "load_tolerances", lambda: {"debug": {"min_rtol": min_rtol}})
+    mocker.patch.dict(globals(), {
+        "expected_outputs": lambda c, r: [tmp_path / "exp" / "ROUT"],
+        "load_tolerances": lambda: {"debug": {"min_rtol": min_rtol}}})
     assert (not _compare_relaxed(None, None, tmp_path)) == ok
 
 

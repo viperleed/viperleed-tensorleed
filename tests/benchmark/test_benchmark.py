@@ -51,15 +51,11 @@ def test_benchmark_performance(case, run, tl_root, baseline_tl_root, tmp_path):
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("reps", [2, 4])
-def test_benchmark_repetitions_from_config(reps, monkeypatch):
-    seen = []
-
-    def fake_compare(case, run, cand, base, n, workroot):
-        seen.append(n)
-        return perf.PerfResult(1, 1, 1, 1, 1, 1)
-    monkeypatch.setattr(perf, "compare_performance", fake_compare)
+def test_benchmark_repetitions_from_config(reps, mocker):
+    compare = mocker.patch.object(perf, "compare_performance",
+                                  return_value=perf.PerfResult(1, 1, 1, 1, 1, 1))
     th = {**load_tolerances()["perf"], "benchmark_repetitions": reps}
-    monkeypatch.setitem(globals(), "load_tolerances", lambda: {"perf": th})
+    mocker.patch.dict(globals(), {"load_tolerances": lambda: {"perf": th}})
     case, run = PARAMS[0].values
     test_benchmark_performance(case, run, "cand", "base", "w")
-    assert seen == [reps]
+    compare.assert_called_once_with(case, run, "cand", "base", reps, "w")
