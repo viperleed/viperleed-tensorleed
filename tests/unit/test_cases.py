@@ -49,24 +49,17 @@ def test_tolerance_lookup():
         tolerance_for("unknown.txt")
 
 
-import json, sys, textwrap
+import json
 from harness import cases
 from harness.runner import ProgramFailed
 
 
-def _stub(tmp_path, body):
-    stub = tmp_path / "stub.py"
-    stub.write_text("#!" + sys.executable + "\n" + textwrap.dedent(body))
-    stub.chmod(0o755)
-    return stub
-
-
-def test_execute_run_copies_files_and_runs(tmp_path, monkeypatch):
-    stub = _stub(tmp_path, """
+def test_execute_run_copies_files_and_runs(tmp_path, stub_script, stub_build):
+    stub = stub_script(tmp_path / "stub.py", """
         import sys, pathlib
         pathlib.Path('fd.out').write_text(sys.stdin.read() + pathlib.Path('WEXPEL').read_text())
     """)
-    monkeypatch.setattr(cases, "build_program", lambda *a, **k: stub)
+    stub_build(stub)
     (tmp_path / "in").write_text("A"); (tmp_path / "w").write_text("B")
     case = cases.Case("c", tmp_path, "stub", [])
     run = cases.Run("r", tmp_path / "in", None, {"WEXPEL": tmp_path / "w"}, ["fd.out"])
@@ -76,9 +69,8 @@ def test_execute_run_copies_files_and_runs(tmp_path, monkeypatch):
     assert info["returncode"] == 0 and "max_rss_kb" in info
 
 
-def test_execute_run_failing_program_raises(tmp_path, monkeypatch):
-    stub = _stub(tmp_path, "import sys; sys.exit(2)")
-    monkeypatch.setattr(cases, "build_program", lambda *a, **k: stub)
+def test_execute_run_failing_program_raises(tmp_path, stub_script, stub_build):
+    stub_build(stub_script(tmp_path / "stub.py", "import sys; sys.exit(2)"))
     (tmp_path / "in").write_text("A")
     case = cases.Case("c", tmp_path, "stub", [])
     run = cases.Run("r", tmp_path / "in", None, {}, ["fd.out"])
@@ -86,8 +78,8 @@ def test_execute_run_failing_program_raises(tmp_path, monkeypatch):
         cases.execute_run(case, run, tmp_path, None, tmp_path / "wd")
 
 
-def test_tolerance_lookup_reads_optional_atol(monkeypatch):
-    monkeypatch.setattr(cases, "load_tolerances", lambda: {"numeric": {
+def test_tolerance_lookup_reads_optional_atol(mocker):
+    mocker.patch.object(cases, "load_tolerances", return_value={"numeric": {
         "ROUT": {"rtol": 0.0, "atol_frac": 0.0, "atol": 1.5e-4}}})
     tol, _, _ = cases.tolerance_for("ROUT")
     assert tol.atol == 1.5e-4

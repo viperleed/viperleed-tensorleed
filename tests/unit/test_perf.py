@@ -1,4 +1,3 @@
-import sys, textwrap
 from pathlib import Path
 
 import pytest
@@ -8,8 +7,8 @@ from harness import cases, perf
 PERF = cases.load_tolerances()["perf"]
 
 
-def _stub(path, cpu_s, mb, log=None):
-    path.write_text("#!" + sys.executable + "\n" + textwrap.dedent(f"""
+def _stub(write_script, path, cpu_s, mb, log=None):
+    return write_script(path, f"""
         import resource
         if {str(log)!r} != "None":
             with open({str(log)!r}, "a") as f:
@@ -17,19 +16,18 @@ def _stub(path, cpu_s, mb, log=None):
         b = bytearray({mb}*1024*1024); b[::4096] = b'x'*len(b[::4096])
         while resource.getrusage(resource.RUSAGE_SELF).ru_utime < {cpu_s}:
             pass
-    """))
-    path.chmod(0o755)
-    return path
+    """)
 
 
-def test_compare_performance_detects_slower_and_bigger_candidate(tmp_path, monkeypatch):
+def test_compare_performance_detects_slower_and_bigger_candidate(
+        tmp_path, stub_script, stub_build):
     log = tmp_path / "order.log"
-    base = _stub(tmp_path / "base.py", 0.1, 10, log)
-    cand = _stub(tmp_path / "cand.py", 0.4, 60, log)
+    base = _stub(stub_script, tmp_path / "base.py", 0.1, 10, log)
+    cand = _stub(stub_script, tmp_path / "cand.py", 0.4, 60, log)
 
     def fake_build(tl_root, program, param, flags):
         return cand if Path(tl_root).name == "cand" else base
-    monkeypatch.setattr(cases, "build_program", fake_build)
+    stub_build(side_effect=fake_build)
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
     run = cases.Run("r", tmp_path / "in", None, {}, [])
@@ -58,9 +56,9 @@ def test_rss_and_cpu_checks():
         assert not perf.rss_ok(perf.PerfResult(1, 1, 1, 1, base + 1.1 * allowed, base), th)
 
 
-def test_short_runs_are_repeated_until_a_sample_is_long_enough(tmp_path, monkeypatch):
-    base = _stub(tmp_path / "base.py", 0.02, 10)
-    monkeypatch.setattr(cases, "build_program", lambda *a, **k: base)
+def test_short_runs_are_repeated_until_a_sample_is_long_enough(
+        tmp_path, stub_script, stub_build):
+    stub_build(_stub(stub_script, tmp_path / "base.py", 0.02, 10))
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
     run = cases.Run("r", tmp_path / "in", None, {}, [])
@@ -71,12 +69,11 @@ def test_short_runs_are_repeated_until_a_sample_is_long_enough(tmp_path, monkeyp
     assert res.base_cpu_median >= 0.16 and res.cand_cpu_median >= 0.16
 
 
-def _sized_inner(tmp_path, monkeypatch, run_cpu_s, sample_cpu_s, **cfg):
+def _sized_inner(tmp_path, mocker, stub_script, stub_build, run_cpu_s, sample_cpu_s, **cfg):
     """inner chosen by compare_performance with [perf] keys overridden by cfg."""
     log = tmp_path / "order.log"
-    base = _stub(tmp_path / "base.py", run_cpu_s, 1, log)
-    monkeypatch.setattr(cases, "build_program", lambda *a, **k: base)
-    monkeypatch.setattr(cases, "load_tolerances", lambda: {"perf": {**PERF, **cfg}})
+    stub_build(_stub(stub_script, tmp_path / "base.py", run_cpu_s, 1, log))
+    mocker.patch.object(cases, "load_tolerances", return_value={"perf": {**PERF, **cfg}})
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
     run = cases.Run("r", tmp_path / "in", None, {}, [])
@@ -86,21 +83,21 @@ def _sized_inner(tmp_path, monkeypatch, run_cpu_s, sample_cpu_s, **cfg):
 
 
 @pytest.mark.parametrize("sizing_runs", [1, 2])
-def test_sizing_runs_from_config(tmp_path, monkeypatch, sizing_runs):
-    inner, n_exec = _sized_inner(tmp_path, monkeypatch, 0.0, 0.0, sizing_runs=sizing_runs)
+def test_sizing_runs_from_config(tmp_path, mocker, stub_script, stub_build, sizing_runs):
+    inner, n_exec = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 0.0, sizing_runs=sizing_runs)
     assert (inner, n_exec) == (1, sizing_runs + 2)
 
 
 @pytest.mark.parametrize("max_inner", [2, 3])
-def test_max_inner_from_config(tmp_path, monkeypatch, max_inner):
-    inner, _ = _sized_inner(tmp_path, monkeypatch, 0.0, 100.0, sizing_runs=1,
+def test_max_inner_from_config(tmp_path, mocker, stub_script, stub_build, max_inner):
+    inner, _ = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 100.0, sizing_runs=1,
                             max_inner=max_inner)
     assert inner == max_inner
 
 
 @pytest.mark.parametrize("floor,expected", [(0.5, 2), (0.25, 4)])
-def test_min_sizing_cpu_s_from_config(tmp_path, monkeypatch, floor, expected):
+def test_min_sizing_cpu_s_from_config(tmp_path, mocker, stub_script, stub_build, floor, expected):
     # a run far below the floor: inner = ceil(sample_cpu_s / floor)
-    inner, _ = _sized_inner(tmp_path, monkeypatch, 0.0, 1.0, sizing_runs=1,
+    inner, _ = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 1.0, sizing_runs=1,
                             min_sizing_cpu_s=floor)
     assert inner == expected
