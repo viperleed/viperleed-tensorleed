@@ -8,7 +8,7 @@ never-executed lines of chosen ranges (--lines FILE:A-B).
 The list of known gaps in tests/README.md ("Known coverage gaps") comes from this script.
 
 Usage (env tl-tests):
-    python tests/generate/coverage_report.py --tl-root <baseline> --work DIR
+    python -m generate.coverage_report --tl-root <baseline> --work DIR
         [--cases CASE ...] [--reuse] [--lines lib.tleed.f:2176-2200 ...]
         [--never-only] [--missed N]
 """
@@ -20,9 +20,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.cases import load_cases  # noqa: E402
-from harness.runner import run_program  # noqa: E402
+from harness.cases import load_cases
+from harness.runner import run_program
 
 SOURCES = {"refcalc": [("src", "ref-calc.f"), ("lib", "lib.tleed.f")],
            "rfactor": [("lib", "rfacsb.f"), ("src", "rfactor.f")]}

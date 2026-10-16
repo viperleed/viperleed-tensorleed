@@ -4,12 +4,10 @@ Each system is a viperleed example input set plus PARAMETERS overrides.
 Run inside an environment with viperleed installed (generators only; pytest never
 imports this module).
 """
-import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.paths import location  # noqa: E402
+from harness.paths import location
 
 EXAMPLES = location("viperleed_examples")
 

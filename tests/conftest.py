@@ -4,11 +4,10 @@ import sys
 
 import pytest
 
-TESTS_DIR = pathlib.Path(__file__).parent
-sys.path.insert(0, str(TESTS_DIR))
+from harness.build import DEBUG, RELEASE
+from harness.paths import location, viperleed_command
 
-from harness.build import DEBUG, RELEASE  # noqa: E402
-from harness.paths import location, viperleed_command  # noqa: E402
+TESTS_DIR = pathlib.Path(__file__).parent
 
 
 def pytest_addoption(parser):

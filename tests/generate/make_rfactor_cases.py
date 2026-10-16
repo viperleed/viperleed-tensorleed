@@ -21,7 +21,7 @@ are reported. Gap inputs must run clean in the debug build without bounds
 checks (see DEBUG_NO_BOUNDS; known gap bugs: tests/README.md, 'Known baseline issues').
 
 Usage (in an environment with viperleed installed):
-    python tests/generate/make_rfactor_cases.py \
+    python -m generate.make_rfactor_cases \
         [--workroot DIR] [--only CASE ...]
 """
 import argparse
@@ -33,13 +33,11 @@ from pathlib import Path
 
 import fortranformat as ff
 
-sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from make_refcalc_cases import (GeneratorError,  # noqa: E402
+from .make_refcalc_cases import (GeneratorError,
                                 ensure_generator_tl, run_viperleed, set_run)
-from harness.build import DEBUG, RELEASE, BuildFlags, build_program  # noqa: E402
-from harness.paths import location  # noqa: E402
-from harness.runner import run_program  # noqa: E402
+from harness.build import DEBUG, RELEASE, BuildFlags, build_program
+from harness.paths import location
+from harness.runner import run_program
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases" / "rfactor"

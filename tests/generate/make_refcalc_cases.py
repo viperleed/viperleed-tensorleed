@@ -23,7 +23,7 @@ ensure_generator_tl). viperleed compiles in its own work directories and
 does not modify the tree.
 
 Usage (in an environment with viperleed installed):
-    python tests/generate/make_refcalc_cases.py \
+    python -m generate.make_refcalc_cases \
         [--only CASE ...] [--workroot DIR] [--check-only] [--benchmark]
 """
 import argparse
@@ -37,12 +37,11 @@ from pathlib import Path
 
 import fortranformat as ff
 
-sys.path.insert(0, str(Path(__file__).parent))
-from baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree  # noqa: E402
-from systems import BENCHMARKS, SYSTEMS  # noqa: E402
+from .baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree
+from .systems import BENCHMARKS, SYSTEMS
 
-from harness import tier2  # noqa: E402
-from harness.paths import location  # noqa: E402
+from harness import tier2
+from harness.paths import location
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases" / "refcalc"

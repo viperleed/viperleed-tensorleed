@@ -132,13 +132,15 @@ Every expected output file is compared line by line and token by token (same num
 
 Expected outputs are the ground truth; when they may change is under [Rules](#rules-tolerances-reference-data-known-debug-failures), how under [Checking a TensErLEED fix](#checking-a-tenserleed-fix-pull-requests). The inputs of existing cases (FINs, PHASESHIFTS, tier-2 system inputs) are frozen: the viperleed generators below only create new cases, and the suite does not follow changes in viperleed's inputs (those are for viperleed's own tests). The commands with `python` run in an environment with viperleed installed, those with `conda run -n tl-tests` in the suite's environment.
 
+Run the generators as modules from `tests/` (`cd tests`):
+
 ```bash
-python tests/generate/make_refcalc_cases.py [--only CASE] [--check-only]                          # FINs, PARAMs
-python tests/generate/make_rfactor_cases.py [--only CASE] [--verify-only]                         # WEXPEL, spectra
-conda run -n tl-tests  python tests/generate/make_expected.py --tl-root <baseline>                # expected/
-conda run -n tl-tests  python tests/generate/calibrate_tolerances.py --tl-root <baseline> [--write]
-python tests/generate/make_tier2_expected.py [--only NAME] [--calibrate]
-python tests/generate/make_refcalc_cases.py --benchmark
+python -m generate.make_refcalc_cases [--only CASE] [--check-only]                          # FINs, PARAMs
+python -m generate.make_rfactor_cases [--only CASE] [--verify-only]                         # WEXPEL, spectra
+conda run -n tl-tests  python -m generate.make_expected --tl-root <baseline>                # expected/
+conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root <baseline> [--write]
+python -m generate.make_tier2_expected [--only NAME] [--calibrate]
+python -m generate.make_refcalc_cases --benchmark
 ```
 
 The viperleed generators keep their work directories in `generate_workroot` and run viperleed with `-t <baseline tree>` (`baseline_tl_root`, see Quick start) and its own `eeasisss`. The tree must be at the baseline commit with an unmodified `TensErLEED/`, and `eeasisss` must have been built there with `make gcc GCC_FFLAGS="-O3 -fno-finite-math-only -std=legacy"` (gfortran ≥ 14 rejects a legacy FORMAT in eeasisss at run time otherwise); the generators check this. viperleed compiles in its own work directories and does not modify the tree. Regenerating the existing cases this way reproduces the committed inputs except for the time stamp in the phase-shift header line of the FIN, and except for `ag100_mix` (ref-calc case and tier-2 system): viperleed's phase shifts for its mixed Ag/Pd site vary from run to run. They write the fixed title `tl-test <case>` into all inputs, so outputs contain no directory names or timestamps and no output line needs to be skipped. `make_expected.py` refuses a tree whose HEAD is not the baseline unless `--allow-non-baseline` is given, and always a modified `TensErLEED/`; `BASELINE.txt` records the commit, not the path of the tree.
@@ -267,7 +269,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 | `ag100_mix` | occupation of `Ag_surf`: Ag 0.5→0.9, Pd 0.5→0.1 (step 0.1) |
 | `ir100_2x1_o` | z of `O_ads`, z of `Ir_surf` (±0.06 Å, step 0.02); vibration `O_ads` (±0.02 Å, step 0.01) |
 
-Inputs are frozen after viperleed's initialization (annotated POSCAR, PHASESHIFTS, IVBEAMS, VIBROCC), so the tree under test needs no eeasisss. Regenerate the expected values with `python tests/generate/make_tier2_expected.py --skip-freeze` in an environment with viperleed installed (see [Rules](#rules-tolerances-reference-data-known-debug-failures)). The expected values, first generated at `3419e83`, are unchanged at v2.1.0: no tier-2 curve has N ≤ 22 (smallest N = 129), so the `DER` fix does not act on them.
+Inputs are frozen after viperleed's initialization (annotated POSCAR, PHASESHIFTS, IVBEAMS, VIBROCC), so the tree under test needs no eeasisss. Regenerate the expected values with `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed (see [Rules](#rules-tolerances-reference-data-known-debug-failures)). The expected values, first generated at `3419e83`, are unchanged at v2.1.0: no tier-2 curve has N ≤ 22 (smallest N = 129), so the `DER` fix does not act on them.
 
 Tolerances (`[tier2]` in `tolerances.toml`): R values `r_atol = 1.5e-4` (one unit in the 4th decimal), displacements/V0 exact. Calibration (`make_tier2_expected.py --calibrate`): `FORTRAN_COMP = 'gfortran -O0'` identical to `-O2` for all systems; `-O2 -march=native` changes one R value of `ir100_2x1_o` by 1e-4.
 

@@ -11,7 +11,7 @@ to be too tight for legitimate floating-point reordering; the PR that
 changes reference data states why (tests/README.md, 'Rules').
 
 Usage (env tl-tests):
-    python tests/generate/make_expected.py --tl-root <baseline tree> \
+    python -m generate.make_expected --tl-root <baseline tree> \
         [--only CASE ...] [--allow-non-baseline]
 """
 import argparse
@@ -22,12 +22,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import RELEASE  # noqa: E402
-from harness.cases import CASES_DIR, execute_run, load_cases  # noqa: E402
+from harness.build import RELEASE
+from harness.cases import CASES_DIR, execute_run, load_cases
 
-sys.path.insert(0, str(Path(__file__).parent))
-from baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree  # noqa: E402
+from .baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree
 
 
 def _cmd(args):

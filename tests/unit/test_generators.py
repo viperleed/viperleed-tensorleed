@@ -11,9 +11,8 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "generate"))
-import baseline_tree  # noqa: E402
-from baseline_tree import GeneratorError, check_baseline_tree  # noqa: E402
+from generate import baseline_tree
+from generate.baseline_tree import GeneratorError, check_baseline_tree
 
 
 def _git(repo, *args):
@@ -47,7 +46,7 @@ def _generator(name, monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, "fortranformat", types.ModuleType("fortranformat"))
     monkeypatch.setenv("TL_TEST_VIPERLEED_EXAMPLES", str(tmp_path))
     monkeypatch.setenv("TL_TEST_BASELINE", str(tmp_path))
-    return importlib.import_module(name)
+    return importlib.import_module(f"generate.{name}")
 
 
 def _must_not_run(what):
@@ -114,7 +113,7 @@ def test_expected_outputs_come_from_the_pinned_baseline():
 # -------------------------------------------------------------- generators ---
 
 def test_make_expected_refuses_dirty_tree(repo, monkeypatch):
-    import make_expected
+    from generate import make_expected
     monkeypatch.setattr(make_expected, "generate", _must_not_run("generate"))
     monkeypatch.setattr(make_expected, "write_baseline_info", _must_not_run("write_baseline_info"))
     _dirty(repo)
@@ -123,7 +122,7 @@ def test_make_expected_refuses_dirty_tree(repo, monkeypatch):
 
 
 def test_baseline_info_has_no_absolute_path(tmp_path, monkeypatch):
-    import make_expected
+    from generate import make_expected
     monkeypatch.setattr(make_expected, "CASES_DIR", tmp_path)
     make_expected.write_baseline_info("3419e83abc", False)
     text = (tmp_path / "BASELINE.txt").read_text()
@@ -161,7 +160,7 @@ def test_failing_coverage_writes_no_case(tmp_path, monkeypatch):
 ])
 def test_check_only_modes_refuse_wrong_commit(module, args, work, repo, tmp_path, monkeypatch):
     gen = _generator(module, monkeypatch, tmp_path)
-    monkeypatch.setattr(sys.modules["make_refcalc_cases"], "location", lambda key: repo)
+    monkeypatch.setattr(sys.modules["generate.make_refcalc_cases"], "location", lambda key: repo)
     monkeypatch.setattr(gen, work, _must_not_run(work))
     with pytest.raises(GeneratorError, match="not the baseline"):
         gen.main([*args, "--workroot", str(tmp_path)])

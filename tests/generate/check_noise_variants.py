@@ -13,7 +13,7 @@ Outputs are kept in --out/<variant>/<case>-<run>/ (default: a temporary
 directory); --compare-only reuses them (e.g. after a tolerance change).
 
 Usage (env tl-tests):
-    python tests/generate/check_noise_variants.py --tl-root <baseline> [--out DIR]
+    python -m generate.check_noise_variants --tl-root <baseline> [--out DIR]
         [--compare-only] [--variants NAME ...] [--cases CASE ...]
 """
 import argparse
@@ -24,12 +24,11 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import BuildFlags  # noqa: E402
-from harness.cases import (execute_run, expected_outputs, load_cases,  # noqa: E402
+from harness.build import BuildFlags
+from harness.cases import (execute_run, expected_outputs, load_cases,
                            load_tolerances, tolerance_for)
-from harness.compare import compare_files, scaled_atols  # noqa: E402
-from harness.tokens import tokenize  # noqa: E402
+from harness.compare import compare_files, scaled_atols
+from harness.tokens import tokenize
 
 _LIB = "/usr/lib/x86_64-linux-gnu"
 REFERENCE_BLAS_LINK = (f"{_LIB}/lapack/liblapack.so.3 {_LIB}/blas/libblas.so.3 "

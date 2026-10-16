@@ -191,25 +191,25 @@ def test_stale_tmp_dirs_of_dead_processes_are_removed(make_tree, tmp_path, monke
 _CHILD = """\
 import sys
 from pathlib import Path
-sys.path.insert(0, sys.argv[1])
 import harness.build as build
-build.CACHE = Path(sys.argv[2])
-print(build.build_program(Path(sys.argv[3]), "rfactor", None, build.RELEASE))
+build.CACHE = Path(sys.argv[1])
+print(build.build_program(Path(sys.argv[2]), "rfactor", None, build.RELEASE))
 """
 
 
 def test_concurrent_processes_build_once(make_tree, tmp_path, monkeypatch):
     # pytest -n: several workers ask for the same program on a cold cache
-    import sys
+    import os, sys
     count = tmp_path / "count"
     (make_tree / "TensErLEED" / "Makefile").write_text(
         TOY_MAKEFILE.replace("\tchmod +x $@\n",
                              "\tchmod +x $@\n\techo x >> $(COUNT); sleep 1\n"))
     monkeypatch.setenv("COUNT", str(count))
     tests_dir = Path(__file__).parents[1]
-    procs = [subprocess.Popen([sys.executable, "-c", _CHILD, str(tests_dir),
+    procs = [subprocess.Popen([sys.executable, "-c", _CHILD,
                                str(tmp_path / "cache"), str(make_tree)],
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                              env={**os.environ, "PYTHONPATH": str(tests_dir)})
              for _ in range(4)]
     results = [p.communicate(timeout=60) for p in procs]
     assert all(p.returncode == 0 for p in procs), [err for _, err in results]

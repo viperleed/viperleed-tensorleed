@@ -30,7 +30,7 @@ or more (such changes go undetected).
 ifort/ifx is not available on the calibration machine; skipped.
 
 Usage (env tl-tests):
-    python tests/generate/calibrate_tolerances.py --tl-root <baseline> [--write]
+    python -m generate.calibrate_tolerances --tl-root <baseline> [--write]
 """
 import argparse
 import datetime
@@ -39,13 +39,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import BuildFlags  # noqa: E402
-from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs,  # noqa: E402
+from harness.build import BuildFlags
+from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs,
                            load_cases, load_tolerances, tolerance_for)
-from harness.compare import Tolerance, float_scales  # noqa: E402
-from harness.tokens import tokenize  # noqa: E402
-from check_noise_variants import insensitive_counts  # noqa: E402
+from harness.compare import Tolerance, float_scales
+from harness.tokens import tokenize
+from .check_noise_variants import insensitive_counts
 
 VARIANTS = [BuildFlags("O0", "-O0"), BuildFlags("O1", "-O1"), BuildFlags("O3", "-O3"),
             BuildFlags("O2-native", "-O2 -march=native"),
