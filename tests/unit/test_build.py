@@ -157,17 +157,17 @@ def test_build_that_modifies_the_tree_fails(make_tree, monkeypatch):
         build_program(make_tree, "rfactor", None, RELEASE)
 
 
-def test_cache_key_covers_compiler_and_blas(make_tree, monkeypatch):
+def test_cache_key_covers_compiler_and_blas(make_tree, mocker):
     import harness.build as build
     exe1 = build_program(make_tree, "rfactor", None, RELEASE)
     assert "GNU Fortran" in build.toolchain() and "blas" in build.toolchain()
-    monkeypatch.setattr(build, "toolchain", lambda: "GNU Fortran 99|/other/libblas.so|x")
+    mocker.patch.object(build, "toolchain", return_value="GNU Fortran 99|/other/libblas.so|x")
     assert build_program(make_tree, "rfactor", None, RELEASE) != exe1
 
 
-def test_failed_build_leaves_only_its_log(tree, tmp_path, monkeypatch):
+def test_failed_build_leaves_only_its_log(tree, tmp_path, mocker):
     import harness.build as build
-    monkeypatch.setattr(build, "CACHE", tmp_path / "cache")
+    mocker.patch.object(build, "CACHE", tmp_path / "cache")
     (tree / "TensErLEED/lib/rfacsb.f").write_text("      THIS IS NOT FORTRAN\n")
     param = tmp_path / "PARAM"; param.write_text("      PARAMETER (MNBED = 1)\n")
     with pytest.raises(BuildError, match="build log: .*failed-rfactor-"):
@@ -176,11 +176,11 @@ def test_failed_build_leaves_only_its_log(tree, tmp_path, monkeypatch):
     assert len(left) == 1 and left[0].startswith("failed-rfactor-") and left[0].endswith(".log")
 
 
-def test_stale_tmp_dirs_of_dead_processes_are_removed(make_tree, tmp_path, monkeypatch):
+def test_stale_tmp_dirs_of_dead_processes_are_removed(make_tree, tmp_path, mocker):
     import os
     import harness.build as build
     cache = tmp_path / "cache"
-    monkeypatch.setattr(build, "CACHE", cache)
+    mocker.patch.object(build, "CACHE", cache)
     dead = cache / "rfactor-0123456789abcdef.tmp999999999"   # no such pid
     alive = cache / f"rfactor-fedcba9876543210.tmp{os.getpid()}"   # running process
     dead.mkdir(parents=True); alive.mkdir()
@@ -218,22 +218,22 @@ def test_concurrent_processes_build_once(make_tree, tmp_path, monkeypatch):
     assert count.read_text() == "x\n"            # built once, the others waited
 
 
-def test_cache_key_covers_make_invocation(make_tree, monkeypatch):
+def test_cache_key_covers_make_invocation(make_tree, mocker):
     import harness.build as build
     exe1 = build_program(make_tree, "rfactor", None, RELEASE)
-    monkeypatch.setattr(build, "MAKE", "make -B -j1")
+    mocker.patch.object(build, "MAKE", "make -B -j1")
     assert build_program(make_tree, "rfactor", None, RELEASE) != exe1
 
 
-def test_toolchain_keeps_full_compiler_version(monkeypatch):
+def test_toolchain_keeps_full_compiler_version(mocker):
     import harness.build as build
     version = "GNU Fortran 15.2\nline 2\n"
 
     def fake_run(cmd, **kw):
         out = version if cmd[1:] == ("--version",) else "/usr/lib/x.so"
         return subprocess.CompletedProcess(cmd, 0, stdout=out)
-    monkeypatch.setattr(build.subprocess, "run", fake_run)
-    monkeypatch.setattr(build, "toolchain", build.toolchain.__wrapped__)
+    mocker.patch.object(build.subprocess, "run", side_effect=fake_run)
+    mocker.patch.object(build, "toolchain", build.toolchain.__wrapped__)
     key1 = build.toolchain()
     version = "GNU Fortran 15.2\nline 2 changed\n"
     assert build.toolchain() != key1

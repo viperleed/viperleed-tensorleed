@@ -73,7 +73,7 @@ def test_relative_cwd_and_paths(tmp_path, monkeypatch):
     assert "xyz" in r.stdout
 
 
-def test_launcher_rebuilt_for_other_c_compiler_version(tmp_path, monkeypatch):
+def test_launcher_rebuilt_for_other_c_compiler_version(tmp_path, mocker):
     import subprocess
     import harness.runner as runner
     version = "gcc 15.2\nline 2\n"
@@ -83,8 +83,8 @@ def test_launcher_rebuilt_for_other_c_compiler_version(tmp_path, monkeypatch):
             return subprocess.CompletedProcess(cmd, 0, stdout=version)
         Path(cmd[cmd.index("-o") + 1]).touch()
         return subprocess.CompletedProcess(cmd, 0)
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
-    monkeypatch.setattr(runner, "_CACHE", tmp_path)
+    mocker.patch.object(runner.subprocess, "run", side_effect=fake_run)
+    mocker.patch.object(runner, "_CACHE", tmp_path)
     exe1 = runner._launcher()
     assert runner._launcher() == exe1
     version = "gcc 15.2\nline 2 changed\n"

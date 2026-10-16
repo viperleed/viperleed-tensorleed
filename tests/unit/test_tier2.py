@@ -82,17 +82,19 @@ def test_row_length_mismatch_fails(row):
 BANNER = "ViPErLEED (Vienna Package for Erlangen LEED) v{}"
 
 
-def test_viperleed_version_mismatch_stops(monkeypatch):
+def test_viperleed_version_mismatch_stops(mocker):
     pinned = load_tolerances()["tier2"]["viperleed_version"]
-    monkeypatch.setattr(tier2, "viperleed_version", lambda cmd: BANNER.format("0.13.0"))
+    version = mocker.patch.object(tier2, "viperleed_version", return_value=BANNER.format("0.13.0"))
     with pytest.raises(tier2.ViperleedFailed, match=rf"{re.escape(pinned)}.*runs 0\.13\.0"):
         tier2.check_viperleed_version(["viperleed"], pinned)
+    version.assert_called_once_with(["viperleed"])
 
 
-def test_viperleed_version_match_passes(monkeypatch):
+def test_viperleed_version_match_passes(mocker):
     pinned = load_tolerances()["tier2"]["viperleed_version"]
-    monkeypatch.setattr(tier2, "viperleed_version", lambda cmd: BANNER.format(pinned))
+    version = mocker.patch.object(tier2, "viperleed_version", return_value=BANNER.format(pinned))
     tier2.check_viperleed_version(["viperleed"], pinned)
+    version.assert_called_once_with(["viperleed"])
 
 
 def test_system_without_expected_toml_raises(tmp_path):
