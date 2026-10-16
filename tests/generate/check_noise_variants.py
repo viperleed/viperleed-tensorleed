@@ -17,7 +17,6 @@ Usage (env tl-tests):
         [--compare-only] [--variants NAME ...] [--cases CASE ...]
 """
 import argparse
-import fnmatch
 import os
 import sys
 import tempfile
@@ -25,9 +24,9 @@ from collections import Counter
 from pathlib import Path
 
 from harness.build import BuildFlags
-from harness.cases import (execute_run, expected_outputs, load_cases,
-                           load_tolerances, tolerance_for)
-from harness.compare import compare_files, scaled_atols
+from harness.cases import (compare_outputs, execute_run, expected_outputs, load_cases,
+                           load_tolerances, pattern_for, tolerance_for)
+from harness.compare import scaled_atols
 from harness.tokens import tokenize
 
 _LIB = "/usr/lib/x86_64-linux-gnu"
@@ -91,12 +90,8 @@ def compare(out, variants, cases):
         for case, run in _runs(cases):
             n_runs += 1
             wd = out / name / f"{case.name}-{run.name}"
-            bad = []
-            for exp in expected_outputs(case, run):
-                tol, ignore, skip = tolerance_for(exp.name)
-                res = compare_files(wd / exp.name, exp, tol, ignore, skip)
-                if not res.ok:
-                    bad.append(f"{exp.name}: {res.first_failures[0][:100]}")
+            bad = [f"{name}: {msgs[0][:100]}" for name, msgs in
+                   compare_outputs(wd, expected_outputs(case, run)).items()]
             if bad:
                 n_fail += 1
                 print(f"  FAIL {name} {case.name}/{run.name}: {bad[:3]}")
@@ -123,7 +118,7 @@ def insensitivity(cases):
     n, n_ins = Counter(), Counter()
     for case, run in _runs(cases):
         for exp in expected_outputs(case, run):
-            pattern = next(p for p in patterns if fnmatch.fnmatchcase(exp.name, p))
+            pattern = pattern_for(exp.name, patterns)
             tol, ignore, skip = tolerance_for(exp.name)
             counts = insensitive_counts(tokenize(exp.read_text(errors="replace"),
                                                  ignore, skip), tol)

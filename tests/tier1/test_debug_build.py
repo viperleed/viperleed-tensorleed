@@ -8,14 +8,12 @@ check only.
 """
 import dataclasses
 import tomllib
-from pathlib import Path
 
 import pytest
 
 from harness.build import DEBUG, DEBUG_NO_BOUNDS
-from harness.cases import (TESTS_DIR, execute_run, expected_outputs, load_cases,
-                           load_tolerances, tolerance_for)
-from harness.compare import compare_files
+from harness.cases import (TESTS_DIR, compare_outputs, execute_run, expected_outputs,
+                           format_failures, load_cases, load_tolerances)
 from harness.runner import ProgramFailed
 
 KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
@@ -37,14 +35,9 @@ def test_known_failures_exist_as_runs():
 
 def _compare_relaxed(case, run, workdir):
     min_rtol = load_tolerances()["debug"]["min_rtol"]
-    failures = []
-    for exp in expected_outputs(case, run):
-        tol, ignore, skip = tolerance_for(exp.name)
-        relaxed = dataclasses.replace(tol, rtol=max(tol.rtol, min_rtol))
-        res = compare_files(Path(workdir) / exp.name, exp, relaxed, ignore, skip)
-        if not res.ok:
-            failures.append(f"{exp.name}: " + "; ".join(res.first_failures))
-    return failures
+    return format_failures(compare_outputs(
+        workdir, expected_outputs(case, run),
+        adjust=lambda tol: dataclasses.replace(tol, rtol=max(tol.rtol, min_rtol))))
 
 
 @pytest.mark.tier1

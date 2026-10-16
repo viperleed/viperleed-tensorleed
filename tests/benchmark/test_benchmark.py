@@ -10,8 +10,8 @@ import pytest
 
 from harness import perf
 from harness.build import RELEASE
-from harness.cases import CASES_DIR, execute_run, load_cases_from, load_tolerances, tolerance_for
-from harness.compare import compare_files
+from harness.cases import (CASES_DIR, compare_outputs, execute_run, file_set_failure,
+                           format_failures, load_cases_from, load_tolerances)
 
 PARAMS = [pytest.param(c, r, id=f"{c.name}/{r.name}")
           for c in load_cases_from(CASES_DIR, "benchmark") for r in c.runs]
@@ -25,15 +25,10 @@ def test_benchmark_outputs_match_fresh_baseline(case, run, tl_root, baseline_tl_
     execute_run(case, run, tl_root, RELEASE, cand)
     files = sorted({p.name for pat in run.outputs for p in base.glob(pat) if p.is_file()})
     assert files, "baseline produced no outputs"
-    failures = []
-    for name in files:
-        tol, ignore, skip = tolerance_for(name)
-        res = compare_files(cand / name, base / name, tol, ignore, skip)
-        if not res.ok:
-            failures.append(f"{name}: " + "; ".join(res.first_failures))
-    produced = {p.name for pat in run.outputs for p in cand.glob(pat) if p.is_file()}
-    if produced != set(files):
-        failures.append(f"output files differ: {sorted(produced ^ set(files))}")
+    failures = format_failures(compare_outputs(cand, [base / name for name in files]))
+    problem = file_set_failure(cand, run.outputs, files)
+    if problem:
+        failures.append(f"output files differ: {problem}")
     assert not failures, "\n".join(failures)
 
 

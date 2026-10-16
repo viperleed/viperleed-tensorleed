@@ -34,13 +34,12 @@ Usage (env tl-tests):
 """
 import argparse
 import datetime
-import fnmatch
 import sys
 import tempfile
 from pathlib import Path
 
 from harness.build import BuildFlags
-from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs,
+from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs, pattern_for,
                            load_cases, load_tolerances, tolerance_for)
 from harness.compare import Tolerance, float_scales
 from harness.tokens import tokenize
@@ -55,10 +54,6 @@ MAX_PRINT_ULPS = 10.0   # deviations up to this many ulps count as print-level n
 ULPS_SAFETY = 3.0       # print-level rule: rounding flips are quantised
 ULPS_FLOOR = 2.0
 LAST_DIGIT_PATTERNS = {"ROUT": 1e-4, "ROUTSHORT": 1e-4}  # pattern: last printed unit
-
-
-def pattern_for(name, patterns):
-    return next((p for p in patterns if fnmatch.fnmatchcase(name, p)), None)
 
 
 def pairs(actual_text, expected_text):
