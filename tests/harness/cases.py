@@ -35,6 +35,7 @@ TOLERANCES_FILE = TESTS_DIR / "tolerances.toml"
 
 @dataclass
 class Run:
+    """One execution of a program within a case: its inputs and the expected output globs."""
     name: str
     stdin: Path
     param: Path | None
@@ -44,6 +45,7 @@ class Run:
 
 @dataclass
 class Case:
+    """A test case: a program and the runs made with it."""
     name: str
     path: Path
     program: str
@@ -51,7 +53,7 @@ class Case:
 
 
 class CaseError(ValueError):
-    pass
+    """A case or system directory is missing or malformed."""
 
 
 def _load_case(case_dir):
@@ -98,6 +100,7 @@ def case_dirs(parent, marker, what):
 
 
 def load_cases(kind):
+    """All cases of a kind in the committed cases directory (see load_cases_from)."""
     return load_cases_from(CASES_DIR, kind)
 
 
@@ -131,6 +134,7 @@ def expected_outputs(case, run):
 
 @lru_cache(maxsize=None)
 def load_tolerances(path=TOLERANCES_FILE):
+    """The parsed tolerances file (cached per path)."""
     return tomllib.loads(Path(path).read_text())
 
 

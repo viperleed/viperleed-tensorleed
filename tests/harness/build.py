@@ -33,11 +33,12 @@ _PARAM_INCLUDE = re.compile(r"^\s*include\s+['\"]PARAM['\"]", re.I | re.M)
 
 
 class BuildError(RuntimeError):
-    pass
+    """The build failed, or the source tree changed while it was built."""
 
 
 @dataclass(frozen=True)
 class BuildFlags:
+    """Compiler and linker flags of one build variant; part of the cache key."""
     name: str
     compile: str
     link: str = "-llapack -lpthread -lblas -fbacktrace"
@@ -61,6 +62,7 @@ _LEGACY = {
 
 
 def uses_makefile(tl_root):
+    """True if the tree has a TensErLEED/Makefile (Makefile mode), else legacy mode."""
     return (Path(tl_root) / "TensErLEED" / "Makefile").is_file()
 
 
@@ -88,6 +90,7 @@ def toolchain():
     """Full compiler version text and the resolved BLAS/LAPACK libraries (part of the
     cache key: switching the compiler or the BLAS alternative rebuilds)."""
     def run(*cmd):
+        """Run a command and return its stdout, or "missing" if it cannot be started."""
         try:
             return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
         except OSError:
@@ -180,6 +183,7 @@ def build_program(tl_root, program, param, flags):
     mode = MAKE if use_make else "legacy"
 
     def tree_key():
+        """Cache key: hash of the flags, the mode, the toolchain and the input files."""
         key_files = source_files(tl_root, program) + ([Path(param)] if use_param else [])
         return _hash(key_files, tl_root / "TensErLEED",
                      f"{program}|{flags}|{mode}|{'param' if use_param else 'noparam'}"

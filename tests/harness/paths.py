@@ -30,7 +30,7 @@ DEFAULT_VIPERLEED_CMD = "viperleed"
 
 
 class PathNotConfigured(LookupError):
-    pass
+    """A required path is set neither in the environment nor in the local configuration file."""
 
 
 def setting(key, config_file=LOCAL_CONFIG):
