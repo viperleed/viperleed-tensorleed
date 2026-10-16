@@ -20,6 +20,9 @@ PARAMS = [pytest.param(c, r, id=f"{c.name}/{r.name}")
 @pytest.mark.benchmark
 @pytest.mark.parametrize("case,run", PARAMS)
 def test_benchmark_outputs_match_fresh_baseline(case, run, tl_root, baseline_tl_root, tmp_path):
+    """Candidate outputs of a benchmark run match those of a fresh baseline run.
+
+    Failing means numerical results or the set of output files changed on a large system."""
     base, cand = tmp_path / "base", tmp_path / "cand"
     execute_run(case, run, baseline_tl_root, RELEASE, base)
     execute_run(case, run, tl_root, RELEASE, cand)
@@ -35,6 +38,7 @@ def test_benchmark_outputs_match_fresh_baseline(case, run, tl_root, baseline_tl_
 @pytest.mark.benchmark
 @pytest.mark.parametrize("case,run", PARAMS)
 def test_benchmark_performance(case, run, tl_root, baseline_tl_root, tmp_path):
+    """Candidate CPU time and peak RSS of a benchmark run are within the baseline thresholds."""
     th = load_tolerances()["perf"]
     res = perf.compare_performance(case, run, tl_root, baseline_tl_root,
                                    th["benchmark_repetitions"], tmp_path)
@@ -47,6 +51,7 @@ def test_benchmark_performance(case, run, tl_root, baseline_tl_root, tmp_path):
 @pytest.mark.tier1
 @pytest.mark.parametrize("reps", [2, 4])
 def test_benchmark_repetitions_from_config(reps, mocker):
+    """compare_performance is called with the benchmark_repetitions of the configuration."""
     compare = mocker.patch.object(perf, "compare_performance",
                                   return_value=perf.PerfResult(1, 1, 1, 1, 1, 1))
     th = {**load_tolerances()["perf"], "benchmark_repetitions": reps}

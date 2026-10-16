@@ -32,6 +32,10 @@ def checked_viperleed_cmd(viperleed_cmd):
 @pytest.mark.parametrize("system", SYSTEMS, ids=[p.name for p in SYSTEMS])
 def test_viperleed_refcalc_and_error_curves(system, tl_root, checked_viperleed_cmd,
                                             tmp_path):
+    """viperleed calc (RUN = 1 5) on a frozen system reproduces the expected R factors.
+
+    Compares the reference-calculation R factor and V0 shift and every error curve with
+    expected.toml; failing means the results of the full viperleed workflow changed."""
     tol = load_tolerances()["tier2"]
     expected = tier2.from_toml(tomllib.loads((system / "expected.toml").read_text()))
     actual = tier2.run_viperleed_calc(system, tl_root, checked_viperleed_cmd, tmp_path)

@@ -23,6 +23,7 @@ REPORT = []  # rows for the terminal summary (see tests/conftest.py)
 
 @pytest.fixture(scope="session")
 def thresholds():
+    """The [perf] table of the tolerances file."""
     return load_tolerances()["perf"]
 
 
@@ -48,6 +49,7 @@ def perf_results(tl_root, baseline_tl_root, thresholds, tmp_path_factory):
 @pytest.mark.perf
 @pytest.mark.parametrize("case,run", PARAMS)
 def test_peak_memory(case, run, perf_results, thresholds):
+    """The candidate peak RSS of a run is at most the allowed increase above the baseline."""
     res = perf_results[(case.name, run.name)]
     assert perf.rss_ok(res, thresholds), (
         f"peak RSS {res.cand_rss_max} kB vs baseline {res.base_rss_max} kB "
@@ -61,6 +63,7 @@ CASES = [pytest.param(c.name, id=c.name)
 @pytest.mark.perf
 @pytest.mark.parametrize("case", CASES)
 def test_cpu_time_per_case(case, perf_results, thresholds):
+    """The summed median user CPU time of a case is within the baseline threshold."""
     rows = [r for (c, _), r in perf_results.items() if c == case]
     assert rows, f"no runs of {case}"
     agg = perf.PerfResult(0, 0, sum(r.cand_cpu_median for r in rows),

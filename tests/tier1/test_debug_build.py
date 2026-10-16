@@ -27,6 +27,7 @@ def _params():
 
 @pytest.mark.tier1
 def test_known_failures_exist_as_runs():
+    """Every entry of the known debug failures names an existing case and run."""
     runs = {(c.name, r.name) for c, r in iter_runs()}
     assert set(KNOWN) <= runs
 
@@ -41,6 +42,7 @@ def _compare_relaxed(case, run, workdir):
 @pytest.mark.tier1
 @pytest.mark.parametrize("min_rtol,ok", [(1e-3, True), (1e-4, False)])
 def test_relaxed_rtol_from_config(min_rtol, ok, mocker, tmp_path):
+    """The debug comparison uses the configured minimum rtol (a 5e-4 deviation passes at 1e-3)."""
     # ROUT: rtol 0, atol 1.5e-4; a relative deviation of 5e-4 passes only with min_rtol 1e-3
     (tmp_path / "exp").mkdir()
     (tmp_path / "exp" / "ROUT").write_text("R = 1.0000\n")
@@ -54,6 +56,11 @@ def test_relaxed_rtol_from_config(min_rtol, ok, mocker, tmp_path):
 @pytest.mark.debug
 @pytest.mark.parametrize("case,run", list(_params()))
 def test_debug_build_runs_clean(case, run, tl_root, tmp_path):
+    """The debug build (bounds checks, FP traps) terminates cleanly and gives sane outputs.
+
+    A run with a known failure must fail with exactly the recorded error and then run clean
+    without bounds checks. Failing means a new runtime error, or a known one that vanished
+    or changed (update the known failures only for a deliberate fix)."""
     known = KNOWN.get((case.name, run.name))
     if known:
         with pytest.raises(ProgramFailed, match=known["match"]):
