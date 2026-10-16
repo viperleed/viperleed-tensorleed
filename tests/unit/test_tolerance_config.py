@@ -10,6 +10,7 @@ def _expected_files():
 
 
 def test_every_expected_output_has_a_tolerance():
+    """Every stored expected file name is matched by a tolerance entry."""
     patterns = list(load_tolerances()["numeric"])
     missing = {p.name for p in _expected_files()
                if not any(fnmatch.fnmatchcase(p.name, pat) for pat in patterns)}
@@ -49,6 +50,7 @@ def test_skip_allowlist_detects_unlisted_entries():
 
 
 def test_titles_in_outputs_are_the_fixed_case_title():
+    """The only title line in expected outputs is the fixed title of the case."""
     for path in _expected_files():
         case = path.parents[2].name
         for line in path.read_text(errors="replace").splitlines():
@@ -57,6 +59,10 @@ def test_titles_in_outputs_are_the_fixed_case_title():
 
 
 def test_skipped_lines_contain_no_numbers():
+    """Lines that tolerances.toml skips hold no floating-point numbers.
+
+    Guard for future configurations that do skip lines.
+    """
     # Guard for future configs that do skip lines.
     for pattern, cfg in load_tolerances()["numeric"].items():
         skip = set(cfg.get("skip_lines", []))
@@ -68,6 +74,7 @@ def test_skipped_lines_contain_no_numbers():
 
 
 def test_perf_and_debug_keys():
+    """The [perf] and [debug] keys exist with plausible types and ranges."""
     perf = load_tolerances()["perf"]
     assert type(perf["repetitions"]) is int and perf["repetitions"] >= 3
     assert type(perf["benchmark_repetitions"]) is int and perf["benchmark_repetitions"] >= 3
@@ -81,5 +88,6 @@ def test_perf_and_debug_keys():
 
 
 def test_tier2_viperleed_version_key():
+    """The [tier2] section pins a non-empty viperleed version."""
     version = load_tolerances()["tier2"]["viperleed_version"]
     assert isinstance(version, str) and version.strip()

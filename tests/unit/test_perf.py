@@ -1,3 +1,4 @@
+"""Tests of the A/B performance comparison of harness.perf on stub programs."""
 from pathlib import Path
 
 import pytest
@@ -21,11 +22,16 @@ def _stub(write_script, path, cpu_s, mb, log=None):
 
 def test_compare_performance_detects_slower_and_bigger_candidate(
         tmp_path, stub_script, stub_build):
+    """compare_performance flags a slower, larger candidate and orders the runs.
+
+    Sizing runs of the baseline come first, then interleaved samples.
+    """
     log = tmp_path / "order.log"
     base = _stub(stub_script, tmp_path / "base.py", 0.1, 10, log)
     cand = _stub(stub_script, tmp_path / "cand.py", 0.4, 60, log)
 
     def fake_build(tl_root, program, param, flags):
+        """Return the candidate stub for the candidate tree, else the baseline stub."""
         return cand if Path(tl_root).name == "cand" else base
     stub_build(side_effect=fake_build)
     (tmp_path / "in").write_text("")
@@ -41,6 +47,10 @@ def test_compare_performance_detects_slower_and_bigger_candidate(
 
 
 def test_rss_and_cpu_checks():
+    """cpu_ok and rss_ok accept deviations below and reject those above the thresholds.
+
+    For a large program the relative RSS threshold applies, for a small one the absolute floor.
+    """
     th = PERF
     cpu = th["cpu_rel_threshold"]
     ok = perf.PerfResult(1 + cpu / 2, 1.0, 1 + cpu / 2, 1.0, 100_000, 100_000)
@@ -58,6 +68,7 @@ def test_rss_and_cpu_checks():
 
 def test_short_runs_are_repeated_until_a_sample_is_long_enough(
         tmp_path, stub_script, stub_build):
+    """A run shorter than the sample length is repeated (inner > 1) to reach it."""
     stub_build(_stub(stub_script, tmp_path / "base.py", 0.02, 10))
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
@@ -84,12 +95,15 @@ def _sized_inner(tmp_path, mocker, stub_script, stub_build, run_cpu_s, sample_cp
 
 @pytest.mark.parametrize("sizing_runs", [1, 2])
 def test_sizing_runs_from_config(tmp_path, mocker, stub_script, stub_build, sizing_runs):
-    inner, n_exec = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 0.0, sizing_runs=sizing_runs)
+    """The number of sizing runs comes from the configuration."""
+    inner, n_exec = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 0.0,
+                                 sizing_runs=sizing_runs)
     assert (inner, n_exec) == (1, sizing_runs + 2)
 
 
 @pytest.mark.parametrize("max_inner", [2, 3])
 def test_max_inner_from_config(tmp_path, mocker, stub_script, stub_build, max_inner):
+    """The upper limit of inner comes from the configuration."""
     inner, _ = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 100.0, sizing_runs=1,
                             max_inner=max_inner)
     assert inner == max_inner
@@ -97,7 +111,10 @@ def test_max_inner_from_config(tmp_path, mocker, stub_script, stub_build, max_in
 
 @pytest.mark.parametrize("floor,expected", [(0.5, 2), (0.25, 4)])
 def test_min_sizing_cpu_s_from_config(tmp_path, mocker, stub_script, stub_build, floor, expected):
-    # a run far below the floor: inner = ceil(sample_cpu_s / floor)
+    """The floor of the sizing estimate comes from the configuration.
+
+    A run far below the floor gives inner = ceil(sample_cpu_s / floor).
+    """
     inner, _ = _sized_inner(tmp_path, mocker, stub_script, stub_build, 0.0, 1.0, sizing_runs=1,
                             min_sizing_cpu_s=floor)
     assert inner == expected

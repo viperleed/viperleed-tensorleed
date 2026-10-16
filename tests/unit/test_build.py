@@ -118,6 +118,7 @@ def make_tree(tmp_path):
 def add_recipe(make_tree):
     """Return a function appending a shell line to the toy rfactor recipe."""
     def add(line):
+        """Add line to the rfactor recipe of the toy Makefile."""
         makefile = make_tree / "TensErLEED" / "Makefile"
         makefile.write_text(makefile.read_text().replace(
             "\tchmod +x $@\n", f"\tchmod +x $@\n\t{line}\n"))

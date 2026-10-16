@@ -1,5 +1,6 @@
 """Shared iteration over cases and runs (harness.cases.iter_runs) and the
-per-file insensitivity count shared by the tolerance generators."""
+per-file insensitivity count shared by the tolerance generators.
+"""
 from types import SimpleNamespace
 
 from generate import check_noise_variants

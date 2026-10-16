@@ -5,6 +5,7 @@ from harness.paths import ENV, PathNotConfigured, configured, location, viperlee
 
 
 def test_environment_variable_wins_over_config_file(tmp_path, monkeypatch):
+    """The environment variable overrides the config file, which applies once it is unset."""
     cfg = tmp_path / "local.toml"
     cfg.write_text('baseline_tl_root = "/from/config"\n')
     monkeypatch.setenv(ENV["baseline_tl_root"], "/from/env")
@@ -14,6 +15,7 @@ def test_environment_variable_wins_over_config_file(tmp_path, monkeypatch):
 
 
 def test_unset_location_raises_a_clear_error(tmp_path, monkeypatch):
+    """A location set nowhere raises an error naming the variable and the config key."""
     monkeypatch.delenv(ENV["generate_workroot"], raising=False)
     cfg = tmp_path / "missing.toml"
     assert configured("generate_workroot", cfg) is None
@@ -22,6 +24,7 @@ def test_unset_location_raises_a_clear_error(tmp_path, monkeypatch):
 
 
 def test_viperleed_command_precedence_cli_env_config_default(tmp_path, monkeypatch):
+    """The command comes from the command line, else environment, config file, default."""
     cfg = tmp_path / "local.toml"
     cfg.write_text('viperleed_cmd = "from-config --flag"\n')
     monkeypatch.setenv(ENV["viperleed_cmd"], "'from env' run")
