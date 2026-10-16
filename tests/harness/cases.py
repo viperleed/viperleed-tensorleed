@@ -26,6 +26,7 @@ from .compare import Tolerance, compare_files
 from .runner import ProgramFailed, run_program
 
 RUN_TIMEOUT_S = 900
+KINDS = ("refcalc", "rfactor")  # case kinds run in tier 1
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases"
@@ -98,6 +99,21 @@ def case_dirs(parent, marker, what):
 
 def load_cases(kind):
     return load_cases_from(CASES_DIR, kind)
+
+
+def iter_runs(kinds=KINDS, only=None):
+    """Yield (case, run) for every run of every case of the given kinds.
+
+    Cases come in load_cases order (kinds as given, then sorted by name),
+    runs in the order of their case.toml. If only is given and not empty,
+    cases whose name is not in it are skipped.
+    """
+    for kind in kinds:
+        for case in load_cases(kind):
+            if only and case.name not in only:
+                continue
+            for run in case.runs:
+                yield case, run
 
 
 def expected_outputs(case, run):

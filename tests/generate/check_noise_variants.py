@@ -24,7 +24,7 @@ from collections import Counter
 from pathlib import Path
 
 from harness.build import BuildFlags
-from harness.cases import (compare_outputs, execute_run, expected_outputs, load_cases,
+from harness.cases import (compare_outputs, execute_run, expected_outputs, iter_runs,
                            load_tolerances, pattern_for, tolerance_for)
 from harness.compare import scaled_atols
 from harness.tokens import tokenize
@@ -50,22 +50,13 @@ INSENSITIVE_REL = 0.01
 
 
 
-def _runs(cases):
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if cases and case.name not in cases:
-                continue
-            for run in case.runs:
-                yield case, run
-
-
 def produce(tl_root, out, variants, cases):
     for name in variants:
         flags, env = VARIANTS[name]
         saved = {k: os.environ.get(k) for k in env}
         os.environ.update(env)
         try:
-            for case, run in _runs(cases):
+            for case, run in iter_runs(only=cases):
                 wd = out / name / f"{case.name}-{run.name}"
                 wd.mkdir(parents=True, exist_ok=True)
                 try:
@@ -87,7 +78,7 @@ def compare(out, variants, cases):
     n_fail_total = 0
     for name in variants:
         n_fail = n_runs = 0
-        for case, run in _runs(cases):
+        for case, run in iter_runs(only=cases):
             n_runs += 1
             wd = out / name / f"{case.name}-{run.name}"
             bad = [f"{name}: {msgs[0][:100]}" for name, msgs in
@@ -112,16 +103,21 @@ def insensitive_counts(toks, tol):
     return n, n_ins
 
 
+def expected_insensitive_counts(exp, tol):
+    """insensitive_counts of the expected output file exp (a path), read with
+    the ignore and skip settings configured for its name."""
+    _, ignore, skip = tolerance_for(exp.name)
+    return insensitive_counts(tokenize(exp.read_text(errors="replace"), ignore, skip), tol)
+
+
 def insensitivity(cases):
     """{pattern: (n non-zero floats, n insensitive to a 1 % change)}."""
     patterns = list(load_tolerances()["numeric"])
     n, n_ins = Counter(), Counter()
-    for case, run in _runs(cases):
+    for case, run in iter_runs(only=cases):
         for exp in expected_outputs(case, run):
             pattern = pattern_for(exp.name, patterns)
-            tol, ignore, skip = tolerance_for(exp.name)
-            counts = insensitive_counts(tokenize(exp.read_text(errors="replace"),
-                                                 ignore, skip), tol)
+            counts = expected_insensitive_counts(exp, tolerance_for(exp.name)[0])
             n[pattern] += counts[0]
             n_ins[pattern] += counts[1]
     return {p: (n[p], n_ins[p]) for p in n}

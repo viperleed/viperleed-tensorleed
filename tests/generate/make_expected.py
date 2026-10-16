@@ -23,7 +23,7 @@ import tempfile
 from pathlib import Path
 
 from harness.build import RELEASE
-from harness.cases import CASES_DIR, execute_run, load_cases
+from harness.cases import CASES_DIR, execute_run, iter_runs
 
 from .baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree
 
@@ -77,14 +77,10 @@ def main(argv=None):
         head = check_baseline_tree(args.tl_root, args.allow_non_baseline)
     except GeneratorError as err:
         sys.exit(f"{err}; --allow-non-baseline overrides only the commit check")
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if args.only and case.name not in args.only:
-                continue
-            for run in case.runs:
-                names = generate(case, run, args.tl_root)
-                print(f"{kind}/{case.name}/{run.name}: {len(names)} files ({', '.join(names[:6])}"
-                      f"{', ...' if len(names) > 6 else ''})")
+    for case, run in iter_runs(only=args.only):
+        names = generate(case, run, args.tl_root)
+        print(f"{case.program}/{case.name}/{run.name}: {len(names)} files ({', '.join(names[:6])}"
+              f"{', ...' if len(names) > 6 else ''})")
     write_baseline_info(head, not head.startswith(BASELINE_COMMIT))
     return 0
 

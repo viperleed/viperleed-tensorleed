@@ -20,7 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from harness.cases import load_cases
+from harness.cases import iter_runs
 from harness.runner import run_program
 
 SOURCES = {"refcalc": [("src", "ref-calc.f"), ("lib", "lib.tleed.f")],
@@ -68,17 +68,13 @@ def run_with_coverage(tl_root, case, run, workdir):
 
 def aggregate(tl_root, work, cases):
     agg = {}
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if cases and case.name not in cases:
-                continue
-            for run in case.runs:
-                counts = run_with_coverage(tl_root, case, run, work / f"{case.name}-{run.name}")
-                for f, cnt in counts.items():
-                    tot = agg.setdefault(f, {})
-                    for ln, c in cnt.items():
-                        tot[ln] = tot.get(ln, 0) + c
-                print(f"{case.name}/{run.name}", flush=True)
+    for case, run in iter_runs(only=cases):
+        counts = run_with_coverage(tl_root, case, run, work / f"{case.name}-{run.name}")
+        for f, cnt in counts.items():
+            tot = agg.setdefault(f, {})
+            for ln, c in cnt.items():
+                tot[ln] = tot.get(ln, 0) + c
+        print(f"{case.name}/{run.name}", flush=True)
     return agg
 
 

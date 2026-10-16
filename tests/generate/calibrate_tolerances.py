@@ -40,10 +40,10 @@ from pathlib import Path
 
 from harness.build import BuildFlags
 from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs, pattern_for,
-                           load_cases, load_tolerances, tolerance_for)
+                           iter_runs, load_tolerances)
 from harness.compare import Tolerance, float_scales
 from harness.tokens import tokenize
-from .check_noise_variants import insensitive_counts
+from .check_noise_variants import expected_insensitive_counts
 
 VARIANTS = [BuildFlags("O0", "-O0"), BuildFlags("O1", "-O1"), BuildFlags("O3", "-O3"),
             BuildFlags("O2-native", "-O2 -march=native"),
@@ -76,30 +76,28 @@ def collect(tl_root, variants):
     """({pattern: {variant: [pairs]}}, problems)."""
     patterns = list(load_tolerances()["numeric"])
     data, problems = {}, []
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                for flags in variants:
-                    with tempfile.TemporaryDirectory() as tmp:
-                        try:
-                            execute_run(case, run, tl_root, flags, Path(tmp))
-                        except Exception as err:  # noqa: BLE001
-                            problems.append(f"{case.name}/{run.name} [{flags.name}]: "
-                                            f"run failed: {str(err).splitlines()[0]}")
-                            continue
-                        for exp in expected_outputs(case, run):
-                            act = Path(tmp) / exp.name
-                            where = f"{case.name}/{run.name}/{exp.name} [{flags.name}]"
-                            if not act.is_file():
-                                problems.append(f"{where}: missing")
-                                continue
-                            p, prob = pairs(act.read_text(errors="replace"),
-                                            exp.read_text(errors="replace"))
-                            if prob:
-                                problems.append(f"{where}: {prob}")
-                                continue
-                            (data.setdefault(pattern_for(exp.name, patterns), {})
-                                 .setdefault(flags.name, []).extend(p))
+    for case, run in iter_runs():
+        for flags in variants:
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    execute_run(case, run, tl_root, flags, Path(tmp))
+                except Exception as err:  # noqa: BLE001
+                    problems.append(f"{case.name}/{run.name} [{flags.name}]: "
+                                    f"run failed: {str(err).splitlines()[0]}")
+                    continue
+                for exp in expected_outputs(case, run):
+                    act = Path(tmp) / exp.name
+                    where = f"{case.name}/{run.name}/{exp.name} [{flags.name}]"
+                    if not act.is_file():
+                        problems.append(f"{where}: missing")
+                        continue
+                    p, prob = pairs(act.read_text(errors="replace"),
+                                    exp.read_text(errors="replace"))
+                    if prob:
+                        problems.append(f"{where}: {prob}")
+                        continue
+                    (data.setdefault(pattern_for(exp.name, patterns), {})
+                         .setdefault(flags.name, []).extend(p))
     return data, problems
 
 
@@ -130,18 +128,14 @@ def insensitivity(tol):
     """Share of non-zero expected floats (all expected files) allowing a 1 % change
     (check_noise_variants.insensitive_counts, the metric tier 1 is reported with)."""
     n = n_bad = 0
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                for exp in expected_outputs(case, run):
-                    t = tol.get(pattern_for(exp.name, list(tol)))
-                    if not t:
-                        continue
-                    _, ignore, skip = tolerance_for(exp.name)
-                    counts = insensitive_counts(tokenize(exp.read_text(errors="replace"),
-                                                         ignore, skip), t)
-                    n += counts[0]
-                    n_bad += counts[1]
+    for case, run in iter_runs():
+        for exp in expected_outputs(case, run):
+            t = tol.get(pattern_for(exp.name, list(tol)))
+            if not t:
+                continue
+            counts = expected_insensitive_counts(exp, t)
+            n += counts[0]
+            n_bad += counts[1]
     return n_bad / n if n else 0.0
 
 

@@ -13,7 +13,7 @@ import pytest
 
 from harness.build import DEBUG, DEBUG_NO_BOUNDS
 from harness.cases import (TESTS_DIR, compare_outputs, execute_run, expected_outputs,
-                           format_failures, load_cases, load_tolerances)
+                           format_failures, iter_runs, load_tolerances)
 from harness.runner import ProgramFailed
 
 KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
@@ -21,15 +21,13 @@ KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
 
 
 def _params():
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                yield pytest.param(case, run, id=f"{case.name}/{run.name}")
+    for case, run in iter_runs():
+        yield pytest.param(case, run, id=f"{case.name}/{run.name}")
 
 
 @pytest.mark.tier1
 def test_known_failures_exist_as_runs():
-    runs = {(c.name, r.name) for k in ("refcalc", "rfactor") for c in load_cases(k) for r in c.runs}
+    runs = {(c.name, r.name) for c, r in iter_runs()}
     assert set(KNOWN) <= runs
 
 
