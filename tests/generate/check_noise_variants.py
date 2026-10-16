@@ -51,6 +51,7 @@ INSENSITIVE_REL = 0.01
 
 
 def produce(tl_root, out, variants, cases):
+    """Run all tier-1 runs with every variant (flags and environment) into out/<variant>/."""
     for name in variants:
         flags, env = VARIANTS[name]
         saved = {k: os.environ.get(k) for k in env}
@@ -124,6 +125,7 @@ def insensitivity(cases):
 
 
 def main(argv=None):
+    """Produce (unless --compare-only) and compare the variant outputs; report insensitivity."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path)
     parser.add_argument("--out", type=Path)

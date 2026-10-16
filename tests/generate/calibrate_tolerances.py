@@ -175,6 +175,7 @@ def propose(data):
 
 
 def render_toml(proposed, variants):
+    """Text of a new tolerances.toml: proposed and kept patterns, then the old tier2 part."""
     old = TOLERANCES_FILE.read_text()
     rest = old[old.index("[tier2]"):]
     lines = [
@@ -214,6 +215,7 @@ def render_toml(proposed, variants):
 
 
 def main(argv=None):
+    """Print the observed deviations and the proposed tolerances; with --write, store them."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--write", action="store_true")

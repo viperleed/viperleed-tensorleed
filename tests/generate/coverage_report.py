@@ -67,6 +67,7 @@ def run_with_coverage(tl_root, case, run, workdir):
 
 
 def aggregate(tl_root, work, cases):
+    """Execution counts per source file and line, summed over the given runs of the cases."""
     agg = {}
     for case, run in iter_runs(only=cases):
         counts = run_with_coverage(tl_root, case, run, work / f"{case.name}-{run.name}")
@@ -79,6 +80,7 @@ def aggregate(tl_root, work, cases):
 
 
 def source_path(tl_root, fname):
+    """Path of the Fortran source file fname in the tree tl_root."""
     sub = next(d for prog in SOURCES.values() for d, f in prog if f == fname)
     return Path(tl_root) / "TensErLEED" / sub / fname
 
@@ -92,6 +94,7 @@ def routines(lines):
 
 
 def report(tl_root, agg, never_only):
+    """Print, per source file and routine, how many executable lines ran."""
     for f, cnt in agg.items():
         lines = source_path(tl_root, f).read_text(errors="replace").splitlines()
         executable = len(cnt)
@@ -123,6 +126,7 @@ def missed_ranges(tl_root, agg, min_lines):
 
 
 def show_lines(tl_root, agg, spec):
+    """Print the source lines of spec ("<file>:<first>-<last>") with their execution counts."""
     fname, rng = spec.split(":")
     a, b = (int(x) for x in rng.split("-"))
     lines = source_path(tl_root, fname).read_text(errors="replace").splitlines()
@@ -135,6 +139,7 @@ def show_lines(tl_root, agg, spec):
 
 
 def main(argv=None):
+    """Collect (or reuse) the coverage counts of the tier-1 runs and print the reports."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)

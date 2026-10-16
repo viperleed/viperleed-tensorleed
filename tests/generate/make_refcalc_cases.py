@@ -76,6 +76,9 @@ def _viperleed_exe():
 
 
 def run_viperleed(calc_dir, tl, *args, allow_section_errors=()):
+    """Run "viperleed calc" in calc_dir against tl; raise GeneratorError on failure.
+
+    A failure confined to the sections named in allow_section_errors is tolerated."""
     log = calc_dir / f"viperleed-{'-'.join(a.strip('-') for a in args) or 'run'}.out"
     with open(log, "w") as out:
         proc = subprocess.run([str(_viperleed_exe()), "calc", "-t", str(tl), *args],
@@ -111,6 +114,7 @@ def edit_parameters(text, overrides):
 
 
 def set_run(params_file, run):
+    """Set the RUN line of a PARAMETERS file (there must be exactly one)."""
     text = params_file.read_text()
     text, n = re.subn(r"(?m)^RUN\s*=.*$", f"RUN = {run}", text)
     if n != 1:
@@ -119,6 +123,7 @@ def set_run(params_file, run):
 
 
 def prepare_calc_dir(sysdef, calc_dir):
+    """Recreate calc_dir and fill it with the input files of the system."""
     if calc_dir.exists():
         shutil.rmtree(calc_dir)
     calc_dir.mkdir(parents=True)
@@ -256,6 +261,9 @@ def _n_beam_sets(fin):
 
 
 def check_coverage(fin, checks):
+    """Evaluate the named coverage checks on the text of a FIN file.
+
+    Return {check: passed}; an unknown check name raises GeneratorError."""
     nsub = _ints(_fin_lines(fin, "number of Bravais sublayers"))
     results = {}
     for check in checks:
@@ -340,6 +348,11 @@ def _theo_step(sysdef):
 
 
 def generate(sysdef, workroot, tl, benchmark=False):
+    """Run viperleed on a system and write its case.
+
+    Return (coverage results, run names, energy-LMAX map). If a coverage check fails,
+    no case is written and the run names are empty.
+    benchmark selects the benchmark case layout instead of tier 1."""
     calc = workroot / sysdef.name / "calc"
     prepare_calc_dir(sysdef, calc)
     run_viperleed(calc, tl)                      # RUN = 0: initialization
@@ -369,6 +382,9 @@ def generate(sysdef, workroot, tl, benchmark=False):
 
 
 def check_committed(names):
+    """Re-run the coverage checks on the committed FIN files of the named systems.
+
+    Return the exit code: 1 if any file is missing or any check fails."""
     failed = False
     for name in names:
         fins = sorted((CASES_DIR / name / "inputs").glob("FIN_*"))
@@ -384,6 +400,7 @@ def check_committed(names):
 
 
 def main(argv=None):
+    """Generate the cases of the selected systems, or only re-check the committed ones."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--only", nargs="+", choices=sorted(SYSTEMS) + sorted(BENCHMARKS))
     parser.add_argument("--benchmark", action="store_true",

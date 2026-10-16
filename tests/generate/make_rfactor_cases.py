@@ -132,6 +132,7 @@ def split_exp_data(text):
 
 
 def join_exp_data(head, fmt, beams, tail):
+    """Inverse of split_exp_data: assemble the experimental-data part from its pieces."""
     writer = ff.FortranRecordWriter(fmt)
     out = list(head)
     for name, rest, points in beams:
@@ -143,6 +144,7 @@ def join_exp_data(head, fmt, beams, tail):
 
 
 def remove_exp_points(text, beam, emin, emax):
+    """Remove the points of experimental beam (1-based) with energy in [emin, emax]."""
     head, fmt, beams, tail = split_exp_data(text)
     name, rest, points = beams[beam - 1]
     kept = [p for p in points if not emin <= p[0] <= emax]
@@ -194,6 +196,7 @@ def set_spectrum_sym(text, syms):
 
 
 def set_spectrum_title(text, title):
+    """Replace the first (title) line of a theoretical spectrum file."""
     _, rest = text.split("\n", maxsplit=1)
     return title + "\n" + rest
 
@@ -268,6 +271,7 @@ def run_error_calc(workroot, tl):
 
 
 def build_cases(workroot, tl, only):
+    """Write the rfactor cases (all, or those named in only) and return their directories."""
     base = workroot / "ag100" / "calc" / "work"
     if not (base / "rfactor-WEXPEL").is_file():
         raise GeneratorError(f"{base} missing; run make_refcalc_cases.py --only ag100 first")
@@ -372,6 +376,7 @@ def check_pendry_against_viperleed(workroot, report):
 
 
 def main(argv=None):
+    """Build the rfactor cases (or take the committed ones) and verify them with the baseline."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--workroot", type=Path, default=None,
                         help="default: generate_workroot (tests/harness/paths.py)")

@@ -50,6 +50,7 @@ DISPLACEMENTS = {
 
 
 def freeze(name, workroot, tl):
+    """Initialize a system with viperleed (RUN = 0) and store its inputs for tier 2."""
     calc = workroot / f"tier2-{name}" / "init"
     prepare_calc_dir(SYSTEMS[name], calc)
     run_viperleed(calc, tl)  # RUN = 0
@@ -64,6 +65,7 @@ def freeze(name, workroot, tl):
 
 
 def make_expected(name, workroot, tl):
+    """Run viperleed calc on a frozen system and store the results as expected.toml."""
     work = workroot / f"tier2-{name}" / "baseline-run"
     if work.exists():
         shutil.rmtree(work)
@@ -105,6 +107,7 @@ def calibrate(name, workroot, tl):
 
 
 def main(argv=None):
+    """Freeze the inputs and regenerate expected.toml of the tier-2 systems, or calibrate."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--only", nargs="+", choices=sorted(DISPLACEMENTS))
     parser.add_argument("--workroot", type=Path, default=None,

@@ -33,6 +33,7 @@ def _cmd(args):
 
 
 def write_baseline_info(head, allowed_non_baseline):
+    """Write cases/BASELINE.txt: the commit, toolchain, flags and date of the expected outputs."""
     lines = [
         f"commit: {head}",
         "tree: --tl-root, TensErLEED/ unmodified at this commit",
@@ -49,6 +50,7 @@ def write_baseline_info(head, allowed_non_baseline):
 
 
 def generate(case, run, tl_root):
+    """Run one run with the release build, store its outputs as expected; return their names."""
     out_dir = case.path / "expected" / run.name
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -68,6 +70,7 @@ def generate(case, run, tl_root):
 
 
 def main(argv=None):
+    """Regenerate the expected outputs of the selected tier-1 runs from the baseline tree."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--only", nargs="+")
