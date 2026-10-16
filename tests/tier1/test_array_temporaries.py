@@ -31,6 +31,10 @@ def _temporaries(tl_root, program, param):
 @pytest.mark.tier1
 @pytest.mark.parametrize("program", ["refcalc", "rfactor"])
 def test_no_array_temporaries(program, tl_root):
+    """Building a program with -Warray-temporaries reports none.
+
+    A hit means the code makes the compiler copy an array into a hidden temporary, which
+    the peak-memory test alone may not notice."""
     case = load_cases(program)[0]
     hits = _temporaries(tl_root, program, case.runs[0].param)
     assert not hits, f"{len(hits)} array temporaries:\n" + "\n".join(hits[:10])
@@ -38,5 +42,9 @@ def test_no_array_temporaries(program, tl_root):
 
 @pytest.mark.tier1
 def test_probe_temporary_is_reported():
+    """The check can see a temporary: the probe tree with a known one is reported.
+
+    Failing means the build flags or the warning regex no longer detect temporaries,
+    so test_no_array_temporaries would pass vacuously."""
     hits = _temporaries(_PROBE, "rfactor", _PROBE / "PARAM")
     assert any("A(1:N:2)" in h for h in hits), hits

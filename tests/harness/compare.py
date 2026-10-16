@@ -10,6 +10,7 @@ from .tokens import FortranOverflowError, kept_lines, tokenize
 
 @dataclass(frozen=True)
 class Tolerance:
+    """Per-file tolerance of the token comparison; see compare_texts for how the fields combine."""
     rtol: float
     atol_frac: float  # absolute tolerance as a fraction of max |expected float|
     atol: float = 0.0  # absolute tolerance
@@ -46,6 +47,7 @@ class Tolerance:
 
 @dataclass
 class CompareResult:
+    """Outcome of a comparison: ok, tokens compared and the first failure messages."""
     ok: bool
     n_compared: int = 0
     first_failures: list = field(default_factory=list)

@@ -1,7 +1,11 @@
+"""Tests of the Fortran output tokenizer of harness.tokens."""
 import pytest
-from harness.tokens import tokenize, FortranOverflowError
 
-def vals(text, **kw):
+from harness.tokens import FortranOverflowError, tokenize
+
+
+def _vals(text, **kw):
+    """Return the (kind, value) pairs of the tokens of text."""
     return [(t.kind, t.value) for t in tokenize(text, **kw)]
 
 
@@ -42,7 +46,8 @@ def vals(text, **kw):
     pytest.param("1.0E-100", [("float", 1.0e-100)], id="three_digit_e_exponent"),
 ])
 def test_tokens(text, expected):
-    assert vals(text) == expected
+    """The tokenizer splits Fortran-formatted text into the listed kinds and values."""
+    assert _vals(text) == expected
 
 
 @pytest.mark.parametrize("text", [
@@ -53,18 +58,24 @@ def test_tokens(text, expected):
     pytest.param("0.1E+01*", id="lone_star_next_to_number"),
 ])
 def test_overflow_raises(text):
+    """Overflow fields (asterisks) raise FortranOverflowError."""
     with pytest.raises(FortranOverflowError):
         tokenize(text)
 
 
 def test_ignored_lines_are_skipped_and_line_numbers_kept():
+    """Ignored lines give no tokens, and later tokens keep their line numbers."""
     toks = tokenize("Ag100_kept 261005\n 1.5\n", ignore_line_patterns=[r"^Ag100"])
     assert [(t.kind, t.value, t.line) for t in toks] == [("float", 1.5, 2)]
 
+
 def test_skip_lines_by_number():
+    """Lines skipped by number give no tokens."""
     toks = tokenize("title 12 3.0\n 1.5\n", skip_lines=[1])
     assert [(t.kind, t.value, t.line) for t in toks] == [("float", 1.5, 2)]
 
+
 def test_float_tokens_carry_unit_in_last_digit():
+    """Each float token knows the value of one unit in its last digit."""
     toks = tokenize("0.16631E-02 -.1653718948E+00 45.00 0.123456-100")
     assert [t.ulp for t in toks] == pytest.approx([1e-7, 1e-10, 1e-2, 1e-106])

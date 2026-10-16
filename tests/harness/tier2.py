@@ -18,7 +18,7 @@ TIMEOUT_S = 3600
 
 
 class ViperleedFailed(RuntimeError):
-    pass
+    """A viperleed run failed, or its results are missing or malformed."""
 
 
 def load_systems(systems_dir):
@@ -110,6 +110,7 @@ def parse_error_csv(text):
 
 
 def parse_results(workdir):
+    """Read the best R factor, V0 shift and the error curves from the OUT of a calc run."""
     out = Path(workdir) / "OUT"
     routs = sorted(out.glob("R_OUT_refcalc_R=*"))
     if len(routs) != 1:
@@ -127,6 +128,7 @@ def parse_results(workdir):
 
 
 def to_toml(results, comment=""):
+    """Serialize results (from parse_results) to expected.toml text, after the comment lines."""
     lines = [f"# {l}" for l in comment.splitlines()]
     lines += ["[refcalc]", f"r = {results['refcalc']['r']!r}",
               f"v0_shift = {results['refcalc']['v0_shift']!r}", ""]
@@ -140,6 +142,7 @@ def to_toml(results, comment=""):
 
 
 def from_toml(data):
+    """Inverse of to_toml: results from the parsed expected.toml."""
     errors = {}
     for e in data["errors"]:
         errors[e["file"]] = {c: e[f"col{i}"] for i, c in enumerate(e["columns"])}

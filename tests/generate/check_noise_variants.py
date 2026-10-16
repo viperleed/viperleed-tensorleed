@@ -13,23 +13,21 @@ Outputs are kept in --out/<variant>/<case>-<run>/ (default: a temporary
 directory); --compare-only reuses them (e.g. after a tolerance change).
 
 Usage (env tl-tests):
-    python tests/generate/check_noise_variants.py --tl-root <baseline> [--out DIR]
+    python -m generate.check_noise_variants --tl-root <baseline> [--out DIR]
         [--compare-only] [--variants NAME ...] [--cases CASE ...]
 """
 import argparse
-import fnmatch
 import os
 import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import BuildFlags  # noqa: E402
-from harness.cases import (execute_run, expected_outputs, load_cases,  # noqa: E402
-                           load_tolerances, tolerance_for)
-from harness.compare import compare_files, scaled_atols  # noqa: E402
-from harness.tokens import tokenize  # noqa: E402
+from harness.build import BuildFlags
+from harness.cases import (compare_outputs, execute_run, expected_outputs, iter_runs,
+                           load_tolerances, pattern_for, tolerance_for)
+from harness.compare import scaled_atols
+from harness.tokens import tokenize
 
 _LIB = "/usr/lib/x86_64-linux-gnu"
 REFERENCE_BLAS_LINK = (f"{_LIB}/lapack/liblapack.so.3 {_LIB}/blas/libblas.so.3 "
@@ -52,22 +50,14 @@ INSENSITIVE_REL = 0.01
 
 
 
-def _runs(cases):
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if cases and case.name not in cases:
-                continue
-            for run in case.runs:
-                yield case, run
-
-
 def produce(tl_root, out, variants, cases):
+    """Run all tier-1 runs with every variant (flags and environment) into out/<variant>/."""
     for name in variants:
         flags, env = VARIANTS[name]
         saved = {k: os.environ.get(k) for k in env}
         os.environ.update(env)
         try:
-            for case, run in _runs(cases):
+            for case, run in iter_runs(only=cases):
                 wd = out / name / f"{case.name}-{run.name}"
                 wd.mkdir(parents=True, exist_ok=True)
                 try:
@@ -89,15 +79,11 @@ def compare(out, variants, cases):
     n_fail_total = 0
     for name in variants:
         n_fail = n_runs = 0
-        for case, run in _runs(cases):
+        for case, run in iter_runs(only=cases):
             n_runs += 1
             wd = out / name / f"{case.name}-{run.name}"
-            bad = []
-            for exp in expected_outputs(case, run):
-                tol, ignore, skip = tolerance_for(exp.name)
-                res = compare_files(wd / exp.name, exp, tol, ignore, skip)
-                if not res.ok:
-                    bad.append(f"{exp.name}: {res.first_failures[0][:100]}")
+            bad = [f"{name}: {msgs[0][:100]}" for name, msgs in
+                   compare_outputs(wd, expected_outputs(case, run)).items()]
             if bad:
                 n_fail += 1
                 print(f"  FAIL {name} {case.name}/{run.name}: {bad[:3]}")
@@ -118,22 +104,28 @@ def insensitive_counts(toks, tol):
     return n, n_ins
 
 
+def expected_insensitive_counts(exp, tol):
+    """insensitive_counts of the expected output file exp (a path), read with
+    the ignore and skip settings configured for its name."""
+    _, ignore, skip = tolerance_for(exp.name)
+    return insensitive_counts(tokenize(exp.read_text(errors="replace"), ignore, skip), tol)
+
+
 def insensitivity(cases):
     """{pattern: (n non-zero floats, n insensitive to a 1 % change)}."""
     patterns = list(load_tolerances()["numeric"])
     n, n_ins = Counter(), Counter()
-    for case, run in _runs(cases):
+    for case, run in iter_runs(only=cases):
         for exp in expected_outputs(case, run):
-            pattern = next(p for p in patterns if fnmatch.fnmatchcase(exp.name, p))
-            tol, ignore, skip = tolerance_for(exp.name)
-            counts = insensitive_counts(tokenize(exp.read_text(errors="replace"),
-                                                 ignore, skip), tol)
+            pattern = pattern_for(exp.name, patterns)
+            counts = expected_insensitive_counts(exp, tolerance_for(exp.name)[0])
             n[pattern] += counts[0]
             n_ins[pattern] += counts[1]
     return {p: (n[p], n_ins[p]) for p in n}
 
 
 def main(argv=None):
+    """Produce (unless --compare-only) and compare the variant outputs; report insensitivity."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path)
     parser.add_argument("--out", type=Path)

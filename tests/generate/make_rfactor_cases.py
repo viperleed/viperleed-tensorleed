@@ -21,7 +21,7 @@ are reported. Gap inputs must run clean in the debug build without bounds
 checks (see DEBUG_NO_BOUNDS; known gap bugs: tests/README.md, 'Known baseline issues').
 
 Usage (in an environment with viperleed installed):
-    python tests/generate/make_rfactor_cases.py \
+    python -m generate.make_rfactor_cases \
         [--workroot DIR] [--only CASE ...]
 """
 import argparse
@@ -33,15 +33,13 @@ from pathlib import Path
 
 import fortranformat as ff
 
-sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from case_files import (set_first_line_title, set_namelist_value,  # noqa: E402
-                        set_wexpel_title, write_case)
-from make_refcalc_cases import (GeneratorError,  # noqa: E402
-                                ensure_generator_tl, run_viperleed, set_run)
-from harness.build import DEBUG, RELEASE, BuildFlags, build_program  # noqa: E402
-from harness.paths import location  # noqa: E402
-from harness.runner import run_program  # noqa: E402
+from .case_files import (set_first_line_title, set_namelist_value,
+                         set_wexpel_title, write_case)
+from .make_refcalc_cases import (GeneratorError,
+                                 ensure_generator_tl, run_viperleed, set_run)
+from harness.build import DEBUG, RELEASE, BuildFlags, build_program
+from harness.paths import location
+from harness.runner import run_program
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases" / "rfactor"
@@ -116,6 +114,7 @@ def split_exp_data(text):
 
 
 def join_exp_data(head, fmt, beams, tail):
+    """Inverse of split_exp_data: assemble the experimental-data part from its pieces."""
     writer = ff.FortranRecordWriter(fmt)
     out = list(head)
     for name, rest, points in beams:
@@ -127,6 +126,7 @@ def join_exp_data(head, fmt, beams, tail):
 
 
 def remove_exp_points(text, beam, emin, emax):
+    """Remove the points of experimental beam (1-based) with energy in [emin, emax]."""
     head, fmt, beams, tail = split_exp_data(text)
     name, rest, points = beams[beam - 1]
     kept = [p for p in points if not emin <= p[0] <= emax]
@@ -241,6 +241,7 @@ def run_error_calc(workroot, tl):
 
 
 def build_cases(workroot, tl, only):
+    """Write the rfactor cases (all, or those named in only) and return their directories."""
     base = workroot / "ag100" / "calc" / "work"
     if not (base / "rfactor-WEXPEL").is_file():
         raise GeneratorError(f"{base} missing; run make_refcalc_cases.py --only ag100 first")
@@ -345,6 +346,7 @@ def check_pendry_against_viperleed(workroot, report):
 
 
 def main(argv=None):
+    """Build the rfactor cases (or take the committed ones) and verify them with the baseline."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--workroot", type=Path, default=None,
                         help="default: generate_workroot (tests/harness/paths.py)")

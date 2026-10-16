@@ -18,6 +18,7 @@ from .build import RELEASE
 
 @dataclass
 class PerfResult:
+    """Candidate-to-baseline CPU and RSS ratios with the underlying medians and maxima."""
     cpu_ratio: float
     rss_ratio: float
     cand_cpu_median: float
@@ -44,6 +45,7 @@ def compare_performance(case, run, candidate_root, baseline_root, reps, workroot
     counter = iter(range(10**9))
 
     def once(label):
+        """Execute the program of label ("base" or "cand") once in a fresh run directory."""
         workdir = workroot / f"{case.name}-{run.name}-{label}-{next(counter)}"
         shutil.rmtree(workdir, ignore_errors=True)
         res = cases.run_built(case, run, exes[label], workdir)
@@ -73,13 +75,16 @@ def compare_performance(case, run, candidate_root, baseline_root, reps, workroot
 
 
 def cpu_ok(res, thresholds):
+    """True if the candidate CPU time is within the relative threshold of the baseline."""
     return res.cand_cpu_median <= (1 + thresholds["cpu_rel_threshold"]) * res.base_cpu_median
 
 
 def rss_allowed_increase_kb(base_rss_kb, thresholds):
+    """Largest allowed peak-RSS increase: the relative threshold or the absolute floor."""
     return max(thresholds["rss_rel_threshold"] * base_rss_kb, thresholds["rss_abs_floor_kb"])
 
 
 def rss_ok(res, thresholds):
+    """True if the candidate peak RSS exceeds the baseline by no more than the allowed increase."""
     return res.cand_rss_max - res.base_rss_max <= rss_allowed_increase_kb(res.base_rss_max,
                                                                           thresholds)

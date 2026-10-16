@@ -11,7 +11,7 @@ to be too tight for legitimate floating-point reordering; the PR that
 changes reference data states why (tests/README.md, 'Rules').
 
 Usage (env tl-tests):
-    python tests/generate/make_expected.py --tl-root <baseline tree> \
+    python -m generate.make_expected --tl-root <baseline tree> \
         [--only CASE ...] [--allow-non-baseline]
 """
 import argparse
@@ -22,12 +22,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import RELEASE  # noqa: E402
-from harness.cases import CASES_DIR, execute_run, load_cases  # noqa: E402
+from harness.build import RELEASE
+from harness.cases import CASES_DIR, execute_run, iter_runs
 
-sys.path.insert(0, str(Path(__file__).parent))
-from baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree  # noqa: E402
+from .baseline_tree import BASELINE_COMMIT, GeneratorError, check_baseline_tree
 
 
 def _cmd(args):
@@ -35,6 +33,7 @@ def _cmd(args):
 
 
 def write_baseline_info(head, allowed_non_baseline):
+    """Write cases/BASELINE.txt: the commit, toolchain, flags and date of the expected outputs."""
     lines = [
         f"commit: {head}",
         "tree: --tl-root, TensErLEED/ unmodified at this commit",
@@ -51,6 +50,7 @@ def write_baseline_info(head, allowed_non_baseline):
 
 
 def generate(case, run, tl_root):
+    """Run one run with the release build, store its outputs as expected; return their names."""
     out_dir = case.path / "expected" / run.name
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
@@ -70,6 +70,7 @@ def generate(case, run, tl_root):
 
 
 def main(argv=None):
+    """Regenerate the expected outputs of the selected tier-1 runs from the baseline tree."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--only", nargs="+")
@@ -79,14 +80,10 @@ def main(argv=None):
         head = check_baseline_tree(args.tl_root, args.allow_non_baseline)
     except GeneratorError as err:
         sys.exit(f"{err}; --allow-non-baseline overrides only the commit check")
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if args.only and case.name not in args.only:
-                continue
-            for run in case.runs:
-                names = generate(case, run, args.tl_root)
-                print(f"{kind}/{case.name}/{run.name}: {len(names)} files ({', '.join(names[:6])}"
-                      f"{', ...' if len(names) > 6 else ''})")
+    for case, run in iter_runs(only=args.only):
+        names = generate(case, run, args.tl_root)
+        print(f"{case.program}/{case.name}/{run.name}: {len(names)} files ({', '.join(names[:6])}"
+              f"{', ...' if len(names) > 6 else ''})")
     write_baseline_info(head, not head.startswith(BASELINE_COMMIT))
     return 0
 

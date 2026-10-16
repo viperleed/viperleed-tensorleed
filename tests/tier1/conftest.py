@@ -1,15 +1,18 @@
 """Shared helpers for tier-1 tests: run each (case, run) once per session."""
 import pytest
 
-from harness.cases import execute_run, load_cases
+from harness.cases import execute_run, iter_runs
 
 
 def case_run_params(kind):
-    # xdist_group: with pytest -n, all tests of one (case, run) go to the
-    # same worker, so run_case executes the run once (see tests/conftest.py)
+    """pytest parameters (case, run) of all runs of a kind.
+
+    The xdist_group mark sends all tests of one (case, run) to the same worker
+    under pytest -n, so run_case executes the run once (see tests/conftest.py).
+    """
     return [pytest.param(case, run, id=f"{case.name}/{run.name}",
                          marks=pytest.mark.xdist_group(f"{case.name}/{run.name}"))
-            for case in load_cases(kind) for run in case.runs]
+            for case, run in iter_runs((kind,))]
 
 
 @pytest.fixture(scope="session")

@@ -10,7 +10,7 @@ BASELINE_COMMIT = "22e3998"
 
 
 class GeneratorError(RuntimeError):
-    pass
+    """A generator cannot run: wrong or modified baseline tree, or a missing tool or input."""
 
 
 def check_baseline_tree(tl, allow_other_commit=False):
@@ -19,6 +19,7 @@ def check_baseline_tree(tl, allow_other_commit=False):
     that TensErLEED/ has no local changes, untracked or git-ignored files
     included (always: the commit must describe the code that ran)."""
     def git(*args):
+        """Run git in the tree tl and return its stripped stdout."""
         return subprocess.run(["git", "-C", str(tl), *args], check=True,
                               capture_output=True, text=True).stdout.strip()
     top = git("rev-parse", "--show-toplevel")

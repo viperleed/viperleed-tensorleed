@@ -12,7 +12,7 @@ For each system:
    error curves).
 
 Usage (in an environment with viperleed installed):
-    python tests/generate/make_tier2_expected.py \
+    python -m generate.make_tier2_expected \
         [--only NAME ...] [--workroot DIR] [--skip-freeze] [--calibrate]
 
 --calibrate runs the baseline with FORTRAN_COMP = 'gfortran -O0' and
@@ -24,14 +24,12 @@ import shutil
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from baseline_tree import BASELINE_COMMIT  # noqa: E402
-from make_refcalc_cases import (_viperleed_exe, ensure_generator_tl,  # noqa: E402
+from .baseline_tree import BASELINE_COMMIT
+from .make_refcalc_cases import (_viperleed_exe, ensure_generator_tl,
                                 prepare_calc_dir, run_viperleed)
-from systems import SYSTEMS  # noqa: E402
-from harness import tier2  # noqa: E402
-from harness.paths import location  # noqa: E402
+from .systems import SYSTEMS
+from harness import tier2
+from harness.paths import location
 
 SYSTEMS_DIR = Path(__file__).parents[1] / "tier2" / "systems"
 
@@ -52,6 +50,7 @@ DISPLACEMENTS = {
 
 
 def freeze(name, workroot, tl):
+    """Initialize a system with viperleed (RUN = 0) and store its inputs for tier 2."""
     calc = workroot / f"tier2-{name}" / "init"
     prepare_calc_dir(SYSTEMS[name], calc)
     run_viperleed(calc, tl)  # RUN = 0
@@ -66,6 +65,7 @@ def freeze(name, workroot, tl):
 
 
 def make_expected(name, workroot, tl):
+    """Run viperleed calc on a frozen system and store the results as expected.toml."""
     work = workroot / f"tier2-{name}" / "baseline-run"
     if work.exists():
         shutil.rmtree(work)
@@ -107,6 +107,7 @@ def calibrate(name, workroot, tl):
 
 
 def main(argv=None):
+    """Freeze the inputs and regenerate expected.toml of the tier-2 systems, or calibrate."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--only", nargs="+", choices=sorted(DISPLACEMENTS))
     parser.add_argument("--workroot", type=Path, default=None,

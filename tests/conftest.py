@@ -4,14 +4,14 @@ import sys
 
 import pytest
 
-TESTS_DIR = pathlib.Path(__file__).parent
-sys.path.insert(0, str(TESTS_DIR))
+from harness.build import DEBUG, RELEASE
+from harness.paths import location, viperleed_command
 
-from harness.build import DEBUG, RELEASE  # noqa: E402
-from harness.paths import location, viperleed_command  # noqa: E402
+TESTS_DIR = pathlib.Path(__file__).parent
 
 
 def pytest_addoption(parser):
+    """Add the options selecting the tree under test, the baseline, the build and viperleed."""
     group = parser.getgroup("tensorleed")
     group.addoption("--tl-root", default=str(TESTS_DIR.parent),
                     help="TensErLEED tree under test (default: this repository)")
@@ -28,9 +28,12 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    # pytest -n (pytest-xdist): distribute by xdist_group, so the tests that
-    # share a session-cached run (tier1/conftest.py: run_case) run on the
-    # same worker. Without groups, loadgroup distributes like load.
+    """Under pytest-xdist, distribute by xdist_group and refuse runs that must be serial.
+
+    Distributing by group keeps the tests that share a session-cached run
+    (tier1/conftest.py: run_case) on the same worker; without groups,
+    loadgroup distributes like load.
+    """
     if getattr(config.option, "dist", "no") == "load":
         config.option.dist = "loadgroup"
     # workers re-parse the command line and only see "--dist loadgroup" if it
@@ -101,7 +104,10 @@ def _refuse_serial_only_under_xdist(config):
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_setup(item):
-    # exact backstop on the workers (before any fixture runs a timing)
+    """Fail a timing or tier-2 test that reaches a worker it must not run on.
+
+    Exact backstop for the controller-side check, before any fixture runs a timing.
+    """
     if hasattr(item.config, "workerinput"):
         timed = [m for m in SERIAL_ONLY if item.get_closest_marker(m)]
         if timed:
@@ -118,7 +124,7 @@ def pytest_configure_node(node):
 
 
 def pytest_collection_modifyitems(config, items):
-    # Harness unit tests are part of every tier-1 run ('pytest -m tier1').
+    """Mark the harness unit tests as unit and tier1, so every tier-1 run includes them."""
     unit_dir = TESTS_DIR / "unit"
     for item in items:
         if unit_dir in pathlib.Path(item.path).parents:
@@ -128,11 +134,13 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="session")
 def tl_root(request):
+    """The TensErLEED tree under test (--tl-root)."""
     return pathlib.Path(request.config.getoption("--tl-root")).resolve()
 
 
 @pytest.fixture(scope="session")
 def baseline_tl_root(request):
+    """The baseline TensErLEED tree; raise if it has no TensErLEED/ directory."""
     root = request.config.getoption("--baseline-tl-root") or location("baseline_tl_root")
     root = pathlib.Path(root).resolve()
     if not (root / "TensErLEED").is_dir():
@@ -142,11 +150,13 @@ def baseline_tl_root(request):
 
 @pytest.fixture(scope="session")
 def build_flags(request):
+    """The BuildFlags of the --build choice for tier-1 correctness tests."""
     return {"release": RELEASE, "debug": DEBUG}[request.config.getoption("--build")]
 
 
 @pytest.fixture(scope="session")
 def viperleed_cmd(request):
+    """The command (list of words) that runs viperleed for tier 2."""
     return viperleed_command(request.config.getoption("--viperleed-cmd"))
 
 

@@ -20,7 +20,7 @@ _PER_LINE = 5
 
 
 class TensorLayoutError(ValueError):
-    pass
+    """A tensor file deviates from the expected layout."""
 
 
 def label_tensor(tokens):
@@ -36,13 +36,16 @@ def label_tensor(tokens):
     block = -1
 
     def fail(msg):
+        """Raise TensorLayoutError for the current line."""
         line = lines[pos][0] if pos < len(lines) else "EOF"
         raise TensorLayoutError(f"tensor layout, line {line}: {msg}")
 
     def kinds(idx):
+        """The set of kinds of the tokens with the given indices."""
         return {tokens[i].kind for i in idx}
 
     def single_int():
+        """Consume a line holding exactly one integer and return it."""
         nonlocal pos
         if pos >= len(lines):
             fail("expected an integer line")
@@ -77,6 +80,7 @@ def label_tensor(tokens):
         return count
 
     def one_line(section, n):
+        """Consume one line of exactly n floats as one block of section."""
         nonlocal pos, block
         if pos >= len(lines):
             fail(f"expected section {section}")

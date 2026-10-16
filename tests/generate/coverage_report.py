@@ -8,7 +8,7 @@ never-executed lines of chosen ranges (--lines FILE:A-B).
 The list of known gaps in tests/README.md ("Known coverage gaps") comes from this script.
 
 Usage (env tl-tests):
-    python tests/generate/coverage_report.py --tl-root <baseline> --work DIR
+    python -m generate.coverage_report --tl-root <baseline> --work DIR
         [--cases CASE ...] [--reuse] [--lines lib.tleed.f:2176-2200 ...]
         [--never-only] [--missed N]
 """
@@ -20,9 +20,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.cases import load_cases  # noqa: E402
-from harness.runner import run_program  # noqa: E402
+from harness.cases import iter_runs
+from harness.runner import run_program
 
 SOURCES = {"refcalc": [("src", "ref-calc.f"), ("lib", "lib.tleed.f")],
            "rfactor": [("lib", "rfacsb.f"), ("src", "rfactor.f")]}
@@ -68,22 +67,20 @@ def run_with_coverage(tl_root, case, run, workdir):
 
 
 def aggregate(tl_root, work, cases):
+    """Execution counts per source file and line, summed over the given runs of the cases."""
     agg = {}
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            if cases and case.name not in cases:
-                continue
-            for run in case.runs:
-                counts = run_with_coverage(tl_root, case, run, work / f"{case.name}-{run.name}")
-                for f, cnt in counts.items():
-                    tot = agg.setdefault(f, {})
-                    for ln, c in cnt.items():
-                        tot[ln] = tot.get(ln, 0) + c
-                print(f"{case.name}/{run.name}", flush=True)
+    for case, run in iter_runs(only=cases):
+        counts = run_with_coverage(tl_root, case, run, work / f"{case.name}-{run.name}")
+        for f, cnt in counts.items():
+            tot = agg.setdefault(f, {})
+            for ln, c in cnt.items():
+                tot[ln] = tot.get(ln, 0) + c
+        print(f"{case.name}/{run.name}", flush=True)
     return agg
 
 
 def source_path(tl_root, fname):
+    """Path of the Fortran source file fname in the tree tl_root."""
     sub = next(d for prog in SOURCES.values() for d, f in prog if f == fname)
     return Path(tl_root) / "TensErLEED" / sub / fname
 
@@ -97,6 +94,7 @@ def routines(lines):
 
 
 def report(tl_root, agg, never_only):
+    """Print, per source file and routine, how many executable lines ran."""
     for f, cnt in agg.items():
         lines = source_path(tl_root, f).read_text(errors="replace").splitlines()
         executable = len(cnt)
@@ -128,6 +126,7 @@ def missed_ranges(tl_root, agg, min_lines):
 
 
 def show_lines(tl_root, agg, spec):
+    """Print the source lines of spec ("<file>:<first>-<last>") with their execution counts."""
     fname, rng = spec.split(":")
     a, b = (int(x) for x in rng.split("-"))
     lines = source_path(tl_root, fname).read_text(errors="replace").splitlines()
@@ -140,6 +139,7 @@ def show_lines(tl_root, agg, spec):
 
 
 def main(argv=None):
+    """Collect (or reuse) the coverage counts of the tier-1 runs and print the reports."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)

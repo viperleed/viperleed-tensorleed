@@ -8,14 +8,12 @@ check only.
 """
 import dataclasses
 import tomllib
-from pathlib import Path
 
 import pytest
 
 from harness.build import DEBUG, DEBUG_NO_BOUNDS
-from harness.cases import (TESTS_DIR, execute_run, expected_outputs, load_cases,
-                           load_tolerances, tolerance_for)
-from harness.compare import compare_files
+from harness.cases import (TESTS_DIR, compare_outputs, execute_run, expected_outputs,
+                           format_failures, iter_runs, load_tolerances)
 from harness.runner import ProgramFailed
 
 KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
@@ -23,45 +21,46 @@ KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
 
 
 def _params():
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                yield pytest.param(case, run, id=f"{case.name}/{run.name}")
+    for case, run in iter_runs():
+        yield pytest.param(case, run, id=f"{case.name}/{run.name}")
 
 
 @pytest.mark.tier1
 def test_known_failures_exist_as_runs():
-    runs = {(c.name, r.name) for k in ("refcalc", "rfactor") for c in load_cases(k) for r in c.runs}
+    """Every entry of the known debug failures names an existing case and run."""
+    runs = {(c.name, r.name) for c, r in iter_runs()}
     assert set(KNOWN) <= runs
 
 
 def _compare_relaxed(case, run, workdir):
     min_rtol = load_tolerances()["debug"]["min_rtol"]
-    failures = []
-    for exp in expected_outputs(case, run):
-        tol, ignore, skip = tolerance_for(exp.name)
-        relaxed = dataclasses.replace(tol, rtol=max(tol.rtol, min_rtol))
-        res = compare_files(Path(workdir) / exp.name, exp, relaxed, ignore, skip)
-        if not res.ok:
-            failures.append(f"{exp.name}: " + "; ".join(res.first_failures))
-    return failures
+    return format_failures(compare_outputs(
+        workdir, expected_outputs(case, run),
+        adjust=lambda tol: dataclasses.replace(tol, rtol=max(tol.rtol, min_rtol))))
 
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("min_rtol,ok", [(1e-3, True), (1e-4, False)])
-def test_relaxed_rtol_from_config(min_rtol, ok, monkeypatch, tmp_path):
+def test_relaxed_rtol_from_config(min_rtol, ok, mocker, tmp_path):
+    """The debug comparison uses the configured minimum rtol (a 5e-4 deviation passes at 1e-3)."""
     # ROUT: rtol 0, atol 1.5e-4; a relative deviation of 5e-4 passes only with min_rtol 1e-3
     (tmp_path / "exp").mkdir()
     (tmp_path / "exp" / "ROUT").write_text("R = 1.0000\n")
     (tmp_path / "ROUT").write_text("R = 1.0005\n")
-    monkeypatch.setitem(globals(), "expected_outputs", lambda c, r: [tmp_path / "exp" / "ROUT"])
-    monkeypatch.setitem(globals(), "load_tolerances", lambda: {"debug": {"min_rtol": min_rtol}})
+    mocker.patch.dict(globals(), {
+        "expected_outputs": lambda c, r: [tmp_path / "exp" / "ROUT"],
+        "load_tolerances": lambda: {"debug": {"min_rtol": min_rtol}}})
     assert (not _compare_relaxed(None, None, tmp_path)) == ok
 
 
 @pytest.mark.debug
 @pytest.mark.parametrize("case,run", list(_params()))
 def test_debug_build_runs_clean(case, run, tl_root, tmp_path):
+    """The debug build (bounds checks, FP traps) terminates cleanly and gives sane outputs.
+
+    A run with a known failure must fail with exactly the recorded error and then run clean
+    without bounds checks. Failing means a new runtime error, or a known one that vanished
+    or changed (update the known failures only for a deliberate fix)."""
     known = KNOWN.get((case.name, run.name))
     if known:
         with pytest.raises(ProgramFailed, match=known["match"]):

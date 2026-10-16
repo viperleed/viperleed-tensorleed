@@ -20,6 +20,10 @@ def _labels(path):
 
 
 def test_parser_labels_a_real_tensor_file():
+    """Floats of a real T_* file get their section label, integers none.
+
+    The section sizes follow from L1 and the number of exit beams.
+    """
     toks, labels = _labels(T_FILE)
     sections = Counter(lab[0] for lab in labels if lab)
     l1 = toks[4].value  # line 2
@@ -35,6 +39,7 @@ def test_parser_labels_a_real_tensor_file():
 
 
 def test_parser_handles_several_energies():
+    """A file with several energies is labelled energy by energy."""
     toks, labels = _labels(T_MULTI)
     assert sum(1 for t in toks if t.kind == "int" and t.value == -1) == 4
     assert Counter(lab[0] for lab in labels if lab)["hdr"] == 4 * 4
@@ -48,14 +53,17 @@ def test_parser_handles_several_energies():
     lambda lines: [ln.replace("    0", "   -2") for ln in lines],  # bad exit number
 ])
 def test_layout_mismatch_raises(edit):
+    """Each listed corruption of the T_* layout raises TensorLayoutError."""
     lines = T_FILE.read_text().splitlines()
     with pytest.raises(TensorLayoutError):
         label_tensor(tokenize("\n".join(edit(lines))))
 
 
 def test_layout_mismatch_fails_comparison():
-    # same tokens, but the line breaks of a CAF block moved: the block
-    # labels would shift, so the comparison must fail instead
+    """A moved line break fails the comparison instead of shifting the block labels.
+
+    The tokens stay the same, so only the layout check can detect it.
+    """
     text = T_FILE.read_text()
     lines = text.splitlines()
     moved = "\n".join(lines[:2] + [lines[2] + lines[3]] + lines[4:]) + "\n"
@@ -95,7 +103,10 @@ FILE_RULE = Tolerance(rtol=1e-6, atol_frac=1.9e-4, ulps=2)
 
 
 def test_perturbed_xist_value_is_caught():
-    # a mid-sized XIST component (0.104), 1 % off
+    """A 1 % change of a mid-sized XIST component fails only the section-aware rule.
+
+    The file-scale rule would accept it.
+    """
     text = T_FILE.read_text()
     tol, *_ = tolerance_for("T_1")
     perturbed = _perturb(text, "xist", 1.01, 2)
@@ -105,7 +116,10 @@ def test_perturbed_xist_value_is_caught():
 
 
 def test_perturbed_tmat_value_is_caught():
-    # the dominant t-matrix element (l = 0, imaginary part), 1e-4 off
+    """A 1e-4 change of the dominant t-matrix element fails only the section-aware rule.
+
+    The file-scale rule would accept it.
+    """
     text = T_FILE.read_text()
     tol, *_ = tolerance_for("T_1")
     perturbed = _perturb(text, "tmat", 1 + 1e-4, 1)
@@ -114,7 +128,10 @@ def test_perturbed_tmat_value_is_caught():
 
 
 def test_block_rule_never_looser_than_file_rule():
-    # no existing tolerance is loosened; the file rule caps every block
+    """The section-aware tolerance never exceeds the file-scale rule in any block.
+
+    No existing tolerance is loosened.
+    """
     tol, *_ = tolerance_for("T_1")
     toks = tokenize(T_FILE.read_text())
     file_rule = scaled_atols(toks, Tolerance(tol.rtol, tol.file_cap, ulps=tol.ulps))

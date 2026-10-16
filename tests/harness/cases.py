@@ -22,10 +22,11 @@ from functools import lru_cache
 from pathlib import Path
 
 from .build import build_program
-from .compare import Tolerance
+from .compare import Tolerance, compare_files
 from .runner import ProgramFailed, run_program
 
 RUN_TIMEOUT_S = 900
+KINDS = ("refcalc", "rfactor")  # case kinds run in tier 1
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases"
@@ -34,6 +35,7 @@ TOLERANCES_FILE = TESTS_DIR / "tolerances.toml"
 
 @dataclass
 class Run:
+    """One execution of a program within a case: its inputs and the expected output globs."""
     name: str
     stdin: Path
     param: Path | None
@@ -43,6 +45,7 @@ class Run:
 
 @dataclass
 class Case:
+    """A test case: a program and the runs made with it."""
     name: str
     path: Path
     program: str
@@ -50,7 +53,7 @@ class Case:
 
 
 class CaseError(ValueError):
-    pass
+    """A case or system directory is missing or malformed."""
 
 
 def _load_case(case_dir):
@@ -97,7 +100,23 @@ def case_dirs(parent, marker, what):
 
 
 def load_cases(kind):
+    """All cases of a kind in the committed cases directory (see load_cases_from)."""
     return load_cases_from(CASES_DIR, kind)
+
+
+def iter_runs(kinds=KINDS, only=None):
+    """Yield (case, run) for every run of every case of the given kinds.
+
+    Cases come in load_cases order (kinds as given, then sorted by name),
+    runs in the order of their case.toml. If only is given and not empty,
+    cases whose name is not in it are skipped.
+    """
+    for kind in kinds:
+        for case in load_cases(kind):
+            if only and case.name not in only:
+                continue
+            for run in case.runs:
+                yield case, run
 
 
 def expected_outputs(case, run):
@@ -115,7 +134,13 @@ def expected_outputs(case, run):
 
 @lru_cache(maxsize=None)
 def load_tolerances(path=TOLERANCES_FILE):
+    """The parsed tolerances file (cached per path)."""
     return tomllib.loads(Path(path).read_text())
+
+
+def pattern_for(name, patterns):
+    """First of patterns matching name (fnmatch, case-sensitive), or None."""
+    return next((p for p in patterns if fnmatch.fnmatchcase(name, p)), None)
 
 
 def tolerance_for(filename):
@@ -127,18 +152,60 @@ def tolerance_for(filename):
     sections = {section: fraction of the block max});
     KeyError if none matches.
     """
-    for pattern, t in load_tolerances()["numeric"].items():
-        if fnmatch.fnmatchcase(filename, pattern):
-            sections = tuple((k, float(v)) for k, v in t.get("sections", {}).items())
-            return (Tolerance(float(t["rtol"]), float(t["atol_frac"]),
-                              float(t.get("atol", 0.0)), float(t.get("ulps", 0.0)),
-                              t.get("scale", "file"), sections,
-                              float(t["file_cap"]) if "file_cap" in t else None,
-                              int(t.get("exact_f_decimals", -1)),
-                              tuple(t.get("exact_columns", ()))),
-                    list(t.get("ignore_line_patterns", [])),
-                    list(t.get("skip_lines", [])))
-    raise KeyError(f"no tolerance configured for output file {filename!r}")
+    numeric = load_tolerances()["numeric"]
+    pattern = pattern_for(filename, numeric)
+    if pattern is None:
+        raise KeyError(f"no tolerance configured for output file {filename!r}")
+    t = numeric[pattern]
+    sections = tuple((k, float(v)) for k, v in t.get("sections", {}).items())
+    return (Tolerance(float(t["rtol"]), float(t["atol_frac"]),
+                      float(t.get("atol", 0.0)), float(t.get("ulps", 0.0)),
+                      t.get("scale", "file"), sections,
+                      float(t["file_cap"]) if "file_cap" in t else None,
+                      int(t.get("exact_f_decimals", -1)),
+                      tuple(t.get("exact_columns", ()))),
+            list(t.get("ignore_line_patterns", [])),
+            list(t.get("skip_lines", [])))
+
+
+def compare_outputs(actual_dir, expected_files, adjust=None):
+    """{file name: failure messages} for each expected file that does not match.
+
+    Each file in expected_files (paths) is compared with the file of the same
+    name in actual_dir, using the tolerance configured for that name
+    (tolerance_for); a missing actual file is a failure. adjust, if given,
+    maps each Tolerance to the one actually used. An empty dict means all
+    files match.
+    """
+    failures = {}
+    for exp in expected_files:
+        tol, ignore, skip = tolerance_for(exp.name)
+        if adjust is not None:
+            tol = adjust(tol)
+        res = compare_files(Path(actual_dir) / exp.name, exp, tol, ignore, skip)
+        if not res.ok:
+            failures[exp.name] = res.first_failures
+    return failures
+
+
+def format_failures(failures):
+    """Lines 'name: message; message' for a compare_outputs result."""
+    return [f"{name}: " + "; ".join(msgs) for name, msgs in failures.items()]
+
+
+def file_set_failure(actual_dir, outputs, expected_names):
+    """Message naming missing and extra files, or '' if the sets agree.
+
+    The files produced are those in actual_dir matching a glob in outputs;
+    expected_names are the file names that must be produced.
+    """
+    produced = {p.name for pattern in outputs
+                for p in Path(actual_dir).glob(pattern) if p.is_file()}
+    expected = set(expected_names)
+    if produced == expected:
+        return ""
+    return (f"missing: {sorted(expected - produced)}, "
+            f"extra: {sorted(produced - expected)}")
 
 
 def execute_run(case, run, tl_root, flags, workdir):

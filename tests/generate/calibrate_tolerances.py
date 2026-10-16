@@ -30,22 +30,20 @@ or more (such changes go undetected).
 ifort/ifx is not available on the calibration machine; skipped.
 
 Usage (env tl-tests):
-    python tests/generate/calibrate_tolerances.py --tl-root <baseline> [--write]
+    python -m generate.calibrate_tolerances --tl-root <baseline> [--write]
 """
 import argparse
 import datetime
-import fnmatch
 import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parents[1]))
-from harness.build import BuildFlags  # noqa: E402
-from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs,  # noqa: E402
-                           load_cases, load_tolerances, tolerance_for)
-from harness.compare import Tolerance, float_scales  # noqa: E402
-from harness.tokens import tokenize  # noqa: E402
-from check_noise_variants import insensitive_counts  # noqa: E402
+from harness.build import BuildFlags
+from harness.cases import (TOLERANCES_FILE, execute_run, expected_outputs, pattern_for,
+                           iter_runs, load_tolerances)
+from harness.compare import Tolerance, float_scales
+from harness.tokens import tokenize
+from .check_noise_variants import expected_insensitive_counts
 
 VARIANTS = [BuildFlags("O0", "-O0"), BuildFlags("O1", "-O1"), BuildFlags("O3", "-O3"),
             BuildFlags("O2-native", "-O2 -march=native"),
@@ -56,10 +54,6 @@ MAX_PRINT_ULPS = 10.0   # deviations up to this many ulps count as print-level n
 ULPS_SAFETY = 3.0       # print-level rule: rounding flips are quantised
 ULPS_FLOOR = 2.0
 LAST_DIGIT_PATTERNS = {"ROUT": 1e-4, "ROUTSHORT": 1e-4}  # pattern: last printed unit
-
-
-def pattern_for(name, patterns):
-    return next((p for p in patterns if fnmatch.fnmatchcase(name, p)), None)
 
 
 def pairs(actual_text, expected_text):
@@ -82,30 +76,28 @@ def collect(tl_root, variants):
     """({pattern: {variant: [pairs]}}, problems)."""
     patterns = list(load_tolerances()["numeric"])
     data, problems = {}, []
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                for flags in variants:
-                    with tempfile.TemporaryDirectory() as tmp:
-                        try:
-                            execute_run(case, run, tl_root, flags, Path(tmp))
-                        except Exception as err:  # noqa: BLE001
-                            problems.append(f"{case.name}/{run.name} [{flags.name}]: "
-                                            f"run failed: {str(err).splitlines()[0]}")
-                            continue
-                        for exp in expected_outputs(case, run):
-                            act = Path(tmp) / exp.name
-                            where = f"{case.name}/{run.name}/{exp.name} [{flags.name}]"
-                            if not act.is_file():
-                                problems.append(f"{where}: missing")
-                                continue
-                            p, prob = pairs(act.read_text(errors="replace"),
-                                            exp.read_text(errors="replace"))
-                            if prob:
-                                problems.append(f"{where}: {prob}")
-                                continue
-                            (data.setdefault(pattern_for(exp.name, patterns), {})
-                                 .setdefault(flags.name, []).extend(p))
+    for case, run in iter_runs():
+        for flags in variants:
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    execute_run(case, run, tl_root, flags, Path(tmp))
+                except Exception as err:  # noqa: BLE001
+                    problems.append(f"{case.name}/{run.name} [{flags.name}]: "
+                                    f"run failed: {str(err).splitlines()[0]}")
+                    continue
+                for exp in expected_outputs(case, run):
+                    act = Path(tmp) / exp.name
+                    where = f"{case.name}/{run.name}/{exp.name} [{flags.name}]"
+                    if not act.is_file():
+                        problems.append(f"{where}: missing")
+                        continue
+                    p, prob = pairs(act.read_text(errors="replace"),
+                                    exp.read_text(errors="replace"))
+                    if prob:
+                        problems.append(f"{where}: {prob}")
+                        continue
+                    (data.setdefault(pattern_for(exp.name, patterns), {})
+                         .setdefault(flags.name, []).extend(p))
     return data, problems
 
 
@@ -136,18 +128,14 @@ def insensitivity(tol):
     """Share of non-zero expected floats (all expected files) allowing a 1 % change
     (check_noise_variants.insensitive_counts, the metric tier 1 is reported with)."""
     n = n_bad = 0
-    for kind in ("refcalc", "rfactor"):
-        for case in load_cases(kind):
-            for run in case.runs:
-                for exp in expected_outputs(case, run):
-                    t = tol.get(pattern_for(exp.name, list(tol)))
-                    if not t:
-                        continue
-                    _, ignore, skip = tolerance_for(exp.name)
-                    counts = insensitive_counts(tokenize(exp.read_text(errors="replace"),
-                                                         ignore, skip), t)
-                    n += counts[0]
-                    n_bad += counts[1]
+    for case, run in iter_runs():
+        for exp in expected_outputs(case, run):
+            t = tol.get(pattern_for(exp.name, list(tol)))
+            if not t:
+                continue
+            counts = expected_insensitive_counts(exp, t)
+            n += counts[0]
+            n_bad += counts[1]
     return n_bad / n if n else 0.0
 
 
@@ -187,6 +175,7 @@ def propose(data):
 
 
 def render_toml(proposed, variants):
+    """Text of a new tolerances.toml: proposed and kept patterns, then the old tier2 part."""
     old = TOLERANCES_FILE.read_text()
     rest = old[old.index("[tier2]"):]
     lines = [
@@ -198,6 +187,8 @@ def render_toml(proposed, variants):
         "# by calibrate_tolerances.py, checked by check_noise_variants.py).",
         "# Patterns are matched with fnmatch against the output file name; the first match wins.",
         "# Optional: atol, ulps, scale, skip_lines (1-based), ignore_line_patterns (regexes).",
+        "# skip_lines and ignore_line_patterns hide differences: only entries on SKIP_ALLOWLIST in",
+        "# tests/unit/test_tolerance_config.py may use them (see the comment there for the rule).",
         "# Calibrated by tests/generate/calibrate_tolerances.py (see README, 'Tolerances'):",
         f"#   date {datetime.date.today().isoformat()}, baseline -O2 vs variants "
         + ", ".join(f"'{v.compile}'" for v in variants) + " (gfortran; ifort not available).",
@@ -224,6 +215,7 @@ def render_toml(proposed, variants):
 
 
 def main(argv=None):
+    """Print the observed deviations and the proposed tolerances; with --write, store them."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--tl-root", type=Path, required=True)
     parser.add_argument("--write", action="store_true")

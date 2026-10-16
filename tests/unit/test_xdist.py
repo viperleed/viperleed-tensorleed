@@ -16,6 +16,7 @@ from conftest import _n_workers, _serial_only_selected, _tier2_selected
     ("not perf and not debug and not benchmark and not tier2", []),   # addopts
 ])
 def test_serial_only_selected(markexpr, refused):
+    """The serial-only markers selected by a -m expression are the ones refused under -n."""
     assert _serial_only_selected(markexpr) == refused
 
 
@@ -29,6 +30,7 @@ def test_serial_only_selected(markexpr, refused):
     ("not perf and not debug and not benchmark and not tier2", False),   # addopts
 ])
 def test_tier2_selected(markexpr, selected):
+    """Tier 2 is detected in a -m expression, also when it selects everything."""
     assert _tier2_selected(markexpr) is selected
 
 
@@ -39,4 +41,5 @@ def test_tier2_selected(markexpr, selected):
     (["3*popen//python=python3", "popen"], 4),
 ])
 def test_n_workers(tx, n):
+    """The number of workers is counted from the xdist specs, including N* prefixes."""
     assert _n_workers(tx) == n

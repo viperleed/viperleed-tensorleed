@@ -24,11 +24,12 @@ _THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
 
 
 class ProgramFailed(RuntimeError):
-    pass
+    """The program did not terminate cleanly or did not produce complete output."""
 
 
 @dataclass
 class RunResult:
+    """Exit code, output, CPU times, peak RSS (KiB) and wall time of one program run."""
     returncode: int
     stdout: str
     stderr: str

@@ -6,7 +6,7 @@ baseline_tree, so it runs without viperleed.
 import re
 import shutil
 
-from baseline_tree import GeneratorError
+from .baseline_tree import GeneratorError
 
 
 def write_case(case_dir, header, program, description, covers, runs, inputs):

@@ -9,6 +9,8 @@
 # file_cap (the scaled part is at most file_cap * max |float| of the file),
 # exact_f_decimals (floats printed in F format with <= this many decimals match exactly),
 # exact_columns (1-based positions of tokens in a line, or "odd"/"even", that match exactly).
+# skip_lines and ignore_line_patterns hide differences: only entries on SKIP_ALLOWLIST in
+# tests/unit/test_tolerance_config.py may use them (see the comment there for the rule).
 # Calibrated by tests/generate/calibrate_tolerances.py (see README, 'Tolerances'):
 #   date 2026-10-05, baseline -O2 vs variants '-O0', '-O1', '-O3', '-O2 -march=native', '-O2 -fno-fast-math' (gfortran; ifort not available).
 # 'insensitive' = share of non-zero expected values for which a 1 % change passes.

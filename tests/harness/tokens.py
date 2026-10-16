@@ -13,10 +13,11 @@ from typing import Literal, NamedTuple
 
 
 class FortranOverflowError(ValueError):
-    pass
+    """A field was filled with asterisks: the value did not fit its format."""
 
 
 class Token(NamedTuple):
+    """One number or text item of Fortran output; numbers carry their print format."""
     kind: Literal["float", "int", "text"]
     value: object
     line: int
