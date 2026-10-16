@@ -16,14 +16,36 @@ def test_every_expected_output_has_a_tolerance():
     assert not missing
 
 
-def test_no_lines_skipped_because_titles_are_fixed():
-    # The generators write the fixed title 'tl-test <case>' into all inputs,
-    # so outputs contain no directory names or timestamps and no line has
-    # to be skipped. Skipping lines would hide differences.
-    cfg = load_tolerances()["numeric"]
-    assert {k: v.get("skip_lines", []) for k, v in cfg.items() if v.get("skip_lines")} == {}
-    assert {k: v.get("ignore_line_patterns", []) for k, v in cfg.items()
-            if v.get("ignore_line_patterns")} == {}
+# Entries of tolerances.toml[numeric] that may use skip_lines or
+# ignore_line_patterns. Skipping lines hides differences, so an entry is
+# added here only together with a decisions entry that carries the evidence
+# that the skipped lines hold no physics (the same rule as for loosening a
+# tolerance), and the lines must still contain no numbers, see
+# test_skipped_lines_contain_no_numbers. Empty: the generators write the
+# fixed title 'tl-test <case>' into all inputs, so outputs contain no
+# directory names or timestamps and no line has to be skipped.
+SKIP_ALLOWLIST = frozenset()
+
+_SKIP_KEYS = ("skip_lines", "ignore_line_patterns")
+
+
+def _unlisted_skips(numeric_cfg, allowlist):
+    """Return the entries that skip lines without being on the allowlist."""
+    return sorted(k for k, v in numeric_cfg.items()
+                  if any(v.get(key) for key in _SKIP_KEYS) and k not in allowlist)
+
+
+def test_lines_skipped_only_for_allowlisted_entries():
+    """Fail if tolerances.toml skips lines in an entry not in SKIP_ALLOWLIST."""
+    assert _unlisted_skips(load_tolerances()["numeric"], SKIP_ALLOWLIST) == []
+
+
+def test_skip_allowlist_detects_unlisted_entries():
+    """A skip on an unlisted entry is reported; listing the entry allows it."""
+    cfg = {"a.out": {"skip_lines": [1]}, "b.out": {"ignore_line_patterns": ["x"]},
+           "c.out": {"rtol": 1e-6}, "d.out": {"skip_lines": []}}
+    assert _unlisted_skips(cfg, frozenset()) == ["a.out", "b.out"]
+    assert _unlisted_skips(cfg, frozenset({"a.out"})) == ["b.out"]
 
 
 def test_titles_in_outputs_are_the_fixed_case_title():

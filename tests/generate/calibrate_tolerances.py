@@ -186,6 +186,8 @@ def render_toml(proposed, variants):
         "# by calibrate_tolerances.py, checked by check_noise_variants.py).",
         "# Patterns are matched with fnmatch against the output file name; the first match wins.",
         "# Optional: atol, ulps, scale, skip_lines (1-based), ignore_line_patterns (regexes).",
+        "# skip_lines and ignore_line_patterns hide differences: only entries on SKIP_ALLOWLIST in",
+        "# tests/unit/test_tolerance_config.py may use them (see the comment there for the rule).",
         "# Calibrated by tests/generate/calibrate_tolerances.py (see README, 'Tolerances'):",
         f"#   date {datetime.date.today().isoformat()}, baseline -O2 vs variants "
         + ", ".join(f"'{v.compile}'" for v in variants) + " (gfortran; ifort not available).",
