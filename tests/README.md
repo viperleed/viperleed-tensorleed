@@ -7,7 +7,7 @@ Baseline (ground truth): TensErLEED v2.1.0 (`22e3998`), which includes the ADREF
 ## Quick start
 
 ```bash
-conda env create -f tests/environment.yml          # creates env tl-tests: python 3.12, numpy, pytest, pytest-xdist
+conda env create -f tests/environment.yml          # creates env tl-tests: python 3.12, numpy, pytest, pytest-xdist, pytest-mock
 # requirements: gfortran, gcc, BLAS/LAPACK (-llapack -lblas)
 
 conda run -n tl-tests pytest tests -m tier1 --tl-root <TL tree>    # unit + tier 1 (~20 s)
@@ -72,7 +72,7 @@ The suite checks that the refactored code reproduces the baseline. These rules k
 
 ## Checking a TensErLEED fix (pull requests)
 
-For a PR that changes `TensErLEED/`, on a clean clone (Python ≥ 3.11 with numpy, pytest, pytest-xdist, e.g. the `tl-tests` env; gfortran, BLAS/LAPACK):
+For a PR that changes `TensErLEED/`, on a clean clone (Python ≥ 3.11 with numpy, pytest, pytest-xdist, pytest-mock, e.g. the `tl-tests` env; gfortran, BLAS/LAPACK):
 
 ```bash
 # baseline tree: the pin before the fix; create it before re-pinning (or set baseline_tl_root, see local.toml.example)
