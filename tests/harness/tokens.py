@@ -98,7 +98,7 @@ def tokenize(text, ignore_line_patterns=(), skip_lines=()):
     """Split text into Token(kind, value, line, ...); skip ignored lines.
 
     ignore_line_patterns: regexes; a line matching any is skipped.
-    skip_lines: 1-based line numbers to skip (e.g. [1] for a title line).
+    skip_lines: 1-based line numbers to skip.
     Raises FortranOverflowError on '*' overflow fields.
     """
     tokens = []
