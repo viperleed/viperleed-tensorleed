@@ -28,7 +28,7 @@ def test_nonzero_exit_fails(tmp_path, stub_script):
 def test_fortran_runtime_error_text_fails(tmp_path, stub_script):
     """A "Fortran runtime error" message fails the check even with exit code 0."""
     exe = stub_script(tmp_path / "prog.py", "import sys; "
-                  "sys.stderr.write('Fortran runtime error: Index 3 out of bounds')")
+                      "sys.stderr.write('Fortran runtime error: Index 3 out of bounds')")
     with pytest.raises(ProgramFailed):
         run_program(exe, tmp_path, None, timeout=30).check()
 
@@ -61,7 +61,8 @@ def test_thread_env_is_set(tmp_path, stub_script):
 
 def test_memory_is_measured(tmp_path, stub_script):
     """The peak resident memory of the program is measured."""
-    exe = stub_script(tmp_path / "prog.py", "b = bytearray(200*1024*1024); b[::4096] = b'x'*len(b[::4096])")
+    exe = stub_script(tmp_path / "prog.py",
+                      "b = bytearray(200*1024*1024); b[::4096] = b'x'*len(b[::4096])")
     r = run_program(exe, tmp_path, None, timeout=60)
     assert r.max_rss_kb > 150 * 1024
 
@@ -81,7 +82,8 @@ def test_peak_rss_excludes_the_parent_python_process(tmp_path):
 
 def test_killed_by_signal_gives_negative_returncode(tmp_path, stub_script):
     """A program killed by a signal has a negative return code and fails the check."""
-    exe = stub_script(tmp_path / "prog.py", "import os, signal; os.kill(os.getpid(), signal.SIGSEGV)")
+    exe = stub_script(tmp_path / "prog.py",
+                      "import os, signal; os.kill(os.getpid(), signal.SIGSEGV)")
     r = run_program(exe, tmp_path, None, timeout=30)
     assert r.returncode == -11
     with pytest.raises(ProgramFailed):

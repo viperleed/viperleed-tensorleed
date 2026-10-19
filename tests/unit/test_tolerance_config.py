@@ -66,7 +66,7 @@ def _dropped_text(text, ignore_line_patterns, skip_lines):
 
 
 def test_skipped_lines_contain_no_numbers():
-    """Lines that tolerances.toml skips or ignores hold no floating-point numbers.
+    """Lines that tolerances.toml skips or ignores hold no numbers, integer or float.
 
     Covers both skip_lines and ignore_line_patterns, for entries on
     SKIP_ALLOWLIST as for any other.
@@ -78,7 +78,7 @@ def test_skipped_lines_contain_no_numbers():
         for path in _expected_files():
             if fnmatch.fnmatchcase(path.name, pattern):
                 text = _dropped_text(path.read_text(errors="replace"), ignore, skip)
-                assert not [t for t in tokenize(text) if t.kind == "float"], (path, text)
+                assert not [t for t in tokenize(text) if t.kind in ("float", "int")], (path, text)
 
 
 def test_dropped_text_has_skipped_and_ignored_lines():

@@ -43,16 +43,19 @@ def test_compare_outputs_accepts_matching_files(dirs):
 
 
 def test_compare_outputs_reports_failing_comparison(dirs):
-    """Each file deviating beyond tolerance is reported under its name.
+    """Exactly the files deviating beyond tolerance are reported, by name.
 
-    Failing files come first and last with a matching file between, so a
-    failure is not lost when a later file matches or fails.
+    Failing and matching files alternate and the list ends on a matching
+    file, so the result does not depend on the position of a file or on the
+    verdict of the last one.
     """
     act, exp = dirs
-    for name, actual in (("bad1", "2.0000"), ("good", "1.0000"), ("bad2", "3.0000")):
+    files = (("bad1", "2.0000"), ("good1", "1.0000"),
+             ("bad2", "3.0000"), ("good2", "1.0000"))
+    for name, actual in files:
         (exp / name).write_text("1.0000\n")
         (act / name).write_text(actual + "\n")
-    failures = cases.compare_outputs(act, [exp / n for n in ("bad1", "good", "bad2")])
+    failures = cases.compare_outputs(act, [exp / name for name, _ in files])
     assert set(failures) == {"bad1", "bad2"}
     assert "2.0" in failures["bad1"][0]
     assert "3.0" in failures["bad2"][0]

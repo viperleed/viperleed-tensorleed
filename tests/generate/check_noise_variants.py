@@ -13,7 +13,7 @@ Outputs are kept in --out/<variant>/<case>-<run>/ (default: a temporary
 directory); --compare-only reuses them (e.g. after a tolerance change).
 
 Usage (env tl-tests):
-    python -m generate.check_noise_variants --tl-root <baseline> [--out DIR]
+    python -m generate.check_noise_variants --tl-root=<baseline> [--out DIR]
         [--compare-only] [--variants NAME ...] [--cases CASE ...]
 """
 import argparse
