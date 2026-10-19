@@ -33,9 +33,9 @@ def repo(tmp_path):
 
 
 @pytest.fixture
-def at_baseline(repo, monkeypatch):
+def at_baseline(repo, mocker):
     """Return the repo with BASELINE_COMMIT patched to its HEAD."""
-    monkeypatch.setattr(baseline_tree, "BASELINE_COMMIT", _git(repo, "rev-parse", "HEAD"))
+    mocker.patch.object(baseline_tree, "BASELINE_COMMIT", _git(repo, "rev-parse", "HEAD"))
     return repo
 
 
@@ -43,8 +43,8 @@ def _dirty(tree):
     (tree / "TensErLEED" / "a.f").write_text("      STOP\n      END\n")
 
 
-def _generator(name, monkeypatch, tmp_path):
-    monkeypatch.setitem(sys.modules, "fortranformat", types.ModuleType("fortranformat"))
+def _generator(name, monkeypatch, mocker, tmp_path):
+    mocker.patch.dict(sys.modules, {"fortranformat": types.ModuleType("fortranformat")})
     monkeypatch.setenv("TL_TEST_VIPERLEED_EXAMPLES", str(tmp_path))
     monkeypatch.setenv("TL_TEST_BASELINE", str(tmp_path))
     return importlib.import_module(f"generate.{name}")
@@ -135,7 +135,7 @@ def test_baseline_info_has_no_absolute_path(tmp_path, mocker):
 
 def test_failing_coverage_writes_no_case(tmp_path, monkeypatch, mocker):
     """A system that fails its coverage checks produces no case."""
-    gen = _generator("make_refcalc_cases", monkeypatch, tmp_path)
+    gen = _generator("make_refcalc_cases", monkeypatch, mocker, tmp_path)
 
     def prepare(sysdef, calc):
         """Write the files a viperleed run would leave in the calculation directory."""
@@ -169,7 +169,7 @@ def test_failing_coverage_writes_no_case(tmp_path, monkeypatch, mocker):
 def test_check_only_modes_refuse_wrong_commit(module, args, work, repo, tmp_path,
                                               monkeypatch, mocker):
     """The check-only generator modes refuse a tree at the wrong commit before any work."""
-    gen = _generator(module, monkeypatch, tmp_path)
+    gen = _generator(module, monkeypatch, mocker, tmp_path)
     mocker.patch.object(sys.modules["generate.make_refcalc_cases"], "location",
                         return_value=repo)
     action = mocker.patch.object(gen, work)
