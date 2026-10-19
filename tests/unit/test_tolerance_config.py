@@ -24,7 +24,10 @@ def test_every_expected_output_has_a_tolerance():
 # tolerance, README 'Rules'). The skipped or ignored lines must still contain
 # no numbers, see test_skipped_lines_contain_no_numbers. Empty: the generators
 # write the fixed title 'tl-test <case>' into all inputs, so outputs contain
-# no directory names or timestamps and no line has to be skipped.
+# no directory names or timestamps and no line has to be skipped. Title lines
+# are compared like any other line and are never skipped: they are fixed per
+# case (test_titles_in_outputs_are_the_fixed_case_title), and the guard would
+# reject them anyway, since case names contain digits.
 SKIP_ALLOWLIST = frozenset()
 
 _SKIP_KEYS = ("skip_lines", "ignore_line_patterns")
