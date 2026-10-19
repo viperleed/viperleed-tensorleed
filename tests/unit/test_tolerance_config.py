@@ -2,7 +2,7 @@
 import fnmatch
 
 from harness.cases import CASES_DIR, load_tolerances
-from harness.tokens import tokenize
+from harness.tokens import kept_lines, tokenize
 
 
 def _expected_files():
@@ -58,19 +58,33 @@ def test_titles_in_outputs_are_the_fixed_case_title():
                 assert line.strip() in (f"tl-test {case}", f"*tl-test {case}"), (path, line)
 
 
-def test_skipped_lines_contain_no_numbers():
-    """Lines that tolerances.toml skips hold no floating-point numbers.
+def _dropped_text(text, ignore_line_patterns, skip_lines):
+    """The lines of text that comparison leaves out, joined by newlines."""
+    kept = {lineno for lineno, _ in kept_lines(text, ignore_line_patterns, skip_lines)}
+    return "\n".join(line for lineno, line in enumerate(text.splitlines(), start=1)
+                     if lineno not in kept)
 
-    Guard for future configurations that do skip lines.
+
+def test_skipped_lines_contain_no_numbers():
+    """Lines that tolerances.toml skips or ignores hold no floating-point numbers.
+
+    Covers both skip_lines and ignore_line_patterns, for entries on
+    SKIP_ALLOWLIST as for any other.
     """
-    # Guard for future configs that do skip lines.
     for pattern, cfg in load_tolerances()["numeric"].items():
-        skip = set(cfg.get("skip_lines", []))
+        ignore, skip = cfg.get("ignore_line_patterns", []), cfg.get("skip_lines", [])
+        if not (ignore or skip):
+            continue
         for path in _expected_files():
-            if skip and fnmatch.fnmatchcase(path.name, pattern):
-                lines = path.read_text(errors="replace").splitlines()
-                text = "\n".join(lines[i - 1] for i in sorted(skip) if i <= len(lines))
+            if fnmatch.fnmatchcase(path.name, pattern):
+                text = _dropped_text(path.read_text(errors="replace"), ignore, skip)
                 assert not [t for t in tokenize(text) if t.kind == "float"], (path, text)
+
+
+def test_dropped_text_has_skipped_and_ignored_lines():
+    """_dropped_text returns the lines dropped by skip_lines and by a pattern."""
+    text = "title\n1.5 2.5\n# note 3.5\n4.5\n"
+    assert _dropped_text(text, [r"^#"], [1]) == "title\n# note 3.5"
 
 
 def test_perf_and_debug_keys():
