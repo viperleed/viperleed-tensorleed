@@ -77,10 +77,10 @@ For a PR that changes `TensErLEED/`, on a clean clone (Python ≥ 3.11 with nump
 ```bash
 # baseline tree: the pin before the fix; create it before re-pinning (or set baseline_tl_root, see local.toml.example)
 git worktree add --detach ../tl-baseline "$(sed -n 's/^commit: //p' tests/cases/BASELINE.txt)"
-pytest tests -m tier1 -n 6 --baseline-tl-root ../tl-baseline   # unit + tier 1
+pytest tests -m tier1 -n 6 --baseline-tl-root=../tl-baseline   # unit + tier 1
 pytest tests -m debug -n 6                                      # debug build
 pytest tests -m tier2 -n 2      # if viperleed's results can change (needs viperleed, see Tier 2)
-pytest tests -m perf --baseline-tl-root ../tl-baseline         # if performance can change, machine quiet
+pytest tests -m perf --baseline-tl-root=../tl-baseline         # if performance can change, machine quiet
 ```
 
 `--tl-root` defaults to the clone itself. The perf A/B runs against this pre-fix tree, so create it before the PR re-pins (below): afterwards `cases/BASELINE.txt` names the fix, and an A/B against that tree compares the fix with itself. On a PR that has already re-pinned, the pre-fix pin is the one at the merge base with master: `git show "$(git merge-base HEAD origin/master)":tests/cases/BASELINE.txt`.
@@ -137,8 +137,8 @@ Run the generators as modules from `tests/` (`cd tests`):
 ```bash
 python -m generate.make_refcalc_cases [--only CASE] [--check-only]                          # FINs, PARAMs
 python -m generate.make_rfactor_cases [--only CASE] [--verify-only]                         # WEXPEL, spectra
-conda run -n tl-tests  python -m generate.make_expected --tl-root <baseline>                # expected/
-conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root <baseline> [--write]
+conda run -n tl-tests  python -m generate.make_expected --tl-root=<baseline>                # expected/
+conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root=<baseline> [--write]
 python -m generate.make_tier2_expected [--only NAME] [--calibrate]
 python -m generate.make_refcalc_cases --benchmark
 ```

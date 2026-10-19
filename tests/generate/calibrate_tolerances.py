@@ -30,7 +30,7 @@ or more (such changes go undetected).
 ifort/ifx is not available on the calibration machine; skipped.
 
 Usage (env tl-tests):
-    python -m generate.calibrate_tolerances --tl-root <baseline> [--write]
+    python -m generate.calibrate_tolerances --tl-root=<baseline> [--write]
 """
 import argparse
 import datetime

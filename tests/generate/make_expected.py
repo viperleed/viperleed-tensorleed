@@ -11,7 +11,7 @@ to be too tight for legitimate floating-point reordering; the PR that
 changes reference data states why (tests/README.md, 'Rules').
 
 Usage (env tl-tests):
-    python -m generate.make_expected --tl-root <baseline tree> \
+    python -m generate.make_expected --tl-root=<baseline tree> \
         [--only CASE ...] [--allow-non-baseline]
 """
 import argparse
