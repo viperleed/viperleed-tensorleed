@@ -1,5 +1,6 @@
 """Unit tests for the shared output-comparison helpers of harness.cases."""
 import dataclasses
+import itertools
 
 import pytest
 
@@ -45,9 +46,9 @@ def test_compare_outputs_accepts_matching_files(dirs):
 def test_compare_outputs_reports_failing_comparison(dirs):
     """Exactly the files deviating beyond tolerance are reported, by name.
 
-    Failing and matching files alternate and the list ends on a matching
-    file, so the result does not depend on the position of a file or on the
-    verdict of the last one.
+    Two failing and two matching files are compared in every order, so the
+    result depends neither on the position of a file nor on the verdict of
+    the first or last one.
     """
     act, exp = dirs
     files = (("bad1", "2.0000"), ("good1", "1.0000"),
@@ -55,10 +56,11 @@ def test_compare_outputs_reports_failing_comparison(dirs):
     for name, actual in files:
         (exp / name).write_text("1.0000\n")
         (act / name).write_text(actual + "\n")
-    failures = cases.compare_outputs(act, [exp / name for name, _ in files])
-    assert set(failures) == {"bad1", "bad2"}
-    assert "2.0" in failures["bad1"][0]
-    assert "3.0" in failures["bad2"][0]
+    for order in itertools.permutations(name for name, _ in files):
+        failures = cases.compare_outputs(act, [exp / name for name in order])
+        assert set(failures) == {"bad1", "bad2"}, order
+        assert "2.0" in failures["bad1"][0]
+        assert "3.0" in failures["bad2"][0]
 
 
 def test_compare_outputs_reports_missing_actual_file(dirs):
