@@ -1,4 +1,4 @@
-"""Large-system benchmark (opt-in): pytest tests -m benchmark --tl-root <candidate>
+"""Large-system benchmark (opt-in): pytest tests -m benchmark --tl-root=<candidate>
 
 Cases: tests/cases/benchmark/ (inputs only). For each run, the candidate
 (--tl-root) and the baseline (--baseline-tl-root) are compared

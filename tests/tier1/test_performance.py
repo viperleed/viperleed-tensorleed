@@ -1,6 +1,6 @@
 """Performance A/B tests: candidate (--tl-root) vs baseline (--baseline-tl-root).
 
-Marker 'perf' (opt-in): pytest tests -m perf --tl-root <candidate>
+Marker 'perf' (opt-in): pytest tests -m perf --tl-root=<candidate>
 Thresholds and repetitions: [perf] in tests/tolerances.toml.
 Short runs are repeated within one sample until the sample takes at least
 sample_cpu_s user CPU time. Peak RSS is tested per run. CPU time is tested

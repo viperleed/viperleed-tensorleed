@@ -1,8 +1,8 @@
 # Large-system benchmark
 
-`pytest tests -m benchmark --tl-root <candidate> [--baseline-tl-root <baseline>]` (opt-in, about 6 min for A/A: 336–375 s wall).
+`pytest tests -m benchmark --tl-root=<candidate> [--baseline-tl-root=<baseline>]` (opt-in, about 6 min for A/A: 336–375 s wall).
 
-System: **Cu(111)-Te** (superstructure `5 0, 1 2`, viperleed example), case `tests/cases/benchmark/bench_cu111_te` (inputs only), generated with `python tests/generate/make_refcalc_cases.py --benchmark` in an environment with viperleed installed (`THEO_ENERGIES = 100 400 10`, `LMAX = 8-14`; the 10 eV step matters because viperleed derives the phase-shift energy grid from it). Two single-energy runs at viperleed's LMAX for that energy:
+System: **Cu(111)-Te** (superstructure `5 0, 1 2`, viperleed example), case `tests/cases/benchmark/bench_cu111_te` (inputs only), generated with `python -m generate.make_refcalc_cases --benchmark` (from `tests/`) in an environment with viperleed installed (`THEO_ENERGIES = 100 400 10`, `LMAX = 8-14`; the 10 eV step matters because viperleed derives the phase-shift energy grid from it). Two single-energy runs at viperleed's LMAX for that energy:
 
 | run | NT/LMAX | baseline user CPU | baseline peak RSS |
 |---|---|---|---|

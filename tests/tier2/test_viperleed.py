@@ -1,6 +1,6 @@
 """Tier 2: reference calculation + error curves through viperleed.
 
-pytest tests -m tier2 --tl-root <TL tree> [--viperleed-cmd "<cmd>"]
+pytest tests -m tier2 --tl-root=<TL tree> [--viperleed-cmd "<cmd>"]
 
 Each system in tests/tier2/systems/ is run with 'viperleed calc -t <tl_root>'
 (RUN = 1 5: reference calculation, then delta amplitudes, superpos and
