@@ -15,6 +15,7 @@ import pytest
 
 from generate import baseline_tree, make_expected, make_hand_cases
 from generate.baseline_tree import GeneratorError, check_baseline_tree
+from harness.cases import CASES_DIR
 
 
 def _git(repo, *args):
@@ -188,7 +189,7 @@ def test_hand_cases_match_their_derivation():
 # Hand-made cases whose expected files equal those of their source case apart
 # from the title line (README, 'Test systems'): (case, source, runs, files;
 # None = every expected file of the run).
-CASES_DIR = Path(__file__).parents[1] / "cases" / "refcalc"
+REFCALC_CASES = CASES_DIR / "refcalc"
 SAME_AS_SOURCE = [
     ("ir100_2x1_o_unsorted", "ir100_2x1_o", ["E118_L07", "E110-122_L07"], None),
     ("ag100_psformat2", "ag100", ["E045_L06", "E141_L08"], ["fd.out"]),
@@ -214,14 +215,14 @@ def _differ_beyond_title(case_dir, source_dir, runs, files):
                          ids=[c for c, *_ in SAME_AS_SOURCE])
 def test_hand_case_outputs_equal_source(case, source, runs, files):
     """A hand-made case has the expected files of its source case apart from the title."""
-    assert _differ_beyond_title(CASES_DIR / case, CASES_DIR / source, runs, files) == []
+    assert _differ_beyond_title(REFCALC_CASES / case, REFCALC_CASES / source, runs, files) == []
 
 
 def test_changed_expected_line_breaks_identity(tmp_path):
     """The identity check notices a change in a single expected line."""
     case, source, runs, files = SAME_AS_SOURCE[0]
     for name in (case, source):
-        shutil.copytree(CASES_DIR / name / "expected", tmp_path / name / "expected")
+        shutil.copytree(REFCALC_CASES / name / "expected", tmp_path / name / "expected")
     fd = tmp_path / source / "expected" / runs[0] / "fd.out"
     lines = fd.read_text().split("\n")
     lines[2] += " "
