@@ -19,12 +19,12 @@ def test_every_expected_output_has_a_tolerance():
 
 # Entries of tolerances.toml[numeric] that may use skip_lines or
 # ignore_line_patterns. Skipping lines hides differences, so an entry is
-# added here only together with a decisions entry that carries the evidence
-# that the skipped lines hold no physics (the same rule as for loosening a
-# tolerance), and the lines must still contain no numbers, see
-# test_skipped_lines_contain_no_numbers. Empty: the generators write the
-# fixed title 'tl-test <case>' into all inputs, so outputs contain no
-# directory names or timestamps and no line has to be skipped.
+# added here only with evidence that the skipped lines hold no physics, and
+# the PR that adds it states that evidence (the same rule as for loosening a
+# tolerance, README 'Rules'). The skipped or ignored lines must still contain
+# no numbers, see test_skipped_lines_contain_no_numbers. Empty: the generators
+# write the fixed title 'tl-test <case>' into all inputs, so outputs contain
+# no directory names or timestamps and no line has to be skipped.
 SKIP_ALLOWLIST = frozenset()
 
 _SKIP_KEYS = ("skip_lines", "ignore_line_patterns")
