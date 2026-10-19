@@ -244,7 +244,8 @@ def build_cases(workroot, tl, only):
     """Write the rfactor cases (all, or those named in only) and return their directories."""
     base = workroot / "ag100" / "calc" / "work"
     if not (base / "rfactor-WEXPEL").is_file():
-        raise GeneratorError(f"{base} missing; run make_refcalc_cases.py --only ag100 first")
+        raise GeneratorError(f"{base} missing; run python -m generate.make_refcalc_cases"
+                             " --only ag100 first (from tests/)")
     wexpel = (base / "rfactor-WEXPEL").read_text()
     param = (base / "rfactor-PARAM").read_text()
     spectrum = (base / "refcalc-fd.out").read_text()

@@ -1,8 +1,6 @@
 """Tests of harness.runner: running programs, failure detection and measurement."""
 import resource
 import subprocess
-import sys
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -11,67 +9,59 @@ from harness import runner
 from harness.runner import ProgramFailed, run_program
 
 
-def _script(tmp_path, body):
-    """Write an executable Python script prog.py into tmp_path and return it."""
-    p = tmp_path / "prog.py"
-    p.write_text("#!" + sys.executable + "\n" + textwrap.dedent(body))
-    p.chmod(0o755)
-    return p
-
-
-def test_success_and_stdin(tmp_path):
+def test_success_and_stdin(tmp_path, stub_script):
     """A program gets stdin, and its output, peak memory and CPU time are recorded."""
-    exe = _script(tmp_path, "import sys; print(sys.stdin.read().upper())")
+    exe = stub_script(tmp_path / "prog.py", "import sys; print(sys.stdin.read().upper())")
     (tmp_path / "in").write_text("abc")
     r = run_program(exe, tmp_path, tmp_path / "in", timeout=30)
     r.check()
     assert "ABC" in r.stdout and r.max_rss_kb > 0 and r.user_cpu_s >= 0
 
 
-def test_nonzero_exit_fails(tmp_path):
+def test_nonzero_exit_fails(tmp_path, stub_script):
     """A non-zero exit code fails the check."""
-    exe = _script(tmp_path, "import sys; sys.exit(3)")
+    exe = stub_script(tmp_path / "prog.py", "import sys; sys.exit(3)")
     with pytest.raises(ProgramFailed):
         run_program(exe, tmp_path, None, timeout=30).check()
 
 
-def test_fortran_runtime_error_text_fails(tmp_path):
+def test_fortran_runtime_error_text_fails(tmp_path, stub_script):
     """A "Fortran runtime error" message fails the check even with exit code 0."""
-    exe = _script(tmp_path, "import sys; "
+    exe = stub_script(tmp_path / "prog.py", "import sys; "
                   "sys.stderr.write('Fortran runtime error: Index 3 out of bounds')")
     with pytest.raises(ProgramFailed):
         run_program(exe, tmp_path, None, timeout=30).check()
 
 
-def test_stop_with_nonzero_code_text_fails(tmp_path):
+def test_stop_with_nonzero_code_text_fails(tmp_path, stub_script):
     """A "STOP <n>" line with n != 0 fails the check."""
-    exe = _script(tmp_path, "import sys; sys.stderr.write('STOP 2\\n')")
+    exe = stub_script(tmp_path / "prog.py", "import sys; sys.stderr.write('STOP 2\\n')")
     with pytest.raises(ProgramFailed):
         run_program(exe, tmp_path, None, timeout=30).check()
 
 
-def test_stop_zero_is_ok(tmp_path):
+def test_stop_zero_is_ok(tmp_path, stub_script):
     """A "STOP 0" line passes the check."""
-    exe = _script(tmp_path, "import sys; sys.stderr.write('STOP 0\\n')")
+    exe = stub_script(tmp_path / "prog.py", "import sys; sys.stderr.write('STOP 0\\n')")
     run_program(exe, tmp_path, None, timeout=30).check()
 
 
-def test_timeout_fails(tmp_path):
+def test_timeout_fails(tmp_path, stub_script):
     """A program running past the timeout fails with "timeout"."""
-    exe = _script(tmp_path, "import time; time.sleep(30)")
+    exe = stub_script(tmp_path / "prog.py", "import time; time.sleep(30)")
     with pytest.raises(ProgramFailed, match="timeout"):
         run_program(exe, tmp_path, None, timeout=0.5)
 
 
-def test_thread_env_is_set(tmp_path):
+def test_thread_env_is_set(tmp_path, stub_script):
     """The program runs with single-threaded BLAS and OpenMP environment."""
-    exe = _script(tmp_path, "import os; print(os.environ['OPENBLAS_NUM_THREADS'])")
+    exe = stub_script(tmp_path / "prog.py", "import os; print(os.environ['OPENBLAS_NUM_THREADS'])")
     assert run_program(exe, tmp_path, None, timeout=30).stdout.strip() == "1"
 
 
-def test_memory_is_measured(tmp_path):
+def test_memory_is_measured(tmp_path, stub_script):
     """The peak resident memory of the program is measured."""
-    exe = _script(tmp_path, "b = bytearray(200*1024*1024); b[::4096] = b'x'*len(b[::4096])")
+    exe = stub_script(tmp_path / "prog.py", "b = bytearray(200*1024*1024); b[::4096] = b'x'*len(b[::4096])")
     r = run_program(exe, tmp_path, None, timeout=60)
     assert r.max_rss_kb > 150 * 1024
 
@@ -89,18 +79,18 @@ def test_peak_rss_excludes_the_parent_python_process(tmp_path):
     assert 0 < r.max_rss_kb < 10 * 1024
 
 
-def test_killed_by_signal_gives_negative_returncode(tmp_path):
+def test_killed_by_signal_gives_negative_returncode(tmp_path, stub_script):
     """A program killed by a signal has a negative return code and fails the check."""
-    exe = _script(tmp_path, "import os, signal; os.kill(os.getpid(), signal.SIGSEGV)")
+    exe = stub_script(tmp_path / "prog.py", "import os, signal; os.kill(os.getpid(), signal.SIGSEGV)")
     r = run_program(exe, tmp_path, None, timeout=30)
     assert r.returncode == -11
     with pytest.raises(ProgramFailed):
         r.check()
 
 
-def test_relative_cwd_and_paths(tmp_path, monkeypatch):
+def test_relative_cwd_and_paths(tmp_path, stub_script, monkeypatch):
     """Relative executable, working directory and stdin paths are resolved correctly."""
-    exe = _script(tmp_path, "import sys; print(sys.stdin.read())")
+    exe = stub_script(tmp_path / "prog.py", "import sys; print(sys.stdin.read())")
     (tmp_path / "wd").mkdir()
     (tmp_path / "in").write_text("xyz")
     monkeypatch.chdir(tmp_path)

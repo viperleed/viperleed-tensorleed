@@ -39,6 +39,6 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/baseline" \
             "$(sed -n 's/^commit: //p' tests/cases/BASELINE.txt)"
       - name: Unit + tier 1
-        run: python3 -m pytest tests -m tier1 -n 4 --baseline-tl-root "$RUNNER_TEMP/baseline"
+        run: python3 -m pytest tests -m tier1 -n 4 --baseline-tl-root="$RUNNER_TEMP/baseline"
       - name: Debug build
         run: python3 -m pytest tests -m debug -n 4

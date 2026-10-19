@@ -2,7 +2,7 @@
 import fnmatch
 
 from harness.cases import CASES_DIR, load_tolerances
-from harness.tokens import tokenize
+from harness.tokens import kept_lines, tokenize
 
 
 def _expected_files():
@@ -19,12 +19,12 @@ def test_every_expected_output_has_a_tolerance():
 
 # Entries of tolerances.toml[numeric] that may use skip_lines or
 # ignore_line_patterns. Skipping lines hides differences, so an entry is
-# added here only together with a decisions entry that carries the evidence
-# that the skipped lines hold no physics (the same rule as for loosening a
-# tolerance), and the lines must still contain no numbers, see
-# test_skipped_lines_contain_no_numbers. Empty: the generators write the
-# fixed title 'tl-test <case>' into all inputs, so outputs contain no
-# directory names or timestamps and no line has to be skipped.
+# added here only with evidence that the skipped lines hold no physics, and
+# the PR that adds it states that evidence (the same rule as for loosening a
+# tolerance, README 'Rules'). The skipped or ignored lines must still contain
+# no numbers, see test_skipped_lines_contain_no_numbers. Empty: the generators
+# write the fixed title 'tl-test <case>' into all inputs, so outputs contain
+# no directory names or timestamps and no line has to be skipped.
 SKIP_ALLOWLIST = frozenset()
 
 _SKIP_KEYS = ("skip_lines", "ignore_line_patterns")
@@ -58,19 +58,33 @@ def test_titles_in_outputs_are_the_fixed_case_title():
                 assert line.strip() in (f"tl-test {case}", f"*tl-test {case}"), (path, line)
 
 
-def test_skipped_lines_contain_no_numbers():
-    """Lines that tolerances.toml skips hold no floating-point numbers.
+def _dropped_text(text, ignore_line_patterns, skip_lines):
+    """The lines of text that comparison leaves out, joined by newlines."""
+    kept = {lineno for lineno, _ in kept_lines(text, ignore_line_patterns, skip_lines)}
+    return "\n".join(line for lineno, line in enumerate(text.splitlines(), start=1)
+                     if lineno not in kept)
 
-    Guard for future configurations that do skip lines.
+
+def test_skipped_lines_contain_no_numbers():
+    """Lines that tolerances.toml skips or ignores hold no floating-point numbers.
+
+    Covers both skip_lines and ignore_line_patterns, for entries on
+    SKIP_ALLOWLIST as for any other.
     """
-    # Guard for future configs that do skip lines.
     for pattern, cfg in load_tolerances()["numeric"].items():
-        skip = set(cfg.get("skip_lines", []))
+        ignore, skip = cfg.get("ignore_line_patterns", []), cfg.get("skip_lines", [])
+        if not (ignore or skip):
+            continue
         for path in _expected_files():
-            if skip and fnmatch.fnmatchcase(path.name, pattern):
-                lines = path.read_text(errors="replace").splitlines()
-                text = "\n".join(lines[i - 1] for i in sorted(skip) if i <= len(lines))
+            if fnmatch.fnmatchcase(path.name, pattern):
+                text = _dropped_text(path.read_text(errors="replace"), ignore, skip)
                 assert not [t for t in tokenize(text) if t.kind == "float"], (path, text)
+
+
+def test_dropped_text_has_skipped_and_ignored_lines():
+    """_dropped_text returns the lines dropped by skip_lines and by a pattern."""
+    text = "title\n1.5 2.5\n# note 3.5\n4.5\n"
+    assert _dropped_text(text, [r"^#"], [1]) == "title\n# note 3.5"
 
 
 def test_perf_and_debug_keys():

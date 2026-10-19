@@ -10,11 +10,11 @@ Baseline (ground truth): TensErLEED v2.1.0 (`22e3998`), which includes the ADREF
 conda env create -f tests/environment.yml          # creates env tl-tests: python 3.12, numpy, pytest, pytest-xdist, pytest-mock
 # requirements: gfortran, gcc, BLAS/LAPACK (-llapack -lblas)
 
-conda run -n tl-tests pytest tests -m tier1 --tl-root <TL tree>    # unit + tier 1 (~20 s)
-conda run -n tl-tests pytest tests -m debug --tl-root <TL tree>    # debug build (~14 s)
-conda run -n tl-tests pytest tests -m perf  --tl-root <candidate> --baseline-tl-root <baseline>   # A/B (~3 min)
-conda run -n tl-tests pytest tests -m tier2 --tl-root <TL tree>    # through viperleed (use -n 2, ~2.5 min)
-conda run -n tl-tests pytest tests -m benchmark --tl-root <candidate>   # large system (~6 min)
+conda run -n tl-tests pytest tests -m tier1 --tl-root=<TL tree>    # unit + tier 1 (~20 s)
+conda run -n tl-tests pytest tests -m debug --tl-root=<TL tree>    # debug build (~14 s)
+conda run -n tl-tests pytest tests -m perf  --tl-root=<candidate> --baseline-tl-root=<baseline>   # A/B (~3 min)
+conda run -n tl-tests pytest tests -m tier2 --tl-root=<TL tree>    # through viperleed (use -n 2, ~2.5 min)
+conda run -n tl-tests pytest tests -m benchmark --tl-root=<candidate>   # large system (~6 min)
 ```
 
 A "TL tree" is a directory containing `TensErLEED/src` and `TensErLEED/lib` (a checkout of this repository). `--tl-root` defaults to this repository. Machine-specific locations (baseline tree, and for the generators viperleed's example systems and a work directory) come from environment variables or `tests/local.toml` (git-ignored; copy `tests/local.toml.example`): `TL_TEST_BASELINE` / `baseline_tl_root` is the default of `--baseline-tl-root` and is needed by the perf and benchmark A/B tests and the build unit tests; a missing setting is a clear error naming both (`harness/paths.py`). Plain `pytest tests` runs everything except perf, debug, benchmark and tier2. Tier 2 additionally needs viperleed in the version pinned by `viperleed_version` in `tests/tolerances.toml` `[tier2]` (by default the command `viperleed` on `PATH`; `--viperleed-cmd`, `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml` change it, see [Tier 2](#tier-2-viperleed)); it stops before any run on a mismatch.
@@ -26,9 +26,9 @@ All program runs use `OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1`.
 `-n <N>` runs one suite in N worker processes (pytest-xdist); without `-n` it runs serially.
 
 ```bash
-conda run -n tl-tests pytest tests -m tier1 -n 6 --tl-root <TL tree>
-conda run -n tl-tests pytest tests -m debug -n 6 --tl-root <TL tree>
-conda run -n tl-tests pytest tests -m tier2 -n 2 --tl-root <TL tree>   # ~2.5 min
+conda run -n tl-tests pytest tests -m tier1 -n 6 --tl-root=<TL tree>
+conda run -n tl-tests pytest tests -m debug -n 6 --tl-root=<TL tree>
+conda run -n tl-tests pytest tests -m tier2 -n 2 --tl-root=<TL tree>   # ~2.5 min
 ```
 
 - **Limits** (for the reference machine, 8 cores and 15 GB): tier 1 / debug / unit up to `-n 6`; tier 2 at most `-n 2` (each viperleed run uses `N_CORES = 4`), and nothing else beside it. Independent suite runs started side by side count against the same budget.
@@ -85,7 +85,7 @@ pytest tests -m perf --baseline-tl-root ../tl-baseline         # if performance 
 
 `--tl-root` defaults to the clone itself. The perf A/B runs against this pre-fix tree, so create it before the PR re-pins (below): afterwards `cases/BASELINE.txt` names the fix, and an A/B against that tree compares the fix with itself. On a PR that has already re-pinned, the pre-fix pin is the one at the merge base with master: `git show "$(git merge-base HEAD origin/master)":tests/cases/BASELINE.txt`.
 
-If the fix changes outputs on purpose (see [Rules](#rules-tolerances-reference-data-known-debug-failures)), commit the fix and pin it as the new baseline (`BASELINE_COMMIT` in `generate/baseline_tree.py`; the generators refuse other commits). The inputs are frozen, so regenerate only the expected outputs, on the committed inputs (commands under [Regenerating](#regenerating-cases-and-expected-outputs)): `make_expected.py`, and for tier 2 `make_tier2_expected.py --skip-freeze` in an environment with viperleed installed, with a `tests/local.toml` (`baseline_tl_root` here a checkout of the fix with `eeasisss` built, not the pre-fix tree used for perf; `generate_workroot`). Then `git status` and `git diff --stat` must show only `generate/baseline_tree.py`, `cases/BASELINE.txt`, `expected/` files of the affected runs and `tier2/systems/*/expected.toml`; the PR states why each output changed. Any other change (inputs, `tolerances.toml`, `known_debug_failures.toml`) needs its own justification under the Rules. A rebase gives the fix a new hash: pin and regenerate again. Merge the PR with a merge commit, not squashed: CI checks out the pinned commit from `cases/BASELINE.txt`, and a squashed fix commit is no longer reachable once the PR branch is deleted.
+If the fix changes outputs on purpose (see [Rules](#rules-tolerances-reference-data-known-debug-failures)), commit the fix and pin it as the new baseline (`BASELINE_COMMIT` in `generate/baseline_tree.py`; the generators refuse other commits). The inputs are frozen, so regenerate only the expected outputs, on the committed inputs (commands under [Regenerating](#regenerating-cases-and-expected-outputs)): `python -m generate.make_expected`, and for tier 2 `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed, with a `tests/local.toml` (`baseline_tl_root` here a checkout of the fix with `eeasisss` built, not the pre-fix tree used for perf; `generate_workroot`). Then `git status` and `git diff --stat` must show only `generate/baseline_tree.py`, `cases/BASELINE.txt`, `expected/` files of the affected runs and `tier2/systems/*/expected.toml`; the PR states why each output changed. Any other change (inputs, `tolerances.toml`, `known_debug_failures.toml`) needs its own justification under the Rules. A rebase gives the fix a new hash: pin and regenerate again. Merge the PR with a merge commit, not squashed: CI checks out the pinned commit from `cases/BASELINE.txt`, and a squashed fix commit is no longer reachable once the PR branch is deleted.
 
 CI (`.github/workflows/tests.yml`) runs unit + tier 1 and debug on pushes to `master` and `refactor/f90`, on pull requests and when started manually (Ubuntu 26.04, gfortran 15, reference BLAS/LAPACK). Tier 2, perf and benchmark do not run in CI; run them locally where they apply and report the result in the PR.
 
@@ -224,7 +224,7 @@ When a tolerance may be loosened: [Rules](#rules-tolerances-reference-data-known
 
 ## Known coverage gaps
 
-Line coverage of all tier-1 runs on the baseline (`generate/coverage_report.py --missed 2`, gcov, 2026-10-06): `ref-calc.f` 96.3 %, `lib.tleed.f` 90.5 %, `rfactor.f` 90.3 %, `rfacsb.f` 83.6 % of executable lines. Never executed (percentages measured at `3419e83`; line numbers refer to v2.1.0):
+Line coverage of all tier-1 runs on the baseline (`python -m generate.coverage_report --missed 2`, gcov, 2026-10-06): `ref-calc.f` 96.3 %, `lib.tleed.f` 90.5 %, `rfactor.f` 90.3 %, `rfacsb.f` 83.6 % of executable lines. Never executed (percentages measured at `3419e83`; line numbers refer to v2.1.0):
 
 - **Dead code** (cannot be reached by any input): `GHMAT` 2191-2200 and `SRTLAY` 4618-4640, the reuse of interplanar propagators of an *earlier* call (`NGOL`), because `NEW` is always 1 (`ref-calc.f:997`); hence a deliberately injected bug in that copy cannot be detected. `ZSU`, `DEBWAL`/`Debwal` (unused).
 - **Not produced by viperleed inputs:** unformatted tensor output in `OPENOUT`, `OUTAMP`, `OUTXIST` and `DELIMIT` (`IFORM = 0`; viperleed always writes `IFORM = 1`). The other paths of this kind in the measurement (`SRTLAY` 4561-4578, `READIN` `PSFORMAT = 2`, `READT`, `COLUMN` with `NORM = 2`) are now covered by hand-made cases (below; for `SRTLAY` only in part).
@@ -250,7 +250,7 @@ Baseline status: 35 clean, 15 known failures. These are 10 × `OUTXIST` SPQF bou
 
 ## Performance (A/B)
 
-`pytest tests -m perf --tl-root <candidate> [--baseline-tl-root <baseline>]` (~3 min) builds both trees (release) and runs every tier-1 run in `repetitions` (5) samples each, interleaved (baseline, candidate, baseline, …), in fresh directories. A sample repeats a short run `inner` times, so that it takes at least `sample_cpu_s` (0.1 s) of user CPU and the samples of all runs of a case together take at least `case_sample_cpu_s` (0.6 s). `inner` is sized from the median of `sizing_runs` (3) baseline executions (floored at `min_sizing_cpu_s`, 1 ms) and capped at `max_inner` (500). All thresholds are relative to the baseline measured in the same session, so the tests do not depend on the machine's speed; they do depend on the machine being quiet. Performance results are authoritative only on the reference machine (the 8-core WSL2 workstation the thresholds were calibrated on); on other machines and in CI they are advisory.
+`pytest tests -m perf --tl-root=<candidate> [--baseline-tl-root=<baseline>]` (~3 min) builds both trees (release) and runs every tier-1 run in `repetitions` (5) samples each, interleaved (baseline, candidate, baseline, …), in fresh directories. A sample repeats a short run `inner` times, so that it takes at least `sample_cpu_s` (0.1 s) of user CPU and the samples of all runs of a case together take at least `case_sample_cpu_s` (0.6 s). `inner` is sized from the median of `sizing_runs` (3) baseline executions (floored at `min_sizing_cpu_s`, 1 ms) and capped at `max_inner` (500). All thresholds are relative to the baseline measured in the same session, so the tests do not depend on the machine's speed; they do depend on the machine being quiet. Performance results are authoritative only on the reference machine (the 8-core WSL2 workstation the thresholds were calibrated on); on other machines and in CI they are advisory.
 
 Thresholds (`[perf]` in `tolerances.toml`; memory should essentially not increase, CPU time is noisier):
 - **Peak RSS** per run: increase ≤ max(2 %, 1 MB).
@@ -266,7 +266,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 
 ## Tier 2 (viperleed)
 
-`pytest tests -m tier2 --tl-root <TL tree> [--viperleed-cmd "<cmd>"]` (default command: `viperleed` on `PATH`; to run another one, e.g. `conda run --no-capture-output -n <env> viperleed`, set it with `--viperleed-cmd`, the environment variable `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml`, which take precedence in this order; the pinned viperleed version with `TL_IGNORE_CHECKSUM = True`). For each system in `tests/tier2/systems/` it runs `viperleed calc -t <tl_root>` with `RUN = 1 5` (reference calculation + error calculation using delta, superpos and rfactor of the same tree) and compares the refcalc R factor, the best V0 shift and every point of every `Errors_*.csv` in `OUT/Errors.zip` with `expected.toml`.
+`pytest tests -m tier2 --tl-root=<TL tree> [--viperleed-cmd "<cmd>"]` (default command: `viperleed` on `PATH`; to run another one, e.g. `conda run --no-capture-output -n <env> viperleed`, set it with `--viperleed-cmd`, the environment variable `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml`, which take precedence in this order; the pinned viperleed version with `TL_IGNORE_CHECKSUM = True`). For each system in `tests/tier2/systems/` it runs `viperleed calc -t <tl_root>` with `RUN = 1 5` (reference calculation + error calculation using delta, superpos and rfactor of the same tree) and compares the refcalc R factor, the best V0 shift and every point of every `Errors_*.csv` in `OUT/Errors.zip` with `expected.toml`.
 
 | system | error curves |
 |---|---|
@@ -276,7 +276,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 
 Inputs are frozen after viperleed's initialization (annotated POSCAR, PHASESHIFTS, IVBEAMS, VIBROCC), so the tree under test needs no eeasisss. Regenerate the expected values with `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed (see [Rules](#rules-tolerances-reference-data-known-debug-failures)). The expected values, first generated at `3419e83`, are unchanged at v2.1.0: no tier-2 curve has N ≤ 22 (smallest N = 129), so the `DER` fix does not act on them.
 
-Tolerances (`[tier2]` in `tolerances.toml`): R values `r_atol = 1.5e-4` (one unit in the 4th decimal), displacements/V0 exact. Calibration (`make_tier2_expected.py --calibrate`): `FORTRAN_COMP = 'gfortran -O0'` identical to `-O2` for all systems; `-O2 -march=native` changes one R value of `ir100_2x1_o` by 1e-4.
+Tolerances (`[tier2]` in `tolerances.toml`): R values `r_atol = 1.5e-4` (one unit in the 4th decimal), displacements/V0 exact. Calibration (`python -m generate.make_tier2_expected --calibrate`): `FORTRAN_COMP = 'gfortran -O0'` identical to `-O2` for all systems; `-O2 -march=native` changes one R value of `ir100_2x1_o` by 1e-4.
 
 Runtime: ~2.5 min for the three systems with `-n 2` (N_CORES = 4).
 

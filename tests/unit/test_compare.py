@@ -99,7 +99,6 @@ def test_ulps_tolerance_is_per_value():
     A large energy does not loosen the check of a small intensity.
     """
     tol = Tolerance(rtol=0.0, atol_frac=0.0, ulps=2)
-    # energy 210 does not loosen the check of a small intensity
     assert compare_texts(" 210.00 0.16633E-02", " 210.00 0.16631E-02", tol).ok
     assert not compare_texts(" 210.00 0.16634E-02", " 210.00 0.16631E-02", tol).ok
 
@@ -155,9 +154,9 @@ def test_configured_amp_out_tolerance_scales_with_the_line_amplitudes():
 
 
 def test_low_precision_f_columns_are_exact():
-    """F-format columns of fd.out (energies.
+    """F-format columns of fd.out (energies, theta, phi) are compared exactly.
 
-    Theta, phi) are compared exactly, E-format intensities at print level.
+    E-format intensities keep their print-level tolerance.
 
     Units of the last digit alone would allow the energies to deviate by 0.18 eV.
     """
