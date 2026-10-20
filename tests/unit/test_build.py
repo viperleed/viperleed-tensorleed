@@ -20,6 +20,14 @@ The contract (tests/README.md, "Build contract") covered here:
 
 Tests using the baseline tree need the baseline location (see harness/paths.py).
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import os
 import shutil
 import subprocess

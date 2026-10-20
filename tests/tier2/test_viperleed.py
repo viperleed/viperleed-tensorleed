@@ -6,6 +6,14 @@ Each system in tests/tier2/systems/ is run with 'viperleed calc -t <tl_root>'
 (RUN = 1 5: reference calculation, then delta amplitudes, superpos and
 rfactor for the error curves) and compared with expected.toml.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import tomllib
 from pathlib import Path
 

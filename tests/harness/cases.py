@@ -12,6 +12,14 @@ case.toml:
     outputs = ["fd.out", "T_*"]        # globs, resolved in expected/<name>/
 All paths are relative to the case directory.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import fnmatch
 import json
 import re

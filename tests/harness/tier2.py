@@ -4,6 +4,14 @@ A system directory (tests/tier2/systems/<name>/) contains viperleed inputs
 (PARAMETERS with RUN = 1 5, POSCAR, VIBROCC, PHASESHIFTS, IVBEAMS,
 EXPBEAMS.csv, DISPLACEMENTS) and expected.toml with the baseline results.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import re
 import shutil
 import subprocess

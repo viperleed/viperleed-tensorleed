@@ -8,6 +8,14 @@ value did not fit the format; this is always an error, also a lone '*'
 (a field of width 1). The only exception are the two '*' of an rfactor
 beam label such as '*( 1  0)*', which are text.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import re
 from typing import Literal, NamedTuple
 

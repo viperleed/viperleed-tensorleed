@@ -24,6 +24,14 @@ Usage (in an environment with viperleed installed):
     python -m generate.make_rfactor_cases \
         [--workroot DIR] [--only CASE ...]
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import argparse
 import re
 import shutil

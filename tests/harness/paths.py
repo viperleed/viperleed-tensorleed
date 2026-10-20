@@ -14,6 +14,14 @@ raises PathNotConfigured, which names both ways to set it.
     viperleed_cmd        TL_TEST_VIPERLEED_CMD         tier 2 (command that runs
                                                        viperleed; see viperleed_command)
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import os
 import shlex
 import tomllib

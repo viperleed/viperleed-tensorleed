@@ -2,6 +2,14 @@
 
 The count is shared with calibrate_tolerances.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-19'
+__license__ = 'GPLv3+'
+
 from generate import check_noise_variants
 
 

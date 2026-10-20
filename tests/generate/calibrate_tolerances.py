@@ -32,6 +32,14 @@ ifort/ifx is not available on the calibration machine; skipped.
 Usage (env tl-tests):
     python -m generate.calibrate_tolerances --tl-root=<baseline> [--write]
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import argparse
 import datetime
 import sys

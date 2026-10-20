@@ -14,6 +14,14 @@ Every WRITE starts a new line, so each block starts on its own line. Any
 deviation from this layout raises TensorLayoutError: a changed layout must
 fail the comparison, never shift tokens into the wrong section.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 from itertools import groupby
 
 _PER_LINE = 5

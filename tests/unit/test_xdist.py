@@ -1,4 +1,12 @@
 """pytest -n (pytest-xdist): which -m expressions are refused (tests/conftest.py)."""
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import pytest
 
 from conftest import _n_workers, _serial_only_selected, _tier2_selected

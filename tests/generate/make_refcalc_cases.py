@@ -26,6 +26,14 @@ Usage (in an environment with viperleed installed):
     python -m generate.make_refcalc_cases \
         [--only CASE ...] [--workroot DIR] [--check-only] [--benchmark]
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import argparse
 import math
 import re
