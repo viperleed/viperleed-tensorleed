@@ -74,7 +74,7 @@ exact_columns = ["odd"]
 # V0 shifts with 2-4 decimals. Calibration (-O0 vs -O2): see README.
 r_atol = 1.5e-4       # one unit in the last digit of an R factor
 other_atol = 1.0e-6   # displacements, V0 shifts: exact
-viperleed_version = "0.14.1"   # tier 2 stops if the installed viperleed differs
+viperleed_version = "0.14.2"   # tier 2 stops if the installed viperleed differs
 
 [perf]
 cpu_rel_threshold = 0.10

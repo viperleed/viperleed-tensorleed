@@ -98,13 +98,18 @@ def test_row_length_mismatch_fails(row):
 BANNER = "ViPErLEED (Vienna Package for Erlangen LEED) v{}"
 
 
-def test_viperleed_version_mismatch_stops(mocker):
-    """A viperleed other than the pinned version stops with a message naming both versions."""
+@pytest.mark.parametrize("suffix", ["0", ".dev0", "+g1"])
+def test_viperleed_version_mismatch_stops(mocker, suffix):
+    """A viperleed other than the pinned version, even one that starts with it,
+    stops with a message naming both versions."""
     pinned = load_tolerances()["tier2"]["viperleed_version"]
-    version = mocker.patch.object(tier2, "viperleed_version", return_value=BANNER.format("0.13.0"))
-    with pytest.raises(tier2.ViperleedFailed, match=rf"{re.escape(pinned)}.*runs 0\.13\.0"):
-        tier2.check_viperleed_version(["viperleed"], pinned)
-    version.assert_called_once_with(["viperleed"])
+    for installed in ("0.13.0", pinned + suffix):
+        version = mocker.patch.object(tier2, "viperleed_version",
+                                      return_value=BANNER.format(installed))
+        with pytest.raises(tier2.ViperleedFailed,
+                           match=rf"{re.escape(pinned)}.*runs {re.escape(installed)}$"):
+            tier2.check_viperleed_version(["viperleed"], pinned)
+        version.assert_called_once_with(["viperleed"])
 
 
 def test_viperleed_version_match_passes(mocker):

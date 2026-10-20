@@ -266,7 +266,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 
 ## Tier 2 (viperleed)
 
-`pytest tests -m tier2 --tl-root=<TL tree> [--viperleed-cmd "<cmd>"]` (default command: `viperleed` on `PATH`; to run another one, e.g. `conda run --no-capture-output -n <env> viperleed`, set it with `--viperleed-cmd`, the environment variable `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml`, which take precedence in this order; the pinned viperleed version with `TL_IGNORE_CHECKSUM = True`). For each system in `tests/tier2/systems/` it runs `viperleed calc -t <tl_root>` with `RUN = 1 5` (reference calculation + error calculation using delta, superpos and rfactor of the same tree) and compares the refcalc R factor, the best V0 shift and every point of every `Errors_*.csv` in `OUT/Errors.zip` with `expected.toml`.
+`pytest tests -m tier2 --tl-root=<TL tree> [--viperleed-cmd "<cmd>"]` (default command: `viperleed` on `PATH`; to run another one, e.g. `conda run --no-capture-output -n <env> viperleed`, set it with `--viperleed-cmd`, the environment variable `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml`, which take precedence in this order; the viperleed version is pinned in `tests/tolerances.toml`, `[tier2] viperleed_version`; it runs with `TL_IGNORE_CHECKSUM = True`). For each system in `tests/tier2/systems/` it runs `viperleed calc -t <tl_root>` with `RUN = 1 5` (reference calculation + error calculation using delta, superpos and rfactor of the same tree) and compares the refcalc R factor, the best V0 shift and every point of every `Errors_*.csv` in `OUT/Errors.zip` with `expected.toml`.
 
 | system | error curves |
 |---|---|
