@@ -1,4 +1,12 @@
 """Shared helpers for tier-1 tests: run each (case, run) once per session."""
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import pytest
 
 from harness.cases import execute_run, iter_runs

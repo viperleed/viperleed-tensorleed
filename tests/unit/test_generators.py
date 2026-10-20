@@ -4,6 +4,14 @@ the hand-made cases' identity with their source cases.
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import importlib
 import shutil
 import subprocess

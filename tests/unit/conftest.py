@@ -1,4 +1,12 @@
 """Fixtures shared by the unit tests."""
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-16'
+__license__ = 'GPLv3+'
+
 import sys
 import textwrap
 

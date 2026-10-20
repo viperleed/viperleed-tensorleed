@@ -4,6 +4,14 @@ Each system is a viperleed example input set plus PARAMETERS overrides.
 Run inside an environment with viperleed installed (generators only; pytest never
 imports this module).
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 from dataclasses import dataclass, field
 from pathlib import Path
 

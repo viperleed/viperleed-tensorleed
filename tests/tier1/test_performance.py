@@ -10,6 +10,14 @@ deviations up to 12 % with 0.3 s samples), and a sum per program dilutes
 regressions in one code path (a +30 % slowdown of the composite-layer case
 passes it). The benchmark tests CPU per run for large cases.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import pytest
 
 from harness import perf

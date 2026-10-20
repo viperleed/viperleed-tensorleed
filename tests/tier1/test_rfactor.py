@@ -1,4 +1,12 @@
 """Tier 1: rfactor outputs compared with the baseline (tests/cases/rfactor)."""
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import pytest
 
 from harness.cases import (compare_outputs, expected_outputs, file_set_failure,

@@ -14,6 +14,14 @@ Usage (env tl-tests):
     python -m generate.make_expected --tl-root=<baseline tree> \
         [--only CASE ...] [--allow-non-baseline]
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import argparse
 import datetime
 import shutil

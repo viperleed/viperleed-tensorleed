@@ -7,6 +7,14 @@ is built with -Warray-temporaries and any such warning fails. A probe tree
 with a known temporary (array_temporaries_probe/) checks that the same build
 and regex do report one.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import re
 from pathlib import Path
 

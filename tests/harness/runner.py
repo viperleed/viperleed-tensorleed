@@ -5,6 +5,14 @@ first use into tests/.build-cache) that reports the program's rusage: on
 Linux ru_maxrss survives execve, so a program forked directly from Python
 would report at least Python's own peak RSS.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import hashlib
 import os
 import re

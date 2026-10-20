@@ -17,6 +17,14 @@ Concurrent processes (pytest -n, parallel suite runs) build each cache entry
 once: the build of an entry holds a lock file in tests/.build-cache.locks/,
 and processes waiting for it use the finished executable.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-13'
+__license__ = 'GPLv3+'
+
 import contextlib
 import fcntl
 import functools
