@@ -52,6 +52,14 @@ into a temporary directory and compared with the committed ones.
 Usage (env tl-tests):
     python -m generate.make_hand_cases [--only CASE ...] [--check]
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-14'
+__license__ = 'GPLv3+'
+
 import argparse
 import re
 import sys

@@ -3,6 +3,14 @@
 Shared by the case generators; imports only the standard library and
 baseline_tree, so it runs without viperleed.
 """
+
+__authors__ = (
+    'Florian Kraushofer (@fkraushofer)',
+    )
+__copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
+__created__ = '2026-10-14'
+__license__ = 'GPLv3+'
+
 import re
 import shutil
 
