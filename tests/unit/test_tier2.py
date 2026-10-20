@@ -15,6 +15,7 @@ import pytest
 
 from harness import tier2
 from harness.cases import CaseError, load_tolerances
+from unit.gitrepo import git
 
 ROUT = """tl-test
 AVERAGE                 0  0.0001    3.00   45.00  216.05    479.50  0.2054  <---
@@ -142,3 +143,103 @@ def test_load_systems_sorted(tmp_path):
         (tmp_path / name).mkdir()
         (tmp_path / name / "expected.toml").write_text("")
     assert [p.name for p in tier2.load_systems(tmp_path)] == ["a", "b"]
+
+
+def _tl_tree(path, tag=None, modified=False):
+    path.mkdir(parents=True)
+    (path / "f90").mkdir()
+    (path / "f90" / "a.f90").write_text("original\n")
+    git(path, "init", "-q")
+    git(path, "add", "f90")
+    git(path, "commit", "-q", "-m", "c")
+    if tag:
+        git(path, "tag", tag)
+    if modified:
+        (path / "f90" / "a.f90").write_text("changed\n")
+    return path
+
+
+@pytest.mark.parametrize("kwargs, released", [
+    ({"tag": "v2.1.0"}, True),
+    ({"tag": "v2.1.0", "modified": True}, False),
+    ({"tag": "v2.1.0-rc1"}, False),
+    ({"tag": "nightly"}, False),
+    ({}, False),
+], ids=["released", "modified", "prerelease-tag", "other-tag", "untagged"])
+def test_is_released_tl_tree(tmp_path, kwargs, released):
+    """Only an unmodified checkout at a vX.Y.Z tag counts as a released TL tree."""
+    assert tier2.is_released_tl_tree(_tl_tree(tmp_path / "tl", **kwargs)) is released
+
+
+def test_tree_without_git_is_not_released(tmp_path, monkeypatch):
+    """A directory that is not in any git checkout is not a released tree."""
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    (tmp_path / "tl").mkdir()
+    assert tier2.is_released_tl_tree(tmp_path / "tl") is False
+
+
+def test_folder_inside_released_tree_is_not_released(tmp_path):
+    """A folder without git of its own inside a released checkout is not released."""
+    tl = _tl_tree(tmp_path / "tl", tag="v2.1.0")
+    (tl / "nested").mkdir()
+    assert tier2.is_released_tl_tree(tl / "nested") is False
+
+
+def test_subdirectory_of_released_tree_is_not_released(tmp_path):
+    """A tracked subdirectory of a released checkout is not a released tree."""
+    tl = _tl_tree(tmp_path / "tl", tag="v2.1.0")
+    assert tier2.is_released_tl_tree(tl / "f90") is False
+
+
+def test_worktree_at_release_tag_is_released(tmp_path):
+    """A git worktree (with a .git file) at a release tag is a released tree."""
+    tl = _tl_tree(tmp_path / "tl", tag="v2.1.0")
+    git(tl, "worktree", "add", "-q", "--detach", str(tmp_path / "wt"), "v2.1.0")
+    assert tier2.is_released_tl_tree(tmp_path / "wt") is True
+
+
+def _point_git_env_at(monkeypatch, repo):
+    monkeypatch.setenv("GIT_DIR", str(repo / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(repo))
+
+
+def test_git_env_of_released_tree_does_not_release_other_folder(tmp_path, monkeypatch):
+    """GIT_DIR/GIT_WORK_TREE naming a released tree do not make another folder released."""
+    _point_git_env_at(monkeypatch, _tl_tree(tmp_path / "tl", tag="v2.1.0"))
+    (tmp_path / "plain").mkdir()
+    assert tier2.is_released_tl_tree(tmp_path / "plain") is False
+
+
+def test_git_env_of_other_repo_does_not_hide_release(tmp_path, monkeypatch):
+    """GIT_DIR/GIT_WORK_TREE naming an untagged repo do not hide a released tree."""
+    tl = _tl_tree(tmp_path / "tl", tag="v2.1.0")
+    _point_git_env_at(monkeypatch, _tl_tree(tmp_path / "other"))
+    assert tier2.is_released_tl_tree(tl) is True
+
+
+def _system(tmp_path):
+    system = tmp_path / "system"
+    system.mkdir()
+    (system / "PARAMETERS").write_text("RUN = 1 5\nTL_IGNORE_CHECKSUM = True\n")
+    return system
+
+
+@pytest.mark.parametrize("tag, expected", [("v2.1.0", "False"), (None, "True")],
+                         ids=["released", "untagged"])
+def test_checksum_check_follows_release_status(mocker, tmp_path, tag, expected):
+    """viperleed's checksum check stays on for a released tl_root and is off otherwise.
+
+    The frozen PARAMETERS of the system say TL_IGNORE_CHECKSUM = True either way."""
+    tl = _tl_tree(tmp_path / "tl", tag=tag)
+    mocker.patch.object(tier2, "parse_results")
+    tier2.run_viperleed_calc(_system(tmp_path), tl, ["true"], tmp_path / "work")
+    text = (tmp_path / "work" / "PARAMETERS").read_text()
+    assert f"TL_IGNORE_CHECKSUM = {expected}\n" in text
+    assert text.count("TL_IGNORE_CHECKSUM") == 1
+
+
+def test_caller_cannot_set_checksum_parameter(tmp_path):
+    """A TL_IGNORE_CHECKSUM in the caller's parameters raises ValueError."""
+    with pytest.raises(ValueError, match="TL_IGNORE_CHECKSUM"):
+        tier2.run_viperleed_calc(_system(tmp_path), tmp_path, ["true"], tmp_path / "work",
+                                 parameters={"TL_IGNORE_CHECKSUM": "True"})

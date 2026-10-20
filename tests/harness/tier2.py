@@ -12,6 +12,7 @@ __copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
 __created__ = '2026-10-13'
 __license__ = 'GPLv3+'
 
+import os
 import re
 import shutil
 import subprocess
@@ -23,6 +24,7 @@ from .cases import case_dirs
 INPUT_FILES = ("PARAMETERS", "POSCAR", "VIBROCC", "PHASESHIFTS", "IVBEAMS",
                "EXPBEAMS.csv", "DISPLACEMENTS")
 TIMEOUT_S = 3600
+RELEASE_TAG = re.compile(r"v\d+\.\d+\.\d+")
 
 
 class ViperleedFailed(RuntimeError):
@@ -68,21 +70,57 @@ def check_viperleed_version(viperleed_cmd, pinned):
                               f"'{' '.join(viperleed_cmd)}' runs {installed}")
 
 
+def is_released_tl_tree(tl_root):
+    """True if tl_root is a git checkout of a released TL version, unmodified.
+
+    Released: tl_root is the top level of its own git checkout (a worktree
+    counts), HEAD carries a tag 'vMAJOR.MINOR.PATCH' and no tracked file is
+    modified. Only such a tree can pass viperleed's checksum check; anything
+    else cannot: branch tips, modified trees, trees without tags (e.g. a
+    shallow or --no-tags clone) and trees without a git checkout of their own,
+    including a folder inside another checkout. Repository variables such as
+    GIT_DIR in the environment are ignored.
+    """
+    local_vars = subprocess.run(["git", "rev-parse", "--local-env-vars"],
+                                capture_output=True, text=True).stdout.split()
+    env = {k: v for k, v in os.environ.items() if k not in local_vars}
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(tl_root), *args],
+                              capture_output=True, text=True, env=env)
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode or Path(top.stdout.strip()).resolve() != Path(tl_root).resolve():
+        return False
+    tags = git("tag", "--points-at", "HEAD")
+    status = git("status", "--porcelain", "--untracked-files=no")
+    if tags.returncode or status.returncode:
+        return False
+    released = any(RELEASE_TAG.fullmatch(t) for t in tags.stdout.split())
+    return released and not status.stdout.strip()
+
+
 def run_viperleed_calc(system_dir, tl_root, viperleed_cmd, workdir, parameters=None):
     """Copy the inputs to workdir, run viperleed calc, return parse_results().
 
-    parameters: optional {KEY: value} set in PARAMETERS (e.g. FORTRAN_COMP).
+    TL_IGNORE_CHECKSUM is set from is_released_tl_tree(tl_root), overriding
+    the system's PARAMETERS.
+    parameters: optional {KEY: value} set in PARAMETERS (e.g. FORTRAN_COMP);
+    ValueError if it sets TL_IGNORE_CHECKSUM.
     Raises ViperleedFailed (with the log tail) on a non-zero exit code or an
     '### ERROR ###' in the output.
     """
+    parameters = dict(parameters or {})
+    if "TL_IGNORE_CHECKSUM" in parameters:
+        raise ValueError("TL_IGNORE_CHECKSUM is set by the harness, not by the caller")
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     for name in INPUT_FILES:
         src = Path(system_dir) / name
         if src.is_file():
             shutil.copy(src, workdir / name)
-    if parameters:
-        set_parameters(workdir / "PARAMETERS", parameters)
+    ignore_checksum = not is_released_tl_tree(tl_root)
+    set_parameters(workdir / "PARAMETERS",
+                   {"TL_IGNORE_CHECKSUM": str(ignore_checksum), **parameters})
     log = workdir / "viperleed.out"
     with open(log, "w") as out:
         proc = subprocess.run([*viperleed_cmd, "calc", "-t", str(tl_root)], cwd=workdir,
