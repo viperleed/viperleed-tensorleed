@@ -1,0 +1,30 @@
+! ####### GLOBAL PARAMETERS #######
+! RUN = 0   ! overridden by tl-test generator
+! THEO_ENERGIES = 45 700 3   ! overridden by tl-test generator
+
+! ####### PARAMETERS FOR INTERPRETING POSCAR #######
+! BULK_LIKE_BELOW = 0.45            ! line commented out automatically
+
+SITE_DEF Ag = surf 1
+
+! ####### PARAMETERS FOR VIBROCC #######
+! T_DEBYE = 330                     ! line commented out automatically
+! T_EXPERIMENT = 100                ! line commented out automatically
+! VIBR_AMP_SCALE = *surf 1.3        ! line commented out automatically
+
+! ---- tl-test generator overrides ----
+THEO_ENERGIES = 45 210 3
+LMAX = 6-9
+ELEMENT_MIX Ag = Ag Pd
+RUN = 1 5
+TL_IGNORE_CHECKSUM = True
+N_CORES = 4
+
+
+! ######################################################
+! #  THE FOLLOWING LINES WERE GENERATED AUTOMATICALLY  #
+! ######################################################
+
+BULK_REPEAT = [-1.44000 -1.44000 2.03647] ! Automatically detected repeat vector
+LAYER_CUTS = 0.3500 0.4500 0.5500 0.6500 0.7500
+N_BULK_LAYERS = 1

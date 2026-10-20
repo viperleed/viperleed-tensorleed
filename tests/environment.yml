@@ -1,0 +1,8 @@
+name: tl-tests
+channels: [conda-forge]
+dependencies:
+  - python=3.12
+  - numpy
+  - pytest
+  - pytest-xdist
+  - pytest-mock
