@@ -31,6 +31,11 @@ refcalc = [
     "ir100_2x1_o_thick/E118_L07",
     "ir100_2x1_o_thick/E170_L08",
     "ir100_2x1_o_thick/E110-122_L07",
+    "ir100_2x1_o_unsorted/E118_L07",
+    "ir100_2x1_o_unsorted/E110-122_L07",
+    "ir100_2x1_o_unsorted/E118_L07_three_heights",
+    "ag100_psformat2/E045_L06",
+    "ag100_psformat2/E141_L08",
 ]
 rfactor = [
     "ag100_rfactor/pendry",
@@ -50,4 +55,6 @@ rfactor = [
     "ag100_rfactor_paths/zj_gap",
     "ag100_rfactor_short/pendry",
     "ag100_rfactor_short/rs",
+    "ag100_rfactor_hand/pseudo_exp",
+    "ag100_rfactor_hand/norm_max",
 ]

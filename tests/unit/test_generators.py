@@ -1,4 +1,5 @@
-"""Baseline-tree and coverage guards of the generators (tests/generate).
+"""Baseline-tree and coverage guards of the generators (tests/generate), and
+the hand-made cases' identity with their source cases.
 
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
@@ -12,6 +13,7 @@ __created__ = '2026-10-13'
 __license__ = 'GPLv3+'
 
 import importlib
+import shutil
 import subprocess
 import sys
 import types
@@ -19,8 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from generate import baseline_tree, make_expected
+from generate import baseline_tree, make_expected, make_hand_cases
 from generate.baseline_tree import GeneratorError, check_baseline_tree
+from harness.cases import CASES_DIR
 
 
 def _git(repo, *args):
@@ -184,3 +187,53 @@ def test_check_only_modes_refuse_wrong_commit(module, args, work, repo, tmp_path
     with pytest.raises(GeneratorError, match="not the baseline"):
         gen.main([*args, "--workroot", str(tmp_path)])
     action.assert_not_called()
+
+
+def test_hand_cases_match_their_derivation():
+    """The committed hand-made cases are what make_hand_cases derives from their sources."""
+    assert make_hand_cases.main(["--check"]) == 0
+
+
+# Hand-made cases whose expected files equal those of their source case apart
+# from the title line (README, 'Test systems'): (case, source, runs, files;
+# None = every expected file of the run).
+REFCALC_CASES = CASES_DIR / "refcalc"
+SAME_AS_SOURCE = [
+    ("ir100_2x1_o_unsorted", "ir100_2x1_o", ["E118_L07", "E110-122_L07"], None),
+    ("ag100_psformat2", "ag100", ["E045_L06", "E141_L08"], ["fd.out"]),
+]
+
+
+def _differ_beyond_title(case_dir, source_dir, runs, files):
+    """Expected files of `runs` that differ between two cases apart from line 1."""
+    def body(path):
+        """Text of a file after its title line, None if the file is missing."""
+        return path.read_text().split("\n", 1)[1] if path.is_file() else None
+    differ = []
+    for run in runs:
+        ours, theirs = case_dir / "expected" / run, source_dir / "expected" / run
+        names = files or sorted({p.name for p in ours.iterdir()}
+                                | {p.name for p in theirs.iterdir()})
+        differ += [f"{run}/{name}" for name in names
+                   if body(ours / name) is None or body(ours / name) != body(theirs / name)]
+    return differ
+
+
+@pytest.mark.parametrize("case, source, runs, files", SAME_AS_SOURCE,
+                         ids=[c for c, *_ in SAME_AS_SOURCE])
+def test_hand_case_outputs_equal_source(case, source, runs, files):
+    """A hand-made case has the expected files of its source case apart from the title."""
+    assert _differ_beyond_title(REFCALC_CASES / case, REFCALC_CASES / source, runs, files) == []
+
+
+def test_changed_expected_line_breaks_identity(tmp_path):
+    """The identity check notices a change in a single expected line."""
+    case, source, runs, files = SAME_AS_SOURCE[0]
+    for name in (case, source):
+        shutil.copytree(REFCALC_CASES / name / "expected", tmp_path / name / "expected")
+    fd = tmp_path / source / "expected" / runs[0] / "fd.out"
+    lines = fd.read_text().split("\n")
+    lines[2] += " "
+    fd.write_text("\n".join(lines))
+    assert _differ_beyond_title(tmp_path / case, tmp_path / source, runs, files) == [
+        f"{runs[0]}/fd.out"]

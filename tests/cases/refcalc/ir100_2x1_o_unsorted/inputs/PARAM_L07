@@ -1,0 +1,40 @@
+C  Dimension statements for Tensor LEED reference calculation, 
+C  version v1.2
+
+C  1. lattice symmetry
+
+      PARAMETER (MIDEG=2,MNL1=2,MNL2=1)
+      PARAMETER (MNL = MNL1*MNL2)
+
+C  2. General calculational quantities
+
+      PARAMETER (MKNBS = 2)
+      PARAMETER (MKNT =  85)
+      PARAMETER (MNPUN = 12, MNT0 = 12)
+      PARAMETER (MNPSI = 44, MNEL = 3)
+      PARAMETER (MLMAX = 7)
+      PARAMETER (MNLMO = 7344, MNLM = 7680)
+
+C  3. Parameters for (3D) geometry within (2D) unit mesh
+
+      PARAMETER (MNSITE  = 3)
+      PARAMETER (MNLTYPE = 7)
+      PARAMETER (MNBRAV  = 1)
+      PARAMETER (MNSUB   = 3)
+      PARAMETER (MNSTACK = 6)
+
+C  4. some derived quantities that must be treated explicitly (dummy dimensions for
+C     special cases necessary
+
+      PARAMETER (MLMAX1=MLMAX+1)
+      PARAMETER (MLMMAX = MLMAX1*MLMAX1)
+
+      PARAMETER (MNBRAV2 = MNBRAV)
+
+      PARAMETER (MNCOMP= MNLTYPE-MNBRAV)
+      PARAMETER (MLMT  = MNSUB*MLMMAX)
+      PARAMETER (MNSUB2= MNSUB * (MNSUB-1)/2)
+      PARAMETER (MLMG  = MNSUB2*MLMMAX*2)
+      PARAMETER (MLMN  = MNSUB * MLMMAX)
+      PARAMETER (MLM2N = 2*MLMN)
+      PARAMETER (MLMNI = MNSUB*MLMMAX)
