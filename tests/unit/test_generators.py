@@ -14,7 +14,6 @@ __license__ = 'GPLv3+'
 
 import importlib
 import shutil
-import subprocess
 import sys
 import types
 from pathlib import Path
@@ -24,11 +23,7 @@ import pytest
 from generate import baseline_tree, make_expected, make_hand_cases
 from generate.baseline_tree import GeneratorError, check_baseline_tree
 from harness.cases import CASES_DIR
-
-
-def _git(repo, *args):
-    return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t",
-                           *args], check=True, capture_output=True, text=True).stdout.strip()
+from unit.gitrepo import git
 
 
 @pytest.fixture
@@ -37,16 +32,16 @@ def repo(tmp_path):
     tree = tmp_path / "tl"
     (tree / "TensErLEED").mkdir(parents=True)
     (tree / "TensErLEED" / "a.f").write_text("      END\n")
-    _git(tree, "init", "-q")
-    _git(tree, "add", ".")
-    _git(tree, "commit", "-qm", "init")
+    git(tree, "init", "-q")
+    git(tree, "add", ".")
+    git(tree, "commit", "-qm", "init")
     return tree
 
 
 @pytest.fixture
 def at_baseline(repo, mocker):
     """Return the repo with BASELINE_COMMIT patched to its HEAD."""
-    mocker.patch.object(baseline_tree, "BASELINE_COMMIT", _git(repo, "rev-parse", "HEAD"))
+    mocker.patch.object(baseline_tree, "BASELINE_COMMIT", git(repo, "rev-parse", "HEAD"))
     return repo
 
 
@@ -112,7 +107,7 @@ def test_ignored_subdirectory_of_baseline_refused(at_baseline):
 
 def test_clean_baseline_accepted(at_baseline):
     """A clean tree at the baseline commit is accepted and its commit returned."""
-    assert check_baseline_tree(at_baseline) == _git(at_baseline, "rev-parse", "HEAD")
+    assert check_baseline_tree(at_baseline) == git(at_baseline, "rev-parse", "HEAD")
 
 
 def test_expected_outputs_come_from_the_pinned_baseline():
