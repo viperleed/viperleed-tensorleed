@@ -18,6 +18,61 @@ module kinds
   integer, parameter :: dp = real64
 end module kinds
 
+!> Enlarging allocatable arrays whose final size is known only after the
+!! input has been read.
+module array_growth
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: grow
+
+  !> Makes the last dimension of an allocated array at least n long. The
+  !! existing elements are kept; new elements are undefined.
+  interface grow
+    module procedure grow_integer, grow_real, grow_real_2d
+  end interface grow
+
+contains
+
+  subroutine grow_integer(a, n)
+    integer, allocatable, intent(inout) :: a(:)
+    integer, intent(in) :: n
+
+    integer, allocatable :: b(:)
+
+    if (n <= size(a)) return
+    allocate(b(n))
+    b(1:size(a)) = a
+    call move_alloc(b, a)
+  end subroutine grow_integer
+
+  subroutine grow_real(a, n)
+    real(sp), allocatable, intent(inout) :: a(:)
+    integer, intent(in) :: n
+
+    real(sp), allocatable :: b(:)
+
+    if (n <= size(a)) return
+    allocate(b(n))
+    b(1:size(a)) = a
+    call move_alloc(b, a)
+  end subroutine grow_real
+
+  subroutine grow_real_2d(a, n)
+    real(sp), allocatable, intent(inout) :: a(:, :)
+    integer, intent(in) :: n
+
+    real(sp), allocatable :: b(:, :)
+
+    if (n <= size(a, 2)) return
+    allocate(b(size(a, 1), n))
+    b(:, 1:size(a, 2)) = a
+    call move_alloc(b, a)
+  end subroutine grow_real_2d
+end module array_growth
+
 !> Interpolation of intensity curves and the energy working grid.
 !!
 !! yval interpolates a tabulated curve at one abscissa: 3rd-order polynomial
@@ -32,7 +87,7 @@ module interpolation
 
   private
 
-  public :: grid, intpol, interpolation_cache, yval
+  public :: grid, grid_points, intpol, interpolation_cache, yval
 
   !> Interval (il, ih) of the last yval call and the four points (x, y)
   !! stored for it. il = ih = 0 forces yval to store new points.
@@ -219,6 +274,23 @@ contains
       egrid(ie) = egrid(ie - 1) + eincr
     end do
   end subroutine grid
+
+  !> Upper bound of the number of working grid points (steps of eincr)
+  !! that grid and intpol make from a curve on the energies e.
+  pure integer function grid_points(e, eincr)
+    real(sp), intent(in) :: e(:), eincr
+
+    integer :: lmin, lmax
+
+    if (size(e) < 2) then
+      grid_points = 0
+      return
+    end if
+    lmin = int((minval(e) - 0.0001_sp) / eincr) + 1
+    lmin = max(lmin, 0)
+    lmax = int((maxval(e) + 0.0001_sp) / eincr)
+    grid_points = lmax - lmin + 1
+  end function grid_points
 
   !> Interpolates the intensities a(e) of beam ib onto the working grid
   !! (steps of eincr), replacing (a, e, ne); negative values become zero.
@@ -714,6 +786,7 @@ end module domain_averaging
 !! of experimental beams with the same group label.
 module experiment_input
   use kinds, only: sp
+  use array_growth, only: grow
   implicit none
 
   private
@@ -726,9 +799,10 @@ contains
   !! its name, the number of points nee(ib) with a factor fac, and the pairs
   !! (ee(ib, ie), ae(ib, ie)). The intensities are divided by fac, meant to
   !! bring them to the order of 1 and to match curves averaged together.
-  subroutine reade(ae, ee, nbed, ngp, nee, bename, ipr)
-    integer, intent(in) :: nbed, ngp, ipr
-    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+  !! ae and ee grow to the longest beam.
+  subroutine reade(ae, ee, nbed, nee, bename, ipr)
+    integer, intent(in) :: nbed, ipr
+    real(sp), allocatable, intent(inout) :: ae(:, :), ee(:, :)
     integer, intent(out) :: nee(nbed)
     character(len=4), intent(out) :: bename(5, nbed)
 
@@ -747,6 +821,8 @@ contains
       write(6, 70) ib, (bename(i, ib), i = 1, 5)
       read(8, 35) nee(ib), fac
       n = nee(ib)
+      call grow(ae, n)
+      call grow(ee, n)
       read(8, fmt) (ee(ib, ie), ae(ib, ie), ie = 1, n)
       if (ipr >= 1) write(6, 80) (ee(ib, ie), ae(ib, ie), ie = 1, n)
       do ie = 1, n
@@ -757,15 +833,17 @@ contains
 
   !> Reads theoretical curves from unit 8 as pseudo-experiment: the number
   !! of beams (must equal nbed), the beam names, then per energy the
-  !! intensities of all beams. Leading points with intensity <= 1e-20 are
-  !! dropped per beam; nee(ib) counts the points above 1e-20.
-  subroutine readt(ae, ee, nbed, ngp, nee, bename)
-    integer, intent(in) :: nbed, ngp
-    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+  !! intensities of all beams, up to the end of the file. Leading points
+  !! with intensity <= 1e-20 are dropped per beam; nee(ib) counts the points
+  !! above 1e-20. ae and ee grow to the number of energies.
+  subroutine readt(ae, ee, nbed, nee, bename)
+    integer, intent(in) :: nbed
+    real(sp), allocatable, intent(inout) :: ae(:, :), ee(:, :)
     integer, intent(out) :: nee(nbed)
     character(len=4), intent(out) :: bename(5, nbed)
 
-    real(sp) :: eeh(ngp), dummy
+    real(sp), allocatable :: eeh(:)
+    real(sp) :: dummy
     integer :: ioff(nbed)
     integer :: i, ib, inn, j, k, nbeams
 
@@ -791,12 +869,14 @@ contains
     do k = 1, nbed
       nee(k) = 0
       ioff(k) = 0
-      do j = 1, ngp
-        ae(k, j) = 0._sp
-      end do
     end do
 
-    do j = 1, ngp
+    allocate(eeh(0))
+    j = 0
+    do
+      j = j + 1
+      call grow(eeh, j)
+      call grow(ae, j)
       read(8, 105, end=250) eeh(j), dummy, (ae(k, j), k = 1, nbed)
       do k = 1, nbed
         if (ae(k, j) > 1.e-20_sp) then
@@ -808,6 +888,7 @@ contains
     end do
 
 250 continue
+    call grow(ee, size(ae, 2))
     do k = 1, nbed
       do j = 1, nee(k)
         ee(k, j) = eeh(j + ioff(k))
@@ -821,11 +902,11 @@ contains
   !! [eg1(ig), eg2(ig)], which is left out of smoothing, interpolation and
   !! the R factor. Gaps must be ordered by beam, and within a beam by
   !! energy; otherwise the program stops. gcount(ib) is incremented for
-  !! every gap of beam ib.
+  !! every gap of beam ib. bm, eg1 and eg2 are sized for ngap gaps.
   subroutine gapin(ngap, bm, eg1, eg2, gcount, nbed)
     integer, intent(out) :: ngap
-    integer, intent(inout) :: bm(:)
-    real(sp), intent(inout) :: eg1(:), eg2(:)
+    integer, allocatable, intent(inout) :: bm(:)
+    real(sp), allocatable, intent(inout) :: eg1(:), eg2(:)
     integer, intent(in) :: nbed
     integer, intent(inout) :: gcount(nbed)
 
@@ -841,6 +922,9 @@ contains
 
     read(8, 10) ngap
     write(6, 20) ngap
+    call grow(bm, ngap)
+    call grow(eg1, ngap)
+    call grow(eg2, ngap)
 
     do ig = 1, ngap
       read(8, 10) bm(ig), eg1(ig), eg2(ig)
@@ -863,18 +947,21 @@ contains
   !! the gaps (eg1, eg2) of each beam. The nbe averaged beams replace the
   !! first rows of ae, ee, nee and bename (each named after its first beam);
   !! their gaps are returned in eg1, eg2 (energies), ng1, ng2 (indices),
-  !! ngap in total and gcount per beam. nbea is set to 0. a and nv are work
-  !! space.
-  subroutine expav(ae, ee, nbed, ngp, nee, bename, nbea, nbe, ipr, a, nv, &
-                   gcount, ngap, eg1, eg2, ng1, ng2)
-    integer, intent(in) :: nbed, ngp, ipr
-    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+  !! ngap in total and gcount per beam. nbea is set to 0. ae and ee grow
+  !! to the longest averaged beam, the gap arrays to the number of gaps.
+  subroutine expav(ae, ee, nbed, nee, bename, nbea, nbe, ipr, gcount, ngap, &
+                   eg1, eg2, ng1, ng2)
+    integer, intent(in) :: nbed, ipr
+    real(sp), allocatable, intent(inout) :: ae(:, :), ee(:, :)
     integer, intent(inout) :: nee(nbed), nbea(nbed), gcount(nbed)
     character(len=4), intent(inout) :: bename(5, nbed)
     integer, intent(out) :: nbe, ngap
-    real(sp), intent(inout) :: a(ngp), eg1(:), eg2(:)
-    integer, intent(inout) :: nv(ngp), ng1(:), ng2(:)
+    real(sp), allocatable, intent(inout) :: eg1(:), eg2(:)
+    integer, allocatable, intent(inout) :: ng1(:), ng2(:)
 
+    ! sum of the intensities (a) and number of values (nv) per energy
+    real(sp), allocatable :: a(:)
+    integer, allocatable :: nv(:)
     integer :: gc(nbed)
     real(sp) :: de, e, ediff, emax, emin
     integer :: gin, i, ib, ib1, ibmin, ie, iemax, ien, ig, igap, igc, n, &
@@ -886,6 +973,7 @@ contains
     nbe = 1
     igap = 0
     ngap = 0
+    allocate(a(0), nv(0))
 
     do ib = 1, nbed
       if (nbea(ib) /= 0) then
@@ -916,6 +1004,10 @@ contains
           end if
         end do
         nemax = int((emax - emin)/de + 0.0001_sp) + 1
+        call grow(a, nemax)
+        call grow(nv, nemax)
+        call grow(ae, nemax)
+        call grow(ee, nemax)
         do ie = 1, nemax
           nv(ie) = 0
           a(ie) = 0._sp
@@ -964,6 +1056,12 @@ contains
             gin = 0
           else if (gin == 0) then
             ig = ig + 1
+            if (ngap + ig > min(size(eg1), size(eg2), size(ng1), size(ng2))) then
+              call grow(eg1, 2*(ngap + ig))
+              call grow(eg2, 2*(ngap + ig))
+              call grow(ng1, 2*(ngap + ig))
+              call grow(ng2, 2*(ngap + ig))
+            end if
             eg1(ngap + ig) = ee(nbe, ie)
             eg2(ngap + ig) = ee(nbe, ie)
             ng1(ngap + ig) = ie
@@ -1004,90 +1102,113 @@ end module experiment_input
 !! geometries, and extraction of one geometry.
 module theory_input
   use kinds, only: sp
+  use array_growth, only: grow
   implicit none
 
   private
 
-  public :: rdpl, strip2
+  public :: read_theory_records, select_energies, strip2, theory_records
+
+  !> The theory as read from stdin: title, number of beams nbtd, their
+  !! names pq(:, j) and symmetry codes sym(j), and nrec records of one
+  !! geometry at one energy each: energy e, geometry code spac and the
+  !! intensities y(:, irec) of all beams. ns geometries follow each other
+  !! at every energy.
+  type :: theory_records
+    character(len=80) :: title
+    integer :: nbtd, ns, nrec
+    integer, allocatable :: sym(:)
+    real(sp), allocatable :: pq(:, :), e(:), spac(:), y(:, :)
+  end type theory_records
 
 contains
 
-  !> Reads the theoretical beams from unit 5: per beam its label, name
-  !! pq(:, j) and symmetry code sym(j); then per energy e(i) and geometry
-  !! its value spac and the nb intensities ydata(:, :, i). Energies above
-  !! emax end the reading, those below emin are overwritten by the next.
-  !! At an end of file, up to limfil files are read, skipping the nb + 2
-  !! header records of each further file. Geometries listed in nssk are
-  !! skipped; nss is the number left. ne returns the number of energies.
-  subroutine rdpl(e, ngp, ydata, nss, nb, mne, ne, spac, pq, kav, sym, &
-                  emin, emax, limfil, nssk, ns, mnbtd)
-    integer, intent(in) :: ngp, nss, nb, mne, limfil, ns, mnbtd
-    real(sp), intent(inout) :: e(ngp), ydata(nss, nb, mne), spac(nss)
-    real(sp), intent(out) :: pq(2, nb)
-    integer, intent(in) :: kav(nb), nssk(ns)
-    integer, intent(out) :: sym(nb), ne
-    real(sp), intent(in) :: emin, emax
+  !> Reads the theory from unit 5 up to the end of the file into tr: the
+  !! title, the number of beams, per beam its label (not used), name and
+  !! symmetry code, then the records of all geometries and energies. The
+  !! number of geometries is the number of leading records at the first
+  !! energy. Stops if there is no record.
+  subroutine read_theory_records(tr)
+    type(theory_records), intent(out) :: tr
 
-    integer :: lab(mnbtd)
-    real(sp) :: spacj(nss), yd(mnbtd)
-    character(len=4) :: idum
-    integer :: i, ifile, j, js, kk
+    integer, allocatable :: lab(:)
+    integer :: i, j, n
 
 20  format(I5, 2F10.5, I3)
-25  format('DIMENSION MNET TOO SMALL, PLEASE CORRECT!', /, &
-           '      ****   PROGRAM STOPPED   ****')
-27  format('*THEOR. BEAM GROUPINGS')
-29  format(' ', 2F10.5, I5)
+22  format(A80)
+26  format(I5)
 40  format(F7.2, F7.4, 4E14.5, /, 2000(5E14.5, /))
-57  format(A4)
-65  format('*SURFACE STRUCTURE NO. AND CHARACTERIZATION')
-75  format(18X, I3, F15.4)
 
-    do j = 1, nb
-      read(5, 20) lab(j), (pq(i, j), i = 1, 2), sym(j)
-    end do
-    write(6, 27)
-    do j = 1, nb
-      write(6, 29) (pq(i, j), i = 1, 2), kav(j)
+    read(5, 22) tr%title
+    read(5, 26) tr%nbtd
+
+    allocate(lab(tr%nbtd), tr%pq(2, tr%nbtd), tr%sym(tr%nbtd))
+    do j = 1, tr%nbtd
+      read(5, 20) lab(j), (tr%pq(i, j), i = 1, 2), tr%sym(j)
     end do
 
-    ifile = 1
+    allocate(tr%e(0), tr%spac(0), tr%y(tr%nbtd, 0))
+    n = 0
+    do
+      if (n == size(tr%e)) then
+        call grow(tr%e, 2*n + 1)
+        call grow(tr%spac, 2*n + 1)
+        call grow(tr%y, 2*n + 1)
+      end if
+      read(5, 40, end=10) tr%e(n + 1), tr%spac(n + 1), tr%y(:, n + 1)
+      n = n + 1
+    end do
+10  tr%nrec = n
+
+    tr%ns = 0
+    do while (tr%ns < n)
+      if (tr%e(tr%ns + 1) /= tr%e(1)) exit
+      tr%ns = tr%ns + 1
+    end do
+    if (tr%ns == 0) then
+      write(0, *) 'rfactor: no theoretical intensities on stdin'
+      stop 1
+    end if
+  end subroutine read_theory_records
+
+  !> Takes the energies and intensities of all geometries from the records
+  !! tr, ns records per energy: per energy e(i) and geometry its code
+  !! spac and the intensities ydata(:, :, i). Energies above emax end the
+  !! selection, those below emin are overwritten by the next. ne returns
+  !! the number of energies; e and ydata hold one more, the energy that
+  !! ended the selection (or the incomplete last one).
+  subroutine select_energies(tr, emin, emax, e, ydata, spac, ne)
+    type(theory_records), intent(in) :: tr
+    real(sp), intent(in) :: emin, emax
+    real(sp), allocatable, intent(out) :: e(:), ydata(:, :, :), spac(:)
+    integer, intent(out) :: ne
+
+    integer :: i, irec, j
+
+    allocate(e((tr%nrec + tr%ns - 1)/tr%ns), spac(tr%ns))
+    allocate(ydata(tr%ns, tr%nbtd, size(e)))
+
+    irec = 0
     i = 1
     energies: do
-      js = 0
-      if (i > mne + 1) then
-        write(6, 25)
-        stop
-      end if
-      do j = 1, ns
-        read(5, 40, end=55) e(i), spacj(j), yd(1:nb)
-        if (any(nssk(1:ns) == j)) cycle
-        js = js + 1
-        spac(js) = spacj(j)
-        ydata(js, 1:nb, i) = yd(1:nb)
+      do j = 1, tr%ns
+        irec = irec + 1
+        if (irec > tr%nrec) exit energies
+        e(i) = tr%e(irec)
+        spac(j) = tr%spac(irec)
+        ydata(j, 1:tr%nbtd, i) = tr%y(1:tr%nbtd, irec)
       end do
       if (e(i) > emax) exit energies
       if (e(i) >= emin) i = i + 1
-      cycle energies
-55    ifile = ifile + 1
-      if (ifile > limfil) exit energies
-      do kk = 1, nb + 2
-        read(5, 57) idum
-      end do
     end do energies
     ne = i - 1
-
-    write(6, 65)
-    do j = 1, nss
-      write(6, 75) j, spac(j)
-    end do
-  end subroutine rdpl
+  end subroutine select_energies
 
   !> Copies the intensities ys(is, :, 1:ne) of geometry is to y and the
   !! energies es to every beam of et.
   subroutine strip2(ys, ns, nbd, ne, is, y, es, et, ngp)
     integer, intent(in) :: ns, nbd, ne, is, ngp
-    real(sp), intent(in) :: ys(ns, nbd, ne), es(ngp)
+    real(sp), intent(in) :: ys(ns, nbd, ne), es(ne)
     real(sp), intent(inout) :: y(nbd, ngp), et(nbd, ngp)
 
     integer :: ib, ie
@@ -1165,7 +1286,10 @@ contains
   !! numbered over all beams) are written as zero intensity. Intensities are
   !! scaled to intmax: with norm = 1 after division by the integrals tse
   !! resp. tst, to the largest value of both curves; with norm = 2 each
-  !! curve to its own maximum. ngap is the size of the gap arrays.
+  !! curve to its own maximum. ngap is the size of the gap arrays. The gap
+  !! tests look up the gap after the last one of a beam before checking that
+  !! there is one; the per-beam gap indices nge and ngt have a zero entry
+  !! for it.
   subroutine column(neminb, nemaxb, ntminb, ntmaxb, ee, ae, bet, bat, nbed, &
                     nbtd, ngp, nbe, ibp, gc, nge1, nge2, ngt1, ngt2, ngap, &
                     tse, tst, v0, intmax, norm)
@@ -1182,7 +1306,7 @@ contains
     real(sp) :: batint(nbed, ngp), betint(nbed, ngp), tstint(nbed)
     real(sp) :: amax(nbed), amaxt(nbed)
     integer :: ntmini(nbed), ntmaxi(nbed)
-    integer :: igc(nbed), nge(nbed, ngap, 2), ngt(nbed, ngap, 2)
+    integer :: igc(nbed), nge(nbed, ngap + 1, 2), ngt(nbed, ngap + 1, 2)
     integer :: neemin, neemax, netmin, netmax
     integer :: i, ibe, iee, iet, igap, igdum, igp
     character(len=10) :: fmt
@@ -1244,7 +1368,7 @@ contains
 
     ! gap indices per beam
     do ibe = 1, nbe
-      do i = 1, ngap
+      do i = 1, ngap + 1
         nge(ibe, i, 1) = 0
         nge(ibe, i, 2) = 0
         ngt(ibe, i, 1) = 0
@@ -1467,6 +1591,7 @@ end module plot_output
 !! labelling lists, and the title of the experiment.
 module control_input
   use kinds, only: sp
+  use array_growth, only: grow
   implicit none
 
   private
@@ -1486,9 +1611,8 @@ module control_input
     ! (eot = 1); plot output if plot = 1; gaps in the experiment if gap = 1
     real(sp) :: emin, emax, eincr, vi, v0rr, v01, v02, vincr, plot
     integer :: limfil, ipr, ismoth, eot, gap
-    ! NL2: geometries to skip (all 0), weights of the experimental beams
-    ! (wb) and of the R factors (wr; wrsum is their sum)
-    integer, allocatable :: nssk(:)
+    ! NL2: weights of the experimental beams (wb) and of the R factors (wr;
+    ! wrsum is their sum)
     real(sp), allocatable :: wb(:)
     real(sp) :: wr(nrfact), wrsum
     ! NL3: plot normalisation (norm), maximum intensity (intmax), aspect
@@ -1505,23 +1629,26 @@ module control_input
 
 contains
 
-  !> Reads the control parameters from unit 8 for nbed experimental and
-  !! nbtd theory beams and ns geometries, echoes them to stdout, and
-  !! returns the number of geometries to use (nss) and the title of the
-  !! experiment. Stops on unsupported input.
-  subroutine read_control(ctl, nbed, nbtd, ns, nss, title)
+  !> Reads the control parameters from unit 8 for nbtd theory beams and
+  !! ns geometries, echoes them to stdout together with the title of the
+  !! experiment, and returns the number of geometries to use (nss). The
+  !! number of experimental beams is the length of their averaging scheme
+  !! nbea, which has a nonzero entry for every beam. Stops on unsupported
+  !! input.
+  subroutine read_control(ctl, nbtd, ns, nss)
     type(control_parameters), intent(out) :: ctl
-    integer, intent(in) :: nbed, nbtd, ns
+    integer, intent(in) :: nbtd, ns
     integer, intent(out) :: nss
-    character(len=80), intent(out) :: title
 
     real(sp) :: emin, emax, eincr, vi, v0rr, v01, v02, vincr, plot
     integer :: limfil, ipr, ismoth, eot, gap
     integer :: nssk(ns)
-    real(sp) :: wb(nbed), wr(nrfact), wrsum
+    real(sp), allocatable :: wb(:)
+    real(sp) :: wr(nrfact), wrsum
     integer :: norm, xtics
     real(sp) :: intmax, plsize(2)
-    integer :: i, j, is
+    character(len=80) :: title
+    integer :: nbed, nbea(25), i, j, is
 
     namelist /nl1/ emin, emax, eincr, limfil, ipr, vi, v0rr, v01, v02, &
                    vincr, ismoth, eot, plot, gap
@@ -1553,7 +1680,6 @@ contains
     plot = 0.0_sp
     gap = 0
 
-    wb = 1.0_sp
     nssk = 0
     ! default: Pendry R factor only
     wr(1) = 0.0_sp
@@ -1584,22 +1710,33 @@ contains
       stop 1
     end if
 
-    write(6, 3) nbtd, nbed
-
-    allocate(ctl%kav(nbtd), ctl%nbea(nbed), ctl%ibp(nbed), ctl%mittel(nbtd))
+    allocate(ctl%kav(nbtd), ctl%mittel(nbtd))
 
     read(8, 4) (ctl%kav(j), j = 1, nbtd)
-    write(6, 5) (ctl%kav(j), j = 1, nbtd)
 
-    read(8, 4) (ctl%nbea(i), i = 1, nbed)
-    write(6, 6) (ctl%nbea(i), i = 1, nbed)
-    do i = 1, nbed
-      if (ctl%nbea(i) == 0) then
-        write(0, *) 'rfactor: NBEA = 0 (skipping an experimental ', &
-                    'beam) is not supported'
-        stop 1
-      end if
+    ! nbea: 25 entries per record; it ends with the first record whose
+    ! last entry is zero (an empty record after a multiple of 25 beams)
+    allocate(ctl%nbea(0))
+    do
+      read(8, '(25I4)') nbea
+      nbed = size(ctl%nbea)
+      j = findloc(nbea /= 0, .true., dim=1, back=.true.)
+      call grow(ctl%nbea, nbed + j)
+      ctl%nbea(nbed + 1:) = nbea(1:j)
+      if (j < 25) exit
     end do
+    nbed = size(ctl%nbea)
+    allocate(ctl%ibp(nbed), wb(nbed))
+    wb = 1.0_sp
+
+    write(6, 3) nbtd, nbed
+    write(6, 5) (ctl%kav(j), j = 1, nbtd)
+    write(6, 6) (ctl%nbea(i), i = 1, nbed)
+    if (nbed == 0 .or. any(ctl%nbea == 0)) then
+      write(0, *) 'rfactor: NBEA = 0 (skipping an experimental ', &
+                  'beam) is not supported'
+      stop 1
+    end if
 
     read(8, 4) (ctl%ibp(j), j = 1, nbed)
     write(6, 7) (ctl%ibp(j), j = 1, nbed)
@@ -1662,7 +1799,6 @@ contains
     ctl%ismoth = ismoth
     ctl%eot = eot
     ctl%gap = gap
-    ctl%nssk = nssk
     ctl%wb = wb
     ctl%wr = wr
     ctl%wrsum = wrsum
@@ -1679,7 +1815,9 @@ end module control_input
 module experiment_preparation
   use kinds, only: sp
   use control_input, only: control_parameters
-  use interpolation, only: grid, interpolation_cache, intpol, yval
+  use array_growth, only: grow
+  use interpolation, only: grid, grid_points, interpolation_cache, intpol, &
+                           yval
   use derivatives, only: der, smooth, ysmooth
   use rfactor_terms, only: varsum, ypend
   use experiment_input, only: expav, gapin, reade, readt
@@ -1687,7 +1825,8 @@ module experiment_preparation
 
   private
 
-  public :: experiment_beams, prepare_experiment, read_experiment
+  public :: experiment_beams, experiment_grid_size, prepare_experiment, &
+            read_experiment
 
   !> Experimental beams; after read_experiment the first nbe are the
   !! averaged beams.
@@ -1713,30 +1852,26 @@ module experiment_preparation
 contains
 
   !> Reads the experiment (eot = 0) or pseudo-experiment from unit 8 into
-  !! ex, sized for nbed beams of ngp points and ngap gaps, reads the gaps
-  !! if ctl%gap = 1 and averages the beams as given by ctl%nbea. Stops if
-  !! an averaged beam has no theory beam.
-  subroutine read_experiment(ex, ctl, nbed, ngp, ngap)
+  !! ex, one beam per entry of ctl%nbea, reads the gaps if ctl%gap = 1 and
+  !! averages the beams as given by ctl%nbea. Stops if an averaged beam has
+  !! no theory beam.
+  subroutine read_experiment(ex, ctl)
     type(experiment_beams), intent(out) :: ex
     type(control_parameters), intent(inout) :: ctl
-    integer, intent(in) :: nbed, ngp, ngap
 
-    real(sp) :: work(ngp)
-    integer :: iwork(ngp)
-    integer :: ib
+    integer :: nbed, ib
 
+    nbed = size(ctl%nbea)
     allocate(ex%nee(nbed), ex%bename(5, nbed), ex%gcount(nbed))
-    allocate(ex%ae(nbed, ngp), ex%ee(nbed, ngp), ex%aep(nbed, ngp), &
-             ex%aepp(nbed, ngp), ex%ype(nbed, ngp), ex%yse(nbed, ngp))
+    allocate(ex%ae(nbed, 0), ex%ee(nbed, 0))
     allocate(ex%tse(nbed), ex%tse2(nbed), ex%tseyp2(nbed), ex%tseys2(nbed))
-    allocate(ex%gbm(ngap), ex%ng1(ngap), ex%ng2(ngap), ex%eg1(ngap), &
-             ex%eg2(ngap))
+    allocate(ex%gbm(0), ex%ng1(0), ex%ng2(0), ex%eg1(0), ex%eg2(0))
     ex%bename = repeat(char(0), 4)
 
     if (ctl%eot <= 0) then
-      call reade(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename, ctl%ipr)
+      call reade(ex%ae, ex%ee, nbed, ex%nee, ex%bename, ctl%ipr)
     else
-      call readt(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename)
+      call readt(ex%ae, ex%ee, nbed, ex%nee, ex%bename)
     end if
 
     ex%gcount = 0
@@ -1744,9 +1879,8 @@ contains
       call gapin(ex%ngap, ex%gbm, ex%eg1, ex%eg2, ex%gcount, nbed)
     end if
 
-    call expav(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename, ctl%nbea, ex%nbe, &
-               ctl%ipr, work, iwork, ex%gcount, ex%ngap, ex%eg1, ex%eg2, &
-               ex%ng1, ex%ng2)
+    call expav(ex%ae, ex%ee, nbed, ex%nee, ex%bename, ctl%nbea, ex%nbe, &
+               ctl%ipr, ex%gcount, ex%ngap, ex%eg1, ex%eg2, ex%ng1, ex%ng2)
     do ib = 1, ex%nbe
       if (ctl%ibp(ib) == 0) then
         write(0, *) 'rfactor: IBP = 0 (skipping a theoretical beam) ', &
@@ -1756,25 +1890,43 @@ contains
     end do
   end subroutine read_experiment
 
+  !> Number of points the arrays of the averaged experimental beams need
+  !! for the beams and their interpolation onto the working grid (steps of
+  !! eincr).
+  integer function experiment_grid_size(ex, eincr) result(ngp)
+    type(experiment_beams), intent(in) :: ex
+    real(sp), intent(in) :: eincr
+
+    integer :: ib, n
+
+    ngp = size(ex%ae, 2)
+    do ib = 1, ex%nbe
+      n = ex%nee(ib)
+      ngp = max(ngp, grid_points(ex%ee(ib, 1:n), eincr))
+    end do
+  end function experiment_grid_size
+
   !> Smooths the averaged experimental beams, interpolates them onto the
   !! working grid, and computes their derivatives, Y functions and
-  !! integrals. Beams with gaps are smoothed and interpolated section by
-  !! section; intensity and derivatives are zero inside a gap. grid_size
-  !! is passed to grid as the declared size of its arrays; the caller
-  !! never sets it (known issue, see tests/README.md).
-  subroutine prepare_experiment(ex, ctl, grid_size)
+  !! integrals, in arrays of ngp points per beam (at least
+  !! experiment_grid_size). Beams with gaps are smoothed and interpolated
+  !! section by section; intensity and derivatives are zero inside a gap.
+  subroutine prepare_experiment(ex, ctl, ngp)
     type(experiment_beams), intent(inout) :: ex
     type(control_parameters), intent(in) :: ctl
-    integer, intent(in) :: grid_size
+    integer, intent(in) :: ngp
 
-    real(sp), dimension(size(ex%ae, 2)) :: a, e, ap, app, xpl, ypl, worx
+    real(sp), dimension(ngp) :: a, e, ap, app, xpl, ypl, worx
     type(interpolation_cache) :: ycache
     real(sp) :: xval
-    integer :: nbed, ngp, ib, ie, ie2, ne, ne1, igap, igc, nz, newnz, npts, &
+    integer :: nbed, ib, ie, ie2, ne, ne1, igap, igc, nz, newnz, npts, &
                imin, nlen, ilen, ipts
 
     nbed = size(ex%ae, 1)
-    ngp = size(ex%ae, 2)
+    call grow(ex%ae, ngp)
+    call grow(ex%ee, ngp)
+    allocate(ex%aep(nbed, ngp), ex%aepp(nbed, ngp), ex%ype(nbed, ngp), &
+             ex%yse(nbed, ngp))
 
     igap = 0
     do ib = 1, ex%nbe
@@ -1839,7 +1991,7 @@ contains
           a(ie) = ex%ae(ib, ie)
           e(ie) = ex%ee(ib, ie)
         end do
-        call grid(a, ne, e, grid_size, ctl%eincr, worx, npts, imin)
+        call grid(a, ne, e, ngp, ctl%eincr, worx, npts, imin)
         ex%nee(ib) = ne
 
         ! interpolate the sections between the gaps onto the working grid;
@@ -1974,16 +2126,16 @@ end module experiment_preparation
 module theory_preparation
   use kinds, only: sp
   use control_input, only: control_parameters
-  use interpolation, only: intpol
+  use interpolation, only: grid_points, intpol
   use derivatives, only: der, ysmooth
   use rfactor_terms, only: varsum, ypend
   use domain_averaging, only: maxint, rintav
-  use theory_input, only: rdpl, strip2
+  use theory_input, only: strip2, theory_records
   implicit none
 
   private
 
-  public :: prepare_theory, read_theory, theory_beams
+  public :: average_theory, prepare_theory, theory_beams, theory_grid_size
 
   !> Averaged theory beams of one geometry.
   type :: theory_beams
@@ -2003,53 +2155,64 @@ module theory_preparation
 
 contains
 
-  !> Reads the theory title, beam count nbtd and the intensities of nss
-  !! geometries from stdin into (es, ats; neti points, geometry codes
-  !! values, momenta pq, symmetry codes sym), averages the beam groups
-  !! into atsav and th%pqav, and stops if an averaged intensity exceeds 1.
-  !! th is sized like ats for the averaged beams of one geometry.
-  subroutine read_theory(ctl, th, nss, nbtd, neti, es, ats, atsav, values, &
-                         pq, sym, title)
+  !> Number of points the arrays of the theory beams need for the neti
+  !! energies es and their interpolation onto the working grid (steps of
+  !! eincr).
+  pure integer function theory_grid_size(es, neti, eincr) result(ngp)
+    real(sp), intent(in) :: es(:), eincr
+    integer, intent(in) :: neti
+
+    ngp = max(neti, grid_points(es(1:neti), eincr))
+  end function theory_grid_size
+
+  !> Echoes the theory title (also to ROUT), beam groupings and geometry
+  !! codes of tr, averages the beam groups of the nss geometries and neti
+  !! energies in ats into atsav and th%pqav, and stops if an averaged
+  !! intensity exceeds 1. th is sized for the averaged beams of one
+  !! geometry on ngp points.
+  subroutine average_theory(ctl, th, tr, nss, neti, ngp, ats, values, atsav)
     type(control_parameters), intent(in) :: ctl
     type(theory_beams), intent(out) :: th
-    integer, intent(in) :: nss
-    integer, intent(out) :: nbtd, neti
-    real(sp), contiguous, intent(inout) :: es(:), ats(:, :, :), atsav(:, :, :)
-    real(sp), contiguous, intent(inout) :: values(:)
-    real(sp), contiguous, intent(out) :: pq(:, :)
-    integer, contiguous, intent(out) :: sym(:)
-    character(len=80), intent(out) :: title
+    type(theory_records), intent(in) :: tr
+    integer, intent(in) :: nss, neti, ngp
+    real(sp), contiguous, intent(in) :: ats(:, :, :), values(:)
+    real(sp), allocatable, intent(out) :: atsav(:, :, :)
 
     real(sp) :: am
-    integer :: mnbtd, ngp, ib
+    integer :: nbtd, ib, i, j
 
 22  format(A80)
 23  format('*', A80)
-26  format(I5)
+27  format('*THEOR. BEAM GROUPINGS')
 28  format(' ', //, ' MAX INTENSITY IN THEOR BEAM ', 1I3, ' IS SUSPECT(', &
            1E13.5, ')- **** STOP PROGRAM ****')
 29  format(1X, /, 6X, 'BEAM', 12X, 'IBE', 3X, 'D12', 5X, 'V0R', 4X, 'EMIN', &
            4X, 'EMAX', 5X, 'OVL', 5X, 'RAV')
+30  format(' ', 2F10.5, I5)
+65  format('*SURFACE STRUCTURE NO. AND CHARACTERIZATION')
+75  format(18X, I3, F15.4)
 
-    mnbtd = size(ats, 2)
-    ngp = size(es)
-    allocate(th%pqav(2, mnbtd), th%net(mnbtd), th%tst(mnbtd), &
-             th%tstyp2(mnbtd), th%tstys2(mnbtd))
-    allocate(th%at(mnbtd, ngp), th%et(mnbtd, ngp), th%atp(mnbtd, ngp), &
-             th%atpp(mnbtd, ngp), th%ypt(mnbtd, ngp), th%yst(mnbtd, ngp))
+    nbtd = tr%nbtd
+    allocate(th%pqav(2, nbtd), th%net(nbtd), th%tst(nbtd), &
+             th%tstyp2(nbtd), th%tstys2(nbtd))
+    allocate(th%at(nbtd, ngp), th%et(nbtd, ngp), th%atp(nbtd, ngp), &
+             th%atpp(nbtd, ngp), th%ypt(nbtd, ngp), th%yst(nbtd, ngp))
+    allocate(atsav(nss, nbtd, neti))
 
-    read(5, 22) title
-    write(7, 22) title
-    write(6, 23) title
+    write(7, 22) tr%title
+    write(6, 23) tr%title
 
-    read(5, 26) nbtd
+    write(6, 27)
+    do j = 1, nbtd
+      write(6, 30) (tr%pq(i, j), i = 1, 2), ctl%kav(j)
+    end do
+    write(6, 65)
+    do j = 1, nss
+      write(6, 75) j, values(j)
+    end do
 
-    call rdpl(es, ngp, ats, nss, nbtd, size(ats, 3), neti, values, pq, &
-              ctl%kav, sym, ctl%emin, ctl%emax, ctl%limfil, ctl%nssk, &
-              size(ctl%nssk), mnbtd)
-
-    call rintav(ats, nss, nbtd, neti, pq, th%pqav, ctl%kav, sym, th%nbt, &
-                atsav)
+    call rintav(ats, nss, nbtd, neti, tr%pq, th%pqav, ctl%kav, tr%sym, &
+                th%nbt, atsav)
 
     do ib = 1, th%nbt
       call maxint(atsav, nss, nbtd, ib, neti, am)
@@ -2060,7 +2223,7 @@ contains
     end do
 
     write(7, 29)
-  end subroutine read_theory
+  end subroutine average_theory
 
   !> Prepares geometry is of the averaged theory atsav (nss geometries,
   !! nbtd beams, neti points on the energies es): interpolation onto the

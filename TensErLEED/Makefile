@@ -1,14 +1,14 @@
 # Build the TensErLEED programs ref-calc (executable refcalc) and rfactor.
 #
-#   make [all|refcalc|rfactor|debug|clean] PARAM=<file> [FC=...] [FFLAGS=...]
-#        [LDLIBS=...] [BUILDDIR=...] [PROGRAMS=...]
+#   make [all|refcalc|rfactor|debug|clean] [PARAM=<file>] [FC=...]
+#        [FFLAGS=...] [LDLIBS=...] [BUILDDIR=...] [PROGRAMS=...]
 #
-# PARAM is the dimension file the legacy sources still INCLUDE; it is copied
-# to BUILDDIR, which also holds objects, module files and executables, so the
-# source tree is never written to. The programs need different PARAM files,
-# so build one per call (make rfactor PARAM=...). 'debug' builds PROGRAMS
-# (default: both) with DEBUG_FFLAGS into BUILDDIR/debug, e.g.
-# make debug PROGRAMS=rfactor PARAM=...
+# PARAM is the dimension file the legacy ref-calc sources still INCLUDE
+# (required for refcalc; rfactor sizes its arrays from its input and
+# ignores it); it is copied to BUILDDIR, which also holds objects, module
+# files and executables, so the source tree is never written to. 'debug'
+# builds PROGRAMS (default: both) with DEBUG_FFLAGS into BUILDDIR/debug,
+# e.g. make debug PROGRAMS=rfactor
 # Free-form sources compile with -std=f2018; the legacy fixed-form sources
 # are exempt.
 
@@ -55,10 +55,10 @@ $(B)/refcalc: $(B)/ref-calc.o $(B)/lib.tleed.o
 $(B)/rfacsb.f90.o: lib/rfacsb.f90 | $(B)
 	$(FC) $(FFLAGS) $(STD_FFLAGS) -J$(B) -o $@ -c $<
 
-$(B)/rfactor.o: src/rfactor.f $(B)/PARAM $(B)/rfacsb.f90.o
-	$(FC) $(FFLAGS) -I$(B) -o $@ -c $<
+$(B)/rfactor.f90.o: src/rfactor.f90 $(B)/rfacsb.f90.o
+	$(FC) $(FFLAGS) $(STD_FFLAGS) -I$(B) -o $@ -c $<
 
-$(B)/rfactor: $(B)/rfacsb.f90.o $(B)/rfactor.o
+$(B)/rfactor: $(B)/rfacsb.f90.o $(B)/rfactor.f90.o
 	$(FC) $(FFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:
