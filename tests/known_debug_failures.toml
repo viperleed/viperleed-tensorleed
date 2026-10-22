@@ -33,9 +33,9 @@ spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 [[failure]]
 case = "ag100_rfactor_gaps"
 run = "explicit_gap"
-match = "rfacsb\\.f.*\\n.*array 'bm'"
-reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
-spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+match = "rfacsb\\.f.*\\n.*array 'a'"
+reason = "GRID declares A(NGP) with NGP undefined in the caller (rfacsb.f:631, rfactor.f:603); in the baseline this was hidden by the earlier GAPIN declaration artefact BM(NGAP) (rfacsb.f:598), which the port no longer has"
+spec_ref = "tests/README.md, known baseline issues (GRID)"
 
 [[failure]]
 case = "ag100_rfactor_gaps"
@@ -47,23 +47,23 @@ spec_ref = "tests/README.md, known baseline issues (GRID)"
 [[failure]]
 case = "ag100_rfactor_paths"
 run = "r2_gap"
-match = "rfacsb\\.f.*\\n.*array 'bm'"
-reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
-spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+match = "rfacsb\\.f.*\\n.*array 'a'"
+reason = "GRID declares A(NGP) with NGP undefined in the caller (rfacsb.f:631, rfactor.f:603); in the baseline this was hidden by the earlier GAPIN declaration artefact BM(NGAP) (rfacsb.f:598), which the port no longer has"
+spec_ref = "tests/README.md, known baseline issues (GRID)"
 
 [[failure]]
 case = "ag100_rfactor_paths"
 run = "zj_gap"
-match = "rfacsb\\.f.*\\n.*array 'bm'"
-reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
-spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+match = "rfacsb\\.f.*\\n.*array 'a'"
+reason = "GRID declares A(NGP) with NGP undefined in the caller (rfacsb.f:631, rfactor.f:603); in the baseline this was hidden by the earlier GAPIN declaration artefact BM(NGAP) (rfacsb.f:598), which the port no longer has"
+spec_ref = "tests/README.md, known baseline issues (GRID)"
 
 [[failure]]
 case = "ag100_rfactor_params"
 run = "smooth_gap"
-match = "rfacsb\\.f.*\\n.*array 'bm'"
-reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
-spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+match = "rfacsb\\.f.*\\n.*array 'a'"
+reason = "GRID declares A(NGP) with NGP undefined in the caller (rfacsb.f:631, rfactor.f:603); in the baseline this was hidden by the earlier GAPIN declaration artefact BM(NGAP) (rfacsb.f:598), which the port no longer has"
+spec_ref = "tests/README.md, known baseline issues (GRID)"
 
 [[failure]]
 case = "cu111"
