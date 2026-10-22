@@ -434,3 +434,269 @@ contains
     end if
   end subroutine ysmooth
 end module derivatives
+
+!> Pendry Y function, integrals over the energy range, and the Zanazzi-Jona
+!! normalisation, as they enter the R factors.
+module rfactor_terms
+  use kinds, only: sp
+  use interpolation, only: yval
+  implicit none
+
+  private
+
+  public :: epszj, varsum, ypend
+
+contains
+
+  !> Largest |aep(ib, ie)| for ie = ne1..ne2 (eps of the Zanazzi-Jona
+  !! R factor, aep being the derivative of the experimental curve).
+  subroutine epszj(aep, nbd, ngp, ib, ne1, ne2, eps)
+    integer, intent(in) :: nbd, ngp, ib, ne1, ne2
+    real(sp), intent(in) :: aep(nbd, ngp)
+    real(sp), intent(out) :: eps
+
+    real(sp) :: a
+    integer :: ie
+
+    eps = 0._sp
+    do ie = ne1, ne2
+      a = abs(aep(ib, ie))
+      if (a > eps) eps = a
+    end do
+  end subroutine epszj
+
+  !> Integral s of y(1:n) (step h) by the trapezoid rule, after Zanazzi and
+  !! Jona.
+  subroutine trapezoid(y, n, h, s)
+    integer, intent(in) :: n
+    real(sp), intent(in) :: y(n), h
+    real(sp), intent(out) :: s
+
+    real(sp) :: a
+    integer :: j
+
+    a = 0._sp
+    do j = 1, n
+      a = a + y(j)
+    end do
+    s = a - 0.5_sp*(y(1) + y(n))
+    s = s*h
+  end subroutine trapezoid
+
+  !> Integral s over energy points ie = ie1..ie2 of the curves a1, b1 of
+  !! beam ib1 and, shifted by nv points, a2, b2 of beam ib2 (step eincr).
+  !! The integrand depends on nf:
+  !!   nf = 1 (and any nf other than 2, 3, 4): a1
+  !!   nf = 2: a1**2
+  !!   nf = 3: (a1 - c*a2)**2
+  !!   nf = 4: |b1 - c*b2| * |a1 - c*a2| / (|a1| + eps), the Zanazzi-Jona
+  !!           integrand, interpolated onto a 10 times denser grid first.
+  !! For nf = 1..3 the integrand is left in y(1:ie2-ie1+1); for nf = 4,
+  !! y(1:ie2-ie1+1) holds the energies relative to the first point.
+  subroutine varsum(a1, a2, b1, b2, nbd1, nbd2, ngp, ib1, ib2, ie1, ie2, nv, &
+                    eincr, eps, c, nf, s, y)
+    integer, intent(in) :: nbd1, nbd2, ngp, ib1, ib2, ie1, ie2, nv, nf
+    real(sp), intent(in) :: a1(nbd1, ngp), b1(nbd1, ngp)
+    real(sp), intent(in) :: a2(nbd2, ngp), b2(nbd2, ngp)
+    real(sp), intent(in) :: eincr, eps, c
+    real(sp), intent(out) :: s
+    real(sp), intent(inout) :: y(ngp)
+
+    real(sp) :: y1(ngp), y2(ngp), y3(ngp), y4(ngp), yy(10*ngp)
+    real(sp) :: aa1, aa2, ab1, ab2, de, x
+    integer :: ie, ies, itil, itih, n, nn
+
+    n = 0
+    if (nf /= 4) then
+      do ie = ie1, ie2
+        n = n + 1
+        ies = ie + nv
+        select case (nf)
+        case (2)
+          y(n) = a1(ib1, ie)**2
+        case (3)
+          y(n) = (a1(ib1, ie) - c*a2(ib2, ies))**2
+        case default
+          y(n) = a1(ib1, ie)
+        end select
+      end do
+      call trapezoid(y(1:n), n, eincr, s)
+      return
+    end if
+
+    do ie = ie1, ie2
+      n = n + 1
+      ies = ie + nv
+      y(n) = real(n - 1, sp)*eincr
+      y1(n) = a1(ib1, ie)
+      y2(n) = a2(ib2, ies)
+      y3(n) = b1(ib1, ie)
+      y4(n) = b2(ib2, ies)
+    end do
+    de = 0.1_sp*eincr
+    nn = 10*(n - 1) + 1
+    do ie = 1, nn
+      x = real(ie - 1, sp)*de
+      itil = 0
+      itih = 0
+      aa1 = yval(x, y1(1:n), y(1:n), n, itil, itih)
+      itil = 0
+      itih = 0
+      aa2 = yval(x, y2(1:n), y(1:n), n, itil, itih)
+      itil = 0
+      itih = 0
+      ab1 = yval(x, y3(1:n), y(1:n), n, itil, itih)
+      itil = 0
+      itih = 0
+      ab2 = yval(x, y4(1:n), y(1:n), n, itil, itih)
+      yy(ie) = abs(ab1 - c*ab2)*abs(aa1 - c*aa2)/(abs(aa1) + eps)
+    end do
+    call trapezoid(yy(1:nn), nn, de, s)
+  end subroutine varsum
+
+  !> Pendry Y function y = L/(1 + vi**2 L**2) of the curves a(ib, 1:ne(ib))
+  !! for beams 1..nb, with L = ap/a the logarithmic derivative (ap: first
+  !! derivative per eV, vi: imaginary part of the inner potential). Where
+  !! |a| < 1e-7 the equivalent form (a/ap)/((a/ap)**2 + vi**2) is used, and
+  !! y = 0 where also |ap| < 1e-7. Entries beyond ne(ib) are not set. e is
+  !! used only for printing (ipr >= 2).
+  subroutine ypend(a, ap, nbd, ngp, nb, ne, e, y, vi, ipr)
+    integer, intent(in) :: nbd, ngp, nb, ipr
+    real(sp), intent(in) :: a(nbd, ngp), ap(nbd, ngp), e(nbd, ngp)
+    integer, intent(in) :: ne(nbd)
+    real(sp), intent(inout) :: y(nbd, ngp)
+    real(sp), intent(in) :: vi
+
+    real(sp) :: af, apf
+    integer :: ib, ie, n
+
+40  format(' PENDRY Y FUNCTION IN BEAM', 1I3, /, 1000(5(1F7.2, 1E13.4, 3X), /))
+
+    do ib = 1, nb
+      n = ne(ib)
+      if (n /= 0) then
+        do ie = 1, n
+          af = a(ib, ie)
+          if (abs(af) >= 1.e-7_sp) then
+            af = ap(ib, ie)/af
+            y(ib, ie) = af/(1._sp + vi*vi*af*af)
+          else
+            apf = ap(ib, ie)
+            if (abs(apf) >= 1.e-7_sp) then
+              af = af/apf
+              y(ib, ie) = af/(af*af + vi*vi)
+            else
+              y(ib, ie) = 0._sp
+            end if
+          end if
+        end do
+      end if
+    end do
+    if (ipr >= 2) then
+      do ib = 1, nb
+        n = ne(ib)
+        if (n /= 0) then
+          write(6, 40) ib, (e(ib, ie), y(ib, ie), ie = 1, n)
+        end if
+      end do
+    end if
+  end subroutine ypend
+end module rfactor_terms
+
+!> Averaging of theoretical beams over domains and beam groups, and the
+!! check of averaged intensities.
+module domain_averaging
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: maxint, rintav
+
+contains
+
+  !> Largest a(is, ib, ie) over all is = 1..ns, ie = 1..ne, and 0 if none
+  !! is positive.
+  subroutine maxint(a, ns, nbd, ib, ne, am)
+    integer, intent(in) :: ns, nbd, ib, ne
+    real(sp), intent(in) :: a(ns, nbd, ne)
+    real(sp), intent(out) :: am
+
+    integer :: ie, is
+
+    am = 0._sp
+    do is = 1, ns
+      do ie = 1, ne
+        if (a(is, ib, ie) > am) am = a(is, ib, ie)
+      end do
+    end do
+  end subroutine maxint
+
+  !> Averages the intensities at(:, jb, :) of all beams jb with the same
+  !! group label kav(jb) into atav(:, lav, :), lav = 1, 2, ... being the
+  !! group labels in increasing order (lavm groups found). Each beam is
+  !! weighted by the number of symmetry-equivalent beams its symmetry code
+  !! sym(jb) stands for in the LEED program (all 1 without symmetry). The
+  !! group takes the name pq1(:, lav) of its first beam in pq. Entries of
+  !! atav and pq1 for labels without beams are not set.
+  subroutine rintav(at, ns, nb, ne, pq, pq1, kav, sym, lavm, atav)
+    integer, intent(in) :: ns, nb, ne
+    real(sp), intent(in) :: at(ns, nb, ne), pq(2, nb)
+    real(sp), intent(inout) :: pq1(2, nb), atav(ns, nb, ne)
+    integer, intent(in) :: kav(nb), sym(nb)
+    integer, intent(out) :: lavm
+
+    real(sp) :: wght, wt
+    integer :: ib, ie, is, jb, lab, lav
+
+    lavm = 0
+    do lav = 1, nb
+      do ib = 1, nb
+        ! the first beam of group lav
+        if (lav /= kav(ib)) cycle
+        lavm = lavm + 1
+        pq1(:, lav) = pq(:, ib)
+        wt = 0.0_sp
+        do jb = ib, nb
+          if (lav /= kav(jb)) cycle
+          lab = sym(jb)
+          if (lab < 2) then
+            wght = 1.0_sp
+          else if (lab < 7) then
+            wght = 2.0_sp
+          else if (lab < 10) then
+            wght = 4.0_sp
+          else if (lab == 10) then
+            wght = 8.0_sp
+          else if (lab < 12) then
+            wght = 3.0_sp
+          else if (lab < 15) then
+            wght = 6.0_sp
+          else
+            wght = 12.0_sp
+          end if
+          if (wt < 0.001_sp) then
+            do is = 1, ns
+              do ie = 1, ne
+                atav(is, lav, ie) = wght*at(is, jb, ie)
+              end do
+            end do
+          else
+            do is = 1, ns
+              do ie = 1, ne
+                atav(is, lav, ie) = atav(is, lav, ie) + wght*at(is, jb, ie)
+              end do
+            end do
+          end if
+          wt = wt + wght
+        end do
+        do is = 1, ns
+          do ie = 1, ne
+            atav(is, lav, ie) = atav(is, lav, ie)/wt
+          end do
+        end do
+        exit
+      end do
+    end do
+  end subroutine rintav
+end module domain_averaging

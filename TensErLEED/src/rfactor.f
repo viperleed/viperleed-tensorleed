@@ -66,6 +66,8 @@ C  cf purpose of quantity FAC in subroutine READE.
 
       USE INTERPOLATION, ONLY: GRID, INTPOL, YVAL
       USE DERIVATIVES, ONLY: DER, SMOOTH, YSMOOTH
+      USE RFACTOR_TERMS, ONLY: EPSZJ, VARSUM, YPEND
+      USE DOMAIN_AVERAGING, ONLY: MAXINT, RINTAV
 
 C  include problem dependent parameter statements for dimensions
 
@@ -744,7 +746,7 @@ C  derivative for the section after the last gap
 
 C  produce Pendry & smooth Y-function for experimental data
 
-      CALL YPEND(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YPE,VI,IPR)
+      CALL YPEND(AE,AEP,NBED,MNGP,NBE,NEE,EE,YPE,VI,IPR)
       CALL YSMOOTH(AE,AEP,NBED,MNGP,NBE,NEE,EE,YSE,VI,EINCR,IPR)
 
 C  produce some integrals over experimental data
@@ -759,18 +761,18 @@ C  produce some integrals over experimental data
           TSEYP2(IB)= 0.
           TSEYS2(IB)= 0.
 
-          CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,     !integral over I: TSE
+          CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IB,1,1,IE2,0,     !integral over I: TSE
      *                EINCR,0.,0.,1,TSE(IB),YPL)
 
           IF (WR(1).GT.1.E-6) THEN
-            CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,   !integral over squared I: TSE2
+            CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IB,1,1,IE2,0,   !integral over squared I: TSE2
      *                  EINCR,0.,0.,2,TSE2(IB),YPL)
           ENDIF
 
           IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-            CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,  !integral over squared Y_Pendry: TSEYP2
+            CALL VARSUM(YPE,AE,AE,AE,NBED,NBED,MNGP,IB,1,1,IE2,0,  !integral over squared Y_Pendry: TSEYP2
      *                  EINCR,0.,0.,2,TSEYP2(IB),YPL)
-            CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IB,1,1,IE2,0,  !integral over squared Y_Smooth; TSEYS2
+            CALL VARSUM(YSE,AE,AE,AE,NBED,NBED,MNGP,IB,1,1,IE2,0,  !integral over squared Y_Smooth; TSEYS2
      *                  EINCR,0.,0.,2,TSEYS2(IB),YPL)
           ENDIF
         ENDIF
@@ -797,7 +799,7 @@ C  read in calculated energies and intensities (in range EMIN to EMAX)
 
 C  perform domain averaging and check for too high theoretical intensities
 
-      CALL RINTAV(ATS,NSS,NBTD,NETI,PQ,PQAV,KAV,SYM,NBT,ES,IPR,ATSAV)   ! TODO: simplify, remove SYM, but also averages beam groups as defined in KAV
+      CALL RINTAV(ATS,NSS,NBTD,NETI,PQ,PQAV,KAV,SYM,NBT,ATSAV)          ! TODO: simplify, remove SYM, but also averages beam groups as defined in KAV
 
       DO IB = 1,NBT                                                      121280
 
@@ -862,7 +864,7 @@ C  produce 1st and 2nd derivative of theoretical spectra
 
 C  produce Pendry Y-function of theoretical data
 
-      CALL YPEND(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YPT,VI,IPR)
+      CALL YPEND(AT,ATP,NBTD,MNGP,NBT,NET,ET,YPT,VI,IPR)
       CALL YSMOOTH(AT,ATP,NBTD,MNGP,NBT,NET,ET,YST,VI,EINCR,IPR)
 
 C  produce some integrals over theoretical data
@@ -872,12 +874,12 @@ C  produce some integrals over theoretical data
         IE2=NET(IB)
         IF (IE2.GT.0) THEN
 
-          CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,
+          CALL VARSUM(AT,AT,AT,AT,NBTD,NBTD,MNGP,IB,1,1,IE2,0,
      *                EINCR,0.,0.,1,TST(IB),YPL)
 
-          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,    !integral over squared Y_theor
+          CALL VARSUM(YPT,AT,AT,AT,NBTD,NBTD,MNGP,IB,1,1,IE2,0,    !integral over squared Y_theor
      *                EINCR,0.,0.,2,TSTYP2(IB),YPL)
-          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IB,1,1,IE2,0,
+          CALL VARSUM(YST,AT,AT,AT,NBTD,NBTD,MNGP,IB,1,1,IE2,0,
      *                EINCR,0.,0.,2,TSTYS2(IB),YPL)
 
         ENDIF
@@ -1043,18 +1045,18 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
       IF (NE1.GT.1) THEN
 
-        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,
+        CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,1,NE1,0,
      *              EINCR,0.,0.,1,SS,YPL)
 
         IF (WR(1).GT.1.E-6) THEN
-          CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,
+          CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,1,NE1,0,
      *                EINCR,0.,0.,2,SS2,YPL)
         ENDIF
 
         IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-          CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,   ! integral over squared exp Y function below: SSYP2
+          CALL VARSUM(YPE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,1,NE1,0,   ! integral over squared exp Y function below: SSYP2
      *              EINCR,0.,0.,2,SSYP2,YPL)
-          CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,1,NE1,0,
+          CALL VARSUM(YSE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,1,NE1,0,
      *              EINCR,0.,0.,2,SSYS2,YPL)
         ENDIF
 
@@ -1062,18 +1064,18 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
       IF (NE2.LT.NE) THEN
 
-        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,
+        CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,NE2,NE,0,
      *              EINCR,0.,0.,1,SU,YPL)
 
         IF (WR(1).GT.1.E-6) THEN
-        CALL VARSUM(AE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,
+        CALL VARSUM(AE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,NE2,NE,0,
      *              EINCR,0.,0.,2,SU2,YPL)
         ENDIF
 
         IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-          CALL VARSUM(YPE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,  ! integral over squared exp Y function above: SUYP2
+          CALL VARSUM(YPE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,NE2,NE,0,  ! integral over squared exp Y function above: SUYP2
      *                EINCR,0.,0.,2,SUYP2,YPL)
-          CALL VARSUM(YSE,AE,AE,AE,1,1,NBED,1,MNGP,1,1,IBE,1,NE2,NE,0,
+          CALL VARSUM(YSE,AE,AE,AE,NBED,NBED,MNGP,IBE,1,NE2,NE,0,
      *                EINCR,0.,0.,2,SUYS2,YPL)
         ENDIF
 
@@ -1097,13 +1099,13 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
       IF (NT1.NE.1) THEN
 
-        CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,
+        CALL VARSUM(AT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,1,NT1,0,
      *              EINCR,0.,0.,1,SS,YPL)
 
         IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,   ! integral over squared theor Y function below: SSYP2
+          CALL VARSUM(YPT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,1,NT1,0,   ! integral over squared theor Y function below: SSYP2
      *                EINCR,0.,0.,2,SSYP2,YPL)
-          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,1,NT1,0,
+          CALL VARSUM(YST,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,1,NT1,0,
      *                EINCR,0.,0.,2,SSYS2,YPL)
         ENDIF
 
@@ -1113,13 +1115,13 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
         DO IGC = IGAP+1,IGAP+GCOUNT(IBE)
 
-          CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NGT1(IGC),
+          CALL VARSUM(AT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,NGT1(IGC),
      *                NGT2(IGC),0,EINCR,0.,0.,1,SG,YPL)
 
           IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-            CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,         ! integral over squared theor Y function in gap: SGYP2
+            CALL VARSUM(YPT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,         ! integral over squared theor Y function in gap: SGYP2
      *                  NGT1(IGC),NGT2(IGC),0,EINCR,0.,0.,2,SGYP2,YPL)
-            CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,
+            CALL VARSUM(YST,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,
      *                  NGT1(IGC),NGT2(IGC),0,EINCR,0.,0.,2,SGYS2,YPL)
           ENDIF
 
@@ -1129,13 +1131,13 @@ C  if a IV-curve is truncated, above integrals should be reduced accordingly
 
       IF (NT2.NE.NT) THEN
 
-        CALL VARSUM(AT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,
+        CALL VARSUM(AT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,NT2,NT,0,
      *              EINCR,0.,0.,1,SU,YPL)
 
         IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
-          CALL VARSUM(YPT,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,  ! integral over squared theor Y function above: SUYP2
+          CALL VARSUM(YPT,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,NT2,NT,0,  ! integral over squared theor Y function above: SUYP2
      *                EINCR,0.,0.,2,SUYP2,YPL)
-          CALL VARSUM(YST,AT,AT,AT,1,1,NBTD,1,MNGP,1,1,IBT,1,NT2,NT,0,
+          CALL VARSUM(YST,AT,AT,AT,NBTD,NBTD,MNGP,IBT,1,NT2,NT,0,
      *                EINCR,0.,0.,2,SUYS2,YPL)
         ENDIF
 
@@ -1171,13 +1173,13 @@ C  produce integrals involving both, experiment and theory
 
       IF (WR(1).GT.1.E-6) THEN
 
-        CALL VARSUM(AE,AT,AE,AE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1,NE2,
+        CALL VARSUM(AE,AT,AE,AE,NBED,NBTD,MNGP,IBE,IBT,NE1,NE2,
      *              NEET,EINCR,0.,C,3,S2,YPL)
 
         IF (GCOUNT(IBE).NE.0) THEN
 
           DO IGC = IGAP+1,IGAP+GCOUNT(IBE)
-            CALL VARSUM(AE,AT,AE,AE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,
+            CALL VARSUM(AE,AT,AE,AE,NBED,NBTD,MNGP,IBE,IBT,
      *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,C,3,SG2,YPL)
           ENDDO
 
@@ -1187,13 +1189,13 @@ C  produce integrals involving both, experiment and theory
 
       IF (WR(2).GT.1.E-6) THEN
 
-        CALL VARSUM(AEP,ATP,AEPP,ATPP,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,
+        CALL VARSUM(AEP,ATP,AEPP,ATPP,NBED,NBTD,MNGP,IBE,IBT,
      *              NE1,NE2,NEET,EINCR,EPSE,C,4,SRZJ,YPL)
 
         IF (GCOUNT(IBE).NE.0) THEN
 
           DO IGC = IGAP+1,IGAP+GCOUNT(IBE)
-            CALL VARSUM(AEP,ATP,AEPP,ATPP,1,1,NBED,NBTD,MNGP,1,1,IBE,
+            CALL VARSUM(AEP,ATP,AEPP,ATPP,NBED,NBTD,MNGP,IBE,
      *                  IBT,NG1(IGC),NG2(IGC),NEET,EINCR,EPSE,C,4,SGZJ,
      *                  YPL)
           ENDDO
@@ -1204,17 +1206,17 @@ C  produce integrals involving both, experiment and theory
 
       IF (WR(3).GT.1.E-6 .OR. WR(4).GT.1.E-6) THEN
 
-        CALL VARSUM(YPE,YPT,YPE,YPE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1, ! squared Y difference exp-theory: SYP2
+        CALL VARSUM(YPE,YPT,YPE,YPE,NBED,NBTD,MNGP,IBE,IBT,NE1, ! squared Y difference exp-theory: SYP2
      *              NE2,NEET,EINCR,0.,1.,3,SYP2,YPL)
-        CALL VARSUM(YSE,YST,YSE,YSE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,NE1,
+        CALL VARSUM(YSE,YST,YSE,YSE,NBED,NBTD,MNGP,IBE,IBT,NE1,
      *              NE2,NEET,EINCR,0.,1.,3,SYS2,YPL)
 
         IF (GCOUNT(IBE).NE.0) THEN
 
           DO IGC = IGAP+1,IGAP+GCOUNT(IBE)
-            CALL VARSUM(YPE,YPT,YPE,YPE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT, ! squared Y difference exp-theory in gap: SGYP2
+            CALL VARSUM(YPE,YPT,YPE,YPE,NBED,NBTD,MNGP,IBE,IBT, ! squared Y difference exp-theory in gap: SGYP2
      *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,1.,3,SGYP2,YPL)
-            CALL VARSUM(YSE,YST,YSE,YSE,1,1,NBED,NBTD,MNGP,1,1,IBE,IBT,
+            CALL VARSUM(YSE,YST,YSE,YSE,NBED,NBTD,MNGP,IBE,IBT,
      *                  NG1(IGC),NG2(IGC),NEET,EINCR,0.,1.,3,SGYS2,YPL)
           ENDDO
 
