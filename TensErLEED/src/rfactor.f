@@ -20,14 +20,13 @@ C  It is possible to specify gaps in the experimental IV-curves. These energy
 C  ranges will be ignored in the R-factor calculation. The gaps will also be
 C  taken into account in the processing of the experimenta data.
 C  The experiment can be smoothed before interpolation onto a regular energy
-C  grid. Individual experimental beams can be skipped (see NBEA).
+C  grid.
 C  The theoretical IV-curves (read in with the format used in the van Hove-Tong
 C  LEED programs) for related beams can be averaged together to account for
-C  different beams. Individual theoretical beams can be skipped (see IBP).
+C  different beams.
 C  The averaged theoretical beams can be labelled as integer order or fractio-
 C  nal order beam. In this case the average for all integer order and/or all
 C  fractional order beams is calculated and written to output (see MITTEL).
-C  Individual theoretical geometries can also be skipped (see NSSK).
 
 C******************************************************************************
 C  Input formats (see description of individual quantities further down)
@@ -54,9 +53,6 @@ C  - read energy, geometry and theoretical intensities for all beams
 C    (van Hove-output format)
 C  - repeat last step until NS geometries have been read in
 C  - repeat last two steps until an END-OF-FILE is encountered
-C  - if END-OF-FILE is encountered read next set of theoretical data (skipping
-C    TEXT and beam information) in van Hove-output format until LIMFIL sets of
-C    theoretical data have been read in.
 
 C******************************************************************************
 C  Limitations
@@ -82,13 +78,15 @@ C          (intensities outside this interval will be ignored)
 C  EINCR : (in eV) energy grid step, a value of 1. eV or lower is recommended
 C          (a 10-fold denser grid is used for the Zanazzi-Jona integrals)
 C  LIMFIL: no. of files from which consecutive theoretical data will be read
+C          (only 1 is supported)
 C  IPR   : controls amount of printout on unit 6
 C          IPR = 0: output of overview of input parameters and of all R-factors
 C          IPR = 1: additional output of raw input exp energies and intensities
 C          IPR = 2: additional printout of exp and theor data after averaging,
 C                   smoothing and interpolation as well as Pendry Y-function
 C  VI    : imaginary part of inner potential used in Pendry Y-function
-C  V0RR  : real part of inner potential as given in LEED programs
+C  V0RR  : real part of inner potential as given in LEED programs (only 0 is
+C          supported, the default)
 C  V01,V02:limits for inner potential variation (V0 = -V0RR+V01,...,-V0RR+V02
 C          V01.le.V02, V01 and V02 should be multiples of EINCR)
 C  VINCR : step of inner potential variation (must be.gt.0)
@@ -112,8 +110,8 @@ C          KAV = I for Ith group to be averaged, KAV = 0 to ignore beams
 C          (KAV.le.NBTD must hold)
 C  IBP   : relationship between theor and exp beams, IBP(I) = J indicates that
 C          the Ith exp beam (after averaging over different experiments) corre-
-C          sponds to the Jth theor beam (counted after domain-averaging), when
-C          J = 0, the (exp) beam I is skipped
+C          sponds to the Jth theor beam (counted after domain-averaging);
+C          J = 0 (skipping a beam) is not supported
 C  MITTEL: labelling of theoretical beams (counted after averaging), MITTEL = 1
 C          for integer beams, MITTEL = 2 for fractional beams
 C  NINT,NFRAC:number of integer and fractional beams respectively
@@ -125,8 +123,8 @@ C  TEXT  : title that gives a short description of either exp or theor data
 
 C  variables in namelist NL2
 
-C  NSSK  : list of geometries to be skipped, eg NSSK = 4,7,8 skips 4th,7th and
-C          8th geometry
+C  NSSK  : list of geometries to be skipped; skipping is not supported, all
+C          entries must be 0
 C  WB    : weights for different beams (counting by numbers NBEA), used to
 C          obtain R-factors averaged over beams (should not include weights for
 C          differing energy ranges, since these are already programmed in)   ! TODO: scrap, no weights
@@ -158,7 +156,8 @@ C  NEE   : number of energy grid points of experimental beams (before and after
 C          averaging and interpolating)
 C  NBEA  : averaging scheme for experimental beams, NBEA(I) = NBEA(J) means
 C          beams I and J will be averaged together (for I.gt.J the relation
-C          NBEA(I).gt.NBEA(J) must hold), NBEA(I) = 0 is used to skip beam I
+C          NBEA(I).gt.NBEA(J) must hold); NBEA(I) = 0 (skipping a beam) is
+C          not supported
 C  BENAME: name of experimental beams (before and after averaging)
 C  NGAP  : total number of gaps in the experimental spectra
 C  GBM   : beam in which gap IGAP is found (gaps must be input in order of the
@@ -374,6 +373,7 @@ C  default values in namelist NL1
       V01    = -5.
       V02    = 5.
       VINCR  = 2.
+      V0RR   = 0.
       ISMOTH = 2
       PLOT   = 0
       GAP    = 0
@@ -415,6 +415,19 @@ C  read in any non-default values of the NL1 variables (as supplied by user)
       READ(8,NL1)
       WRITE(6,NL1)
 
+C  only one theory file and no real inner-potential offset are supported
+
+      IF (LIMFIL.NE.1) THEN
+        WRITE(0,*) 'rfactor: LIMFIL must be 1; reading several ',
+     *             'theory files is not supported'
+        STOP 1
+      ENDIF
+      IF (V0RR.NE.0.) THEN
+        WRITE(0,*) 'rfactor: V0RR must be 0; a real inner-potential ',
+     *             'offset is not supported'
+        STOP 1
+      ENDIF
+
       WRITE(6,3)NBTD,NBED                                                040481
  3    FORMAT(13H*NBTD,NBED = ,2I4)                                       040481
 
@@ -429,6 +442,13 @@ C  read experimental beam averaging information
 
       READ(8,4)(NBEA(I),I=1,NBED)
       WRITE(6,6)(NBEA(I),I=1,NBED)
+      DO I = 1,NBED
+        IF (NBEA(I).EQ.0) THEN
+          WRITE(0,*) 'rfactor: NBEA = 0 (skipping an experimental ',
+     *               'beam) is not supported'
+          STOP 1
+        ENDIF
+      ENDDO
  6    FORMAT(31H*AVERAGING SCHEME OF EXP. BEAMS,/,400(25I4,/))
 
 C  read relationship of experimental to theoretical beams
@@ -461,6 +481,13 @@ C  read list of geometries to be skipped and weights for the R-factor averages
 
       READ(8,NL2)
 C      WRITE(6,NL2)
+      DO IS = 1,NS
+        IF (NSSK(IS).NE.0) THEN
+          WRITE(0,*) 'rfactor: NSSK must be 0; skipping geometries ',
+     *               'is not supported'
+          STOP 1
+        ENDIF
+      ENDDO
 
 C Calculate sum of R-factor weights. Note that ViPErLEED supplies only 3 WR values
 C for compatibility with old versions. Therefore, if sum=0, assume the newly added
@@ -515,6 +542,13 @@ C  average data from different experiments and order by increasing energy
 
       CALL EXPAV(AE,EE,NBED,MNGP,NEE,BENAME,NBEA,NBE,IPR,XPL,NNN,GCOUNT,
      *           NGAP,EG1,EG2,NG1,NG2)
+      DO IB = 1,NBE
+        IF (IBP(IB).EQ.0) THEN
+          WRITE(0,*) 'rfactor: IBP = 0 (skipping a theoretical beam) ',
+     *               'is not supported'
+          STOP 1
+        ENDIF
+      ENDDO
 
       IGAP = 0
       DO IB = 1,NBE                                                     !for all exp beams
