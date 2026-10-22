@@ -64,7 +64,7 @@ C  cf purpose of quantity FAC in subroutine READE.
 
       PROGRAM RFACTOR
 
-      USE INTERPOLATION, ONLY: GRID, INTPOL, YVAL
+      USE INTERPOLATION, ONLY: GRID, INTERPOLATION_CACHE, INTPOL, YVAL
       USE DERIVATIVES, ONLY: DER, SMOOTH, YSMOOTH
       USE RFACTOR_TERMS, ONLY: EPSZJ, VARSUM, YPEND
       USE DOMAIN_AVERAGING, ONLY: MAXINT, RINTAV
@@ -187,10 +187,13 @@ C  NG1,NG2:energy indices of the gap boundaries (after averaging)
 C  NNN   : working spaces
 C  XPL,YPL,WORX: working spaces
 C  A,E   : working space for intensities and energies of current beam
+C  YCACHE: interpolation points of YVAL, shared by all sections of a beam
+C          with gaps
 
       INTEGER NBE, NG1(MNGAP), NG2(MNGAP)
       INTEGER NNN(MNGP)
       REAL XPL(MNGP), YPL(MNGP), WORX(MNGP), A(MNGP), E(MNGP)
+      TYPE(INTERPOLATION_CACHE) YCACHE
 
 C  variables used for functions of experimental data
 
@@ -651,8 +654,8 @@ C  interpolate intensities of sections between gaps onto working grid
 
           NZ = 0
           NEWNZ = 0
-          ITIL = 0
-          ITIH = 0
+          YCACHE%IL = 0
+          YCACHE%IH = 0
           DO IGC = IGAP+1,IGAP+GCOUNT(IB)
             IF (NG1(IGC).GT.IMIN) THEN
 
@@ -680,7 +683,7 @@ C  interpolate intensities of sections between gaps onto working grid
               DO ILEN = 1,LEN
                 XVAL = WORX(ILEN+NEWNZ)
                 A(ILEN) = YVAL(XVAL,YPL(1:NE1),XPL(1:NE1),NE1,
-     *                         ITIL,ITIH)
+     *                         YCACHE)
               ENDDO
 
 C  produce 1st and 2nd derivative of intensities
@@ -729,7 +732,7 @@ C  derivative for the section after the last gap
           LEN = NPTS - NEWNZ
           DO ILEN = 1,LEN
             XVAL = WORX(ILEN+NEWNZ)
-            A(ILEN) = YVAL(XVAL,YPL(1:NE1),XPL(1:NE1),NE1,ITIL,ITIH)
+            A(ILEN) = YVAL(XVAL,YPL(1:NE1),XPL(1:NE1),NE1,YCACHE)
           ENDDO
 
           IF (LEN.GT.0) THEN

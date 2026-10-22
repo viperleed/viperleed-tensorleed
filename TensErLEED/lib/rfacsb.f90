@@ -23,15 +23,23 @@ end module kinds
 !! yval interpolates a tabulated curve at one abscissa: 3rd-order polynomial
 !! interpolation through the four nearest points, or 2nd/1st order if the
 !! curve has fewer than four points. The four points of the last interval
-!! found are kept in COMMON /DATBLK/ and reused when the next call finds the
-!! same interval (itil, itih).
+!! found are kept in an interpolation_cache and reused when the next call
+!! with the same cache finds the same interval, even if that call passes a
+!! different curve.
 module interpolation
   use kinds, only: sp
   implicit none
 
   private
 
-  public :: grid, intpol, yval
+  public :: grid, intpol, interpolation_cache, yval
+
+  !> Interval (il, ih) of the last yval call and the four points (x, y)
+  !! stored for it. il = ih = 0 forces yval to store new points.
+  type :: interpolation_cache
+    integer :: il, ih
+    real(sp) :: x(0:3), y(0:3)
+  end type interpolation_cache
 
 contains
 
@@ -76,48 +84,44 @@ contains
   end subroutine binsrx
 
   !> Stores the four grid points nearest to the interval (il, ih) and their
-  !! ordinates in /DATBLK/, shifted inwards at the ends of the table.
-  subroutine stfpts(il, ih, worx, wory, length)
+  !! ordinates in cache, shifted inwards at the ends of the table.
+  subroutine stfpts(il, ih, worx, wory, length, cache)
     integer, intent(in) :: il, ih, length
     real(sp), intent(in) :: worx(length), wory(length)
+    type(interpolation_cache), intent(inout) :: cache
 
-    real(sp) :: x0, x1, x2, x3, y0, y1, y2, y3
-    common /datblk/ x0, x1, x2, x3, y0, y1, y2, y3
     integer :: i
 
     i = il - 1
     if (il <= 1) i = i + 1
     if (ih >= length) i = i - 1
-    x0 = worx(i)
-    x1 = worx(i + 1)
-    x2 = worx(i + 2)
-    x3 = worx(i + 3)
-    y0 = wory(i)
-    y1 = wory(i + 1)
-    y2 = wory(i + 2)
-    y3 = wory(i + 3)
+    cache%x(0:3) = worx(i:i + 3)
+    cache%y(0:3) = wory(i:i + 3)
   end subroutine stfpts
 
-  !> 3rd-order (Newton) polynomial through the four points in /DATBLK/,
+  !> 3rd-order (Newton) polynomial through the four points in cache,
   !! evaluated at x.
-  real(sp) function xnterp(x)
+  real(sp) function xnterp(x, cache)
     real(sp), intent(in) :: x
+    type(interpolation_cache), intent(in) :: cache
 
-    real(sp) :: x0, x1, x2, x3, y0, y1, y2, y3
-    common /datblk/ x0, x1, x2, x3, y0, y1, y2, y3
     real(sp) :: term, fact1, fact2, temp
 
-    term = y0
-    fact1 = x - x0
-    fact2 = (y1 - y0) / (x1 - x0)
-    term = term + fact1 * fact2
-    fact1 = fact1 * (x - x1)
-    fact2 = ((y2 - y1)/(x2 - x1) - fact2) / (x2 - x0)
-    term = term + fact1 * fact2
-    fact1 = fact1 * (x - x2)
-    temp = ((y3 - y2)/(x3 - x2) - (y2 - y1)/(x2 - x1))/(x3 - x1)
-    fact2 = (temp - fact2) / (x3 - x0)
-    term = term + fact1 * fact2
+    associate (x0 => cache%x(0), x1 => cache%x(1), x2 => cache%x(2), &
+               x3 => cache%x(3), y0 => cache%y(0), y1 => cache%y(1), &
+               y2 => cache%y(2), y3 => cache%y(3))
+      term = y0
+      fact1 = x - x0
+      fact2 = (y1 - y0) / (x1 - x0)
+      term = term + fact1 * fact2
+      fact1 = fact1 * (x - x1)
+      fact2 = ((y2 - y1)/(x2 - x1) - fact2) / (x2 - x0)
+      term = term + fact1 * fact2
+      fact1 = fact1 * (x - x2)
+      temp = ((y3 - y2)/(x3 - x2) - (y2 - y1)/(x2 - x1))/(x3 - x1)
+      fact2 = (temp - fact2) / (x3 - x0)
+      term = term + fact1 * fact2
+    end associate
     xnterp = term
   end function xnterp
 
@@ -142,13 +146,14 @@ contains
     y = c + x*(b + a*x)
   end subroutine xntrp2
 
-  !> Interpolates the curve (worx, wory) at x. itil, itih are the interval
-  !! of the previous call (0 to force a new one); they are updated.
-  real(sp) function yval(x, wory, worx, length, itil, itih)
+  !> Interpolates the curve (worx, wory) at x. cache holds the interval and
+  !! points of the previous call (cache%il = cache%ih = 0 to force new ones);
+  !! for four or more points it is updated.
+  real(sp) function yval(x, wory, worx, length, cache)
     real(sp), intent(in) :: x
     integer, intent(in) :: length
     real(sp), intent(in) :: wory(length), worx(length)
-    integer, intent(inout) :: itil, itih
+    type(interpolation_cache), intent(inout) :: cache
 
     real(sp) :: y
     integer :: il, ih
@@ -159,10 +164,12 @@ contains
       return
     end if
     call binsrx(il, ih, x, worx, length)
-    if (il /= itil .or. ih /= itih) call stfpts(il, ih, worx, wory, length)
-    y = xnterp(x)
-    itih = ih
-    itil = il
+    if (il /= cache%il .or. ih /= cache%ih) then
+      call stfpts(il, ih, worx, wory, length, cache)
+    end if
+    y = xnterp(x, cache)
+    cache%ih = ih
+    cache%il = il
     yval = y
   end function yval
 
@@ -225,15 +232,16 @@ contains
     integer, intent(in) :: ipr, ib
     real(sp), intent(inout) :: x(ngp), woryt(ngp)
 
+    type(interpolation_cache) :: cache
     real(sp) :: xmin, xval
-    integer :: itil, itih, imin, lmin, lmax, nem, npts, i, ie
+    integer :: imin, lmin, lmax, nem, npts, i, ie
 
 10  format('0 IN THIS BEAM TOO FEW ENERGY VALUES FOR INTERPOLATION')
 20  format('*INTENSITIES AFTER INTERPOLATION IN BEAM', 1I4, &
            /, 100(5(1F7.2, 1E13.4, 3X), /))
 
-    itil = 0
-    itih = 0
+    cache%il = 0
+    cache%ih = 0
 
     do ie = 1, ne
       imin = ie
@@ -264,7 +272,7 @@ contains
 
     do i = 1, npts
       xval = xval + eincr
-      a(i) = yval(xval, woryt(1:nem), x(1:nem), nem, itil, itih)
+      a(i) = yval(xval, woryt(1:nem), x(1:nem), nem, cache)
       if (a(i) < 0.0_sp) then
         a(i) = 0.0_sp
       end if
@@ -439,7 +447,7 @@ end module derivatives
 !! normalisation, as they enter the R factors.
 module rfactor_terms
   use kinds, only: sp
-  use interpolation, only: yval
+  use interpolation, only: interpolation_cache, yval
   implicit none
 
   private
@@ -503,8 +511,9 @@ contains
     real(sp), intent(inout) :: y(ngp)
 
     real(sp) :: y1(ngp), y2(ngp), y3(ngp), y4(ngp), yy(10*ngp)
+    type(interpolation_cache) :: cache
     real(sp) :: aa1, aa2, ab1, ab2, de, x
-    integer :: ie, ies, itil, itih, n, nn
+    integer :: ie, ies, n, nn
 
     n = 0
     if (nf /= 4) then
@@ -537,18 +546,18 @@ contains
     nn = 10*(n - 1) + 1
     do ie = 1, nn
       x = real(ie - 1, sp)*de
-      itil = 0
-      itih = 0
-      aa1 = yval(x, y1(1:n), y(1:n), n, itil, itih)
-      itil = 0
-      itih = 0
-      aa2 = yval(x, y2(1:n), y(1:n), n, itil, itih)
-      itil = 0
-      itih = 0
-      ab1 = yval(x, y3(1:n), y(1:n), n, itil, itih)
-      itil = 0
-      itih = 0
-      ab2 = yval(x, y4(1:n), y(1:n), n, itil, itih)
+      cache%il = 0
+      cache%ih = 0
+      aa1 = yval(x, y1(1:n), y(1:n), n, cache)
+      cache%il = 0
+      cache%ih = 0
+      aa2 = yval(x, y2(1:n), y(1:n), n, cache)
+      cache%il = 0
+      cache%ih = 0
+      ab1 = yval(x, y3(1:n), y(1:n), n, cache)
+      cache%il = 0
+      cache%ih = 0
+      ab2 = yval(x, y4(1:n), y(1:n), n, cache)
       yy(ie) = abs(ab1 - c*ab2)*abs(aa1 - c*aa2)/(abs(aa1) + eps)
     end do
     call trapezoid(yy(1:nn), nn, de, s)
