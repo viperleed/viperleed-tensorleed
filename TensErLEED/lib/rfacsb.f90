@@ -1908,7 +1908,7 @@ contains
 end module experiment_input
 
 !> Reading of the theoretical beams written by the LEED program, for all
-!! geometries, and extraction of one geometry.
+!! geometries.
 module theory_input
   use kinds, only: sp
   use array_growth, only: grow
@@ -1916,7 +1916,7 @@ module theory_input
 
   private
 
-  public :: read_theory_records, select_energies, strip2, theory_records
+  public :: read_theory_records, theory_records
 
   !> The theory as read from stdin: title, number of beams nbtd, their
   !! names pq(:, j) and symmetry codes sym(j), and nrec records of one
@@ -1979,56 +1979,6 @@ contains
       stop 1
     end if
   end subroutine read_theory_records
-
-  !> Takes the energies and intensities of all geometries from the records
-  !! tr, ns records per energy: per energy e(i) and geometry its code
-  !! spac and the intensities ydata(:, :, i). Energies above emax end the
-  !! selection, those below emin are overwritten by the next. ne returns
-  !! the number of energies; e and ydata hold one more, the energy that
-  !! ended the selection (or the incomplete last one).
-  subroutine select_energies(tr, emin, emax, e, ydata, spac, ne)
-    type(theory_records), intent(in) :: tr
-    real(sp), intent(in) :: emin, emax
-    real(sp), allocatable, intent(out) :: e(:), ydata(:, :, :), spac(:)
-    integer, intent(out) :: ne
-
-    integer :: i, irec, j
-
-    allocate(e((tr%nrec + tr%ns - 1)/tr%ns), spac(tr%ns))
-    allocate(ydata(tr%ns, tr%nbtd, size(e)))
-
-    irec = 0
-    i = 1
-    energies: do
-      do j = 1, tr%ns
-        irec = irec + 1
-        if (irec > tr%nrec) exit energies
-        e(i) = tr%e(irec)
-        spac(j) = tr%spac(irec)
-        ydata(j, 1:tr%nbtd, i) = tr%y(1:tr%nbtd, irec)
-      end do
-      if (e(i) > emax) exit energies
-      if (e(i) >= emin) i = i + 1
-    end do energies
-    ne = i - 1
-  end subroutine select_energies
-
-  !> Copies the intensities ys(is, :, 1:ne) of geometry is to y and the
-  !! energies es to every beam of et.
-  subroutine strip2(ys, ns, nbd, ne, is, y, es, et, ngp)
-    integer, intent(in) :: ns, nbd, ne, is, ngp
-    real(sp), intent(in) :: ys(ns, nbd, ne), es(ne)
-    real(sp), intent(inout) :: y(nbd, ngp), et(nbd, ngp)
-
-    integer :: ib, ie
-
-    do ib = 1, nbd
-      do ie = 1, ne
-        et(ib, ie) = es(ie)
-        y(ib, ie) = ys(is, ib, ie)
-      end do
-    end do
-  end subroutine strip2
 end module theory_input
 
 !> Energy interval common to an experimental and a theoretical beam.
@@ -2491,9 +2441,10 @@ contains
   end subroutine prepare_experiment
 end module experiment_preparation
 
-!> Theory beams: domain averaging of all geometries, and the
-!! preparation of one geometry for the R factors (interpolation onto the
-!! working grid, derivatives, Y functions and integrals).
+!> Theory beams: selection of the energy range, domain averaging of all
+!! geometries, and the preparation of one geometry for the R factors
+!! (interpolation onto the working grid, derivatives, Y functions and
+!! integrals).
 module theory_preparation
   use kinds, only: sp
   use control_input, only: control_parameters
@@ -2501,14 +2452,15 @@ module theory_preparation
   use derivatives, only: der, ysmooth
   use rfactor_terms, only: varsum, ypend
   use domain_averaging, only: maxint, rintav
-  use theory_input, only: strip2, theory_records
+  use theory_input, only: theory_records
   use rfactor_output, only: write_interpolated, write_pendry_y, &
                             write_smooth_y, write_too_few_points
   implicit none
 
   private
 
-  public :: average_theory, prepare_theory, theory_beams, theory_grid_size
+  public :: average_theory, prepare_theory, select_energies, theory_beams, &
+            theory_grid_size
 
   !> Averaged theory beams of one geometry.
   type :: theory_beams
@@ -2537,6 +2489,56 @@ contains
 
     ngp = max(neti, grid_points(es(1:neti), eincr))
   end function theory_grid_size
+
+  !> Takes the energies and intensities of all geometries from the records
+  !! tr, ns records per energy: per energy e(i) and geometry its code
+  !! spac and the intensities ydata(:, :, i). Energies above emax end the
+  !! selection, those below emin are overwritten by the next. ne returns
+  !! the number of energies; e and ydata hold one more, the energy that
+  !! ended the selection (or the incomplete last one).
+  subroutine select_energies(tr, emin, emax, e, ydata, spac, ne)
+    type(theory_records), intent(in) :: tr
+    real(sp), intent(in) :: emin, emax
+    real(sp), allocatable, intent(out) :: e(:), ydata(:, :, :), spac(:)
+    integer, intent(out) :: ne
+
+    integer :: i, irec, j
+
+    allocate(e((tr%nrec + tr%ns - 1)/tr%ns), spac(tr%ns))
+    allocate(ydata(tr%ns, tr%nbtd, size(e)))
+
+    irec = 0
+    i = 1
+    energies: do
+      do j = 1, tr%ns
+        irec = irec + 1
+        if (irec > tr%nrec) exit energies
+        e(i) = tr%e(irec)
+        spac(j) = tr%spac(irec)
+        ydata(j, 1:tr%nbtd, i) = tr%y(1:tr%nbtd, irec)
+      end do
+      if (e(i) > emax) exit energies
+      if (e(i) >= emin) i = i + 1
+    end do energies
+    ne = i - 1
+  end subroutine select_energies
+
+  !> Copies the intensities ys(is, :, 1:ne) of geometry is to y and the
+  !! energies es to every beam of et.
+  subroutine strip2(ys, ns, nbd, ne, is, y, es, et, ngp)
+    integer, intent(in) :: ns, nbd, ne, is, ngp
+    real(sp), intent(in) :: ys(ns, nbd, ne), es(ne)
+    real(sp), intent(inout) :: y(nbd, ngp), et(nbd, ngp)
+
+    integer :: ib, ie
+
+    do ib = 1, nbd
+      do ie = 1, ne
+        et(ib, ie) = es(ie)
+        y(ib, ie) = ys(is, ib, ie)
+      end do
+    end do
+  end subroutine strip2
 
   !> Averages the beam groups of the nss geometries and neti energies in
   !! ats into atsav and th%pqav. suspect is the first averaged beam whose

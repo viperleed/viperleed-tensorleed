@@ -68,10 +68,10 @@ program rfactor
   use experiment_input, only: experiment_beams, read_experiment
   use experiment_preparation, only: expav, experiment_grid_size, &
                                     prepare_experiment
-  use theory_input, only: read_theory_records, select_energies, &
-                          theory_records
+  use theory_input, only: read_theory_records, theory_records
   use theory_preparation, only: average_theory, prepare_theory, &
-                                theory_beams, theory_grid_size
+                                select_energies, theory_beams, &
+                                theory_grid_size
   use rfactor_scan, only: beam_results, best_fit, scan_v0, start_scan
   use rfactor_output, only: column, script, write_averaged_experiment, &
                             write_best_fit, write_rout_header, &
