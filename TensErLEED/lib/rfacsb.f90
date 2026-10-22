@@ -709,7 +709,7 @@ module experiment_input
 
   private
 
-  public :: expav, reade, readt
+  public :: expav, gapin, reade, readt
 
 contains
 
@@ -806,6 +806,48 @@ contains
       end do
     end do
   end subroutine readt
+
+  !> Reads the gaps of the experimental spectra from unit 8: their number
+  !! ngap, then per gap the beam bm(ig) and the energy range
+  !! [eg1(ig), eg2(ig)], which is left out of smoothing, interpolation and
+  !! the R factor. Gaps must be ordered by beam, and within a beam by
+  !! energy; otherwise the program stops. gcount(ib) is incremented for
+  !! every gap of beam ib.
+  subroutine gapin(ngap, bm, eg1, eg2, gcount, nbed)
+    integer, intent(out) :: ngap
+    integer, intent(inout) :: bm(:)
+    real(sp), intent(inout) :: eg1(:), eg2(:)
+    integer, intent(in) :: nbed
+    integer, intent(inout) :: gcount(nbed)
+
+    integer :: ig
+
+10  format(I3, 2F7.2)
+20  format('*THERE ARE', I3, ' GAPS IN THE EXPERIMENTAL SPECTRA')
+30  format(' *** GAPS MUST BE IN ORDER OF EXPERIMENTAL BEAMS ***', /, &
+           ' ***               PROGRAM STOPPED               ***')
+40  format(' *** GAPS IN BEAM', I3, ' MUST BE ORDERED BY ENERGY ***', /, &
+           ' ***              PROGRAM STOPPED              ***')
+50  format(' GAP', I3, ' IN BEAM', I3, ' BETWEEN', F7.2, ' AND', F7.2, ' EV')
+
+    read(8, 10) ngap
+    write(6, 20) ngap
+
+    do ig = 1, ngap
+      read(8, 10) bm(ig), eg1(ig), eg2(ig)
+      if (ig > 1) then
+        if (bm(ig) < bm(ig - 1)) then
+          write(6, 30)
+          stop
+        else if (bm(ig) == bm(ig - 1) .and. eg1(ig) < eg1(ig - 1)) then
+          write(6, 40) bm(ig)
+          stop
+        end if
+      end if
+      write(6, 50) ig, bm(ig), eg1(ig), eg2(ig)
+      gcount(bm(ig)) = gcount(bm(ig)) + 1
+    end do
+  end subroutine gapin
 
   !> Averages the experimental beams with the same group label nbea(ib) onto
   !! a common energy grid in increasing order, leaving out points inside
@@ -1049,3 +1091,364 @@ contains
     end do
   end subroutine strip2
 end module theory_input
+
+!> Energy interval common to an experimental and a theoretical beam.
+module common_interval
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: comnei
+
+contains
+
+  !> Finds the energy interval common to experimental beam ibe (grid ee)
+  !! and theoretical beam ibt (grid et, shifted by the inner potential v0),
+  !! both on steps of eincr: it is ee(ibe, ne1:ne2) and et(ibt, nt1:nt2).
+  subroutine comnei(ee, nbed, nee, et, nbtd, ngp, net, ibe, ibt, v0, eincr, &
+                    ne1, ne2, nt1, nt2)
+    integer, intent(in) :: nbed, nbtd, ngp, ibe, ibt
+    real(sp), intent(in) :: ee(nbed, ngp), et(nbtd, ngp), v0, eincr
+    integer, intent(in) :: nee(nbed), net(nbtd)
+    integer, intent(out) :: ne1, ne2, nt1, nt2
+
+    real(sp) :: de1, de2
+    integer :: ne, nt
+
+    ne = nee(ibe)
+    nt = net(ibt)
+    de1 = et(ibt, 1) + v0 - ee(ibe, 1)
+    de2 = et(ibt, nt) + v0 - ee(ibe, ne)
+    if (de1 < 0._sp) then
+      ne1 = 1
+      nt1 = int((-de1/eincr) + 0.0001_sp) + 1
+    else
+      ne1 = int((de1/eincr) + 0.0001_sp) + 1
+      nt1 = 1
+    end if
+    if (de2 < 0._sp) then
+      ne2 = ne - int((-de2/eincr) + 0.0001_sp)
+      nt2 = nt
+    else
+      ne2 = ne
+      nt2 = nt - int((de2/eincr) + 0.0001_sp)
+    end if
+  end subroutine comnei
+end module common_interval
+
+!> Plot output: the experimental and best-fit theoretical spectra in column
+!! format, and gnuplot and LaTeX scripts that plot them.
+module plot_output
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: column, script
+
+contains
+
+  !> Writes the experimental spectra to exp.column and the best-fit
+  !! theoretical spectra to theo.column, one line per energy step with an
+  !! (energy, intensity) pair per beam. Energies outside a beam's range or
+  !! inside one of its gcount(ibe) gaps (indices nge1:nge2 resp. nget1:nget2,
+  !! numbered over all beams) are written as zero intensity. Intensities are
+  !! scaled to intmax: with norm = 1 after division by the integrals tse
+  !! resp. tst, to the largest value of both curves; with norm = 2 each
+  !! curve to its own maximum. ngap is the size of the gap arrays.
+  subroutine column(neminb, nemaxb, ntminb, ntmaxb, ee, ae, bet, bat, nbed, &
+                    nbtd, ngp, nbe, ibp, gc, nge1, nge2, ngt1, ngt2, ngap, &
+                    tse, tst, v0, intmax, norm)
+    integer, intent(in) :: nbed, nbtd, ngp, nbe, ngap, norm
+    integer, intent(in) :: neminb(nbed), nemaxb(nbed)
+    integer, intent(in) :: ntminb(nbtd), ntmaxb(nbtd)
+    real(sp), intent(in) :: ee(nbed, ngp), ae(nbed, ngp)
+    real(sp), intent(in) :: bet(nbtd, ngp), bat(nbtd, ngp)
+    integer, intent(in) :: ibp(nbed), gc(nbed)
+    integer, intent(in) :: nge1(:), nge2(:), ngt1(:), ngt2(:)
+    real(sp), intent(in) :: tse(nbed), tst(nbtd), v0, intmax
+
+    real(sp) :: aei(nbed), eei(nbed), bati(nbed), beti(nbed)
+    real(sp) :: batint(nbed, ngp), betint(nbed, ngp), tstint(nbed)
+    real(sp) :: amax(nbed), amaxt(nbed)
+    integer :: ntmini(nbed), ntmaxi(nbed)
+    integer :: igc(nbed), nge(nbed, ngap, 2), ngt(nbed, ngap, 2)
+    integer :: neemin, neemax, netmin, netmax
+    integer :: i, ibe, iee, iet, igap, igdum, igp
+    character(len=10) :: fmt
+
+10  format('(', I4, 'F8.2)')
+11  format(A10)
+
+    open(10, file='exp.column')
+    open(11, file='theo.column')
+
+    ! spectra output format for exp.column and theo.column
+    write(10, 10) 2*nbe
+    rewind(10)
+    read(10, 11) fmt
+    rewind(10)
+
+    ! lowest lower and highest upper energy indices of all beams
+    neemin = ngp
+    neemax = 1
+    netmin = ngp
+    netmax = 1
+
+    do ibe = 1, nbe
+      if (ibp(ibe) == 0) then
+        ntmini(ibe) = ngp
+        ntmaxi(ibe) = 1
+        tstint(ibe) = 1._sp
+        do igp = 1, ngp
+          betint(ibe, igp) = 0._sp
+          batint(ibe, igp) = 0._sp
+        end do
+      else
+        ntmini(ibe) = ntminb(ibp(ibe))
+        ntmaxi(ibe) = ntmaxb(ibp(ibe))
+        tstint(ibe) = tst(ibp(ibe))
+        do igp = 1, ngp
+          betint(ibe, igp) = bet(ibp(ibe), igp)
+          batint(ibe, igp) = bat(ibp(ibe), igp)
+        end do
+      end if
+    end do
+
+    do ibe = 1, nbe
+      amax(ibe) = 0._sp
+      if (neminb(ibe) < neemin) then
+        neemin = neminb(ibe)
+      end if
+      if (nemaxb(ibe) > neemax) then
+        neemax = nemaxb(ibe)
+      end if
+      amaxt(ibe) = 0._sp
+      if (ntmini(ibe) < netmin) then
+        netmin = ntmini(ibe)
+      end if
+      if (ntmaxi(ibe) > netmax) then
+        netmax = ntmaxi(ibe)
+      end if
+    end do
+
+    ! gap indices per beam
+    do ibe = 1, nbe
+      do i = 1, ngap
+        nge(ibe, i, 1) = 0
+        nge(ibe, i, 2) = 0
+        ngt(ibe, i, 1) = 0
+        ngt(ibe, i, 2) = 0
+      end do
+    end do
+
+    igap = 0
+    do ibe = 1, nbe
+      do i = 1, gc(ibe)
+        nge(ibe, i, 1) = nge1(i + igap)
+        nge(ibe, i, 2) = nge2(i + igap)
+        ngt(ibe, i, 1) = ngt1(i + igap)
+        ngt(ibe, i, 2) = ngt2(i + igap)
+      end do
+      igap = igap + gc(ibe)
+    end do
+
+    ! highest intensity amax(ibe) of each experimental beam
+    do ibe = 1, nbe
+      igc(ibe) = 0
+    end do
+
+    do iee = neemin, neemax
+      do ibe = 1, nbe
+        if (iee >= neminb(ibe) .and. iee <= nemaxb(ibe)) then
+          igdum = igc(ibe) + 1
+          if (gc(ibe) /= 0 .and. iee >= nge(ibe, igdum, 1) .and. &
+              iee <= nge(ibe, igdum, 2) .and. igc(ibe) < gc(ibe)) then
+            aei(ibe) = 0._sp
+            if (iee == nge(ibe, igdum, 2)) then
+              igc(ibe) = igdum
+            end if
+          else if (norm == 1) then
+            aei(ibe) = ae(ibe, iee)/tse(ibe)
+          else if (norm == 2) then
+            aei(ibe) = ae(ibe, iee)
+          end if
+
+          if (aei(ibe) > amax(ibe)) then
+            amax(ibe) = aei(ibe)
+          end if
+        end if
+      end do
+    end do
+
+    ! highest intensity of each theoretical beam: into amax (norm = 1) or
+    ! amaxt (norm = 2)
+    do ibe = 1, nbe
+      igc(ibe) = 0
+    end do
+
+    do iet = netmin, netmax
+      do ibe = 1, nbe
+        if (iet >= ntmini(ibe) .and. iet <= ntmaxi(ibe)) then
+          igdum = igc(ibe) + 1
+          if (gc(ibe) /= 0 .and. iet >= ngt(ibe, igdum, 1) .and. &
+              iet <= ngt(ibe, igdum, 2) .and. igc(ibe) < gc(ibe)) then
+            bati(ibe) = 0._sp
+            if (iet == ngt(ibe, igdum, 2)) then
+              igc(ibe) = igdum
+            end if
+          else if (norm == 1) then
+            bati(ibe) = batint(ibe, iet)/tstint(ibe)
+            if (bati(ibe) > amax(ibe)) then
+              amax(ibe) = bati(ibe)
+            end if
+          else if (norm == 2) then
+            bati(ibe) = batint(ibe, iet)
+            if (bati(ibe) > amaxt(ibe)) then
+              amaxt(ibe) = bati(ibe)
+            end if
+          end if
+        end if
+      end do
+    end do
+
+    ! normalised experimental beams to exp.column
+    do ibe = 1, nbe
+      igc(ibe) = 0
+    end do
+
+    do iee = neemin, neemax
+      do ibe = 1, nbe
+        igdum = igc(ibe) + 1
+        if (iee < neminb(ibe) .or. iee > nemaxb(ibe)) then
+          eei(ibe) = 0._sp
+          aei(ibe) = 0._sp
+        else if (gc(ibe) /= 0 .and. iee >= nge(ibe, igdum, 1) .and. &
+                 iee <= nge(ibe, igdum, 2) .and. igc(ibe) < gc(ibe)) then
+          eei(ibe) = 0._sp
+          aei(ibe) = 0._sp
+          if (iee == nge(ibe, igdum, 2)) then
+            igc(ibe) = igdum
+          end if
+        else
+          eei(ibe) = ee(ibe, iee)
+          if (norm == 1) then
+            aei(ibe) = ae(ibe, iee)*intmax/(tse(ibe)*amax(ibe))
+          else if (norm == 2) then
+            aei(ibe) = ae(ibe, iee)*intmax/amax(ibe)
+          end if
+        end if
+      end do
+
+      write(10, fmt) (eei(ibe), aei(ibe), ibe = 1, nbe)
+    end do
+
+    ! normalised theoretical beams to theo.column
+    do ibe = 1, nbe
+      igc(ibe) = 0
+    end do
+
+    do iet = netmin, netmax
+      do ibe = 1, nbe
+        igdum = igc(ibe) + 1
+        if (iet < ntmini(ibe) .or. iet > ntmaxi(ibe)) then
+          beti(ibe) = -v0
+          bati(ibe) = 0._sp
+        else if (gc(ibe) /= 0 .and. iet >= ngt(ibe, igdum, 1) .and. &
+                 iet <= ngt(ibe, igdum, 2) .and. igc(ibe) < gc(ibe)) then
+          beti(ibe) = -v0
+          bati(ibe) = 0._sp
+          if (iet == ngt(ibe, igdum, 2)) then
+            igc(ibe) = igdum
+          end if
+        else
+          beti(ibe) = betint(ibe, iet)
+          if (norm == 1) then
+            bati(ibe) = batint(ibe, iet)*intmax/(tstint(ibe)*amax(ibe))
+          else if (norm == 2) then
+            bati(ibe) = batint(ibe, iet)*intmax/amaxt(ibe)
+          end if
+        end if
+      end do
+
+      write(11, fmt) (beti(ibe) + v0, bati(ibe), ibe = 1, nbe)
+    end do
+  end subroutine column
+
+  !> Writes plot.gnu, a gnuplot script that plots the spectra of
+  !! exp.column and theo.column to one PDF per beam (energy range emin to
+  !! emax, labelled with the beam name and its R factor rb), and plot.tex,
+  !! a LaTeX document with one page per plot under the title and the
+  !! average R factor brav.
+  subroutine script(emin, emax, intmax, plsize, xtics, nbe, bename, rb, &
+                    nbed, title, brav, ibp)
+    integer, intent(in) :: nbe, nbed, xtics
+    real(sp), intent(in) :: emin, emax, intmax, plsize(2), rb(nbed), brav
+    character(len=4), intent(in) :: bename(5, nbed)
+    character(len=80), intent(in) :: title
+    integer, intent(in) :: ibp(nbed)
+
+    integer :: i, ibe
+
+10  format('set terminal pdfcairo enhanced font "Arial,12"', /, &
+           'set encoding iso_8859_1')
+11  format('set xrange [', I3, ':', I3, ']', /, 'set yrange [0:', I4, ']')
+12  format('set size ', F5.3, ',', F5.3, /, 'set style data lines', /, &
+           'set xtics ', I3, /, 'set noytics', /, &
+           'set xlabel "Energy [eV]"', /, 'set noxzeroaxis', /)
+15  format('set output "pic_', I3.3, '.pdf"', /, 'set nolabel')
+16  format('set label "', 5A4, '\nR =', F7.4, '" at ', I3, &
+           ',', I4, ' center font "Helvetica,12"')
+17  format('plot ''exp.column'' using ($', I3, '>0?$', I3, ':1/0) :', &
+           '($', I3, '>0?$', I3, ':1/0) title "(exp.)" ', &
+           'lt rgb "red" lw 2,\', / &
+           ' ''theo.column'' using ($', I3, '>0?$', I3, ':1/0) :', &
+           '($', I3, '>0?$', I3, ':1/0) title "(theory)" ', &
+           'lt rgb "blue" lw 2', /)
+20  format('\documentclass[12pt,a4paper]{article}', /, &
+           '\usepackage{graphicx}', /, '\usepackage{float}', /)
+21  format('\begin{document}', /, '\pagestyle{empty}', /)
+22  format('\newcommand{\bigtitle}{', /, '\begin{center}', /, '\large', &
+           /, '\textbf{', A80, '}\\', /, '$\mathbf{R_{P} =', F7.4, '}$', &
+           /, '\end{center}', /, '}', /)
+25  format('\newpage', /, '\bigtitle', /, '\begin{figure}[H]')
+26  format('\includegraphics[angle=0,width=14cm]{pic_', I3.3, &
+           '.pdf}', /, '\end{figure}', /)
+27  format('\end{document}')
+
+    open(12, file='plot.gnu')
+    open(13, file='plot.tex')
+
+    ! general settings of the plots
+    write(12, 10)
+    write(12, 11) int(emin), int(emax), int(1.5_sp*intmax)
+    write(12, 12) plsize(1), plsize(2), xtics
+
+    ! one plot per beam
+    do ibe = 1, nbe
+      if (ibp(ibe) /= 0) then
+        write(12, 15) ibe
+        write(12, 16) (bename(i, ibe), i = 1, 5), rb(ibe), &
+          int(emin + (emax - emin)/2), int(1.2_sp*intmax)
+        write(12, 17) (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe, &
+          (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe
+      end if
+    end do
+
+    ! document settings and title
+    write(13, 20)
+    write(13, 21)
+    write(13, 22) title, brav
+
+    ! one page per plot
+    do ibe = 1, nbe
+      if (ibp(ibe) /= 0) then
+        write(13, 25)
+        write(13, 26) ibe
+      end if
+    end do
+
+    write(13, 27)
+  end subroutine script
+end module plot_output

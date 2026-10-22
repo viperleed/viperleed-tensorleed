@@ -55,13 +55,10 @@ $(B)/refcalc: $(B)/ref-calc.o $(B)/lib.tleed.o
 $(B)/rfacsb.f90.o: lib/rfacsb.f90 | $(B)
 	$(FC) $(FFLAGS) $(STD_FFLAGS) -J$(B) -o $@ -c $<
 
-$(B)/rfacsb.o: lib/rfacsb.f $(B)/rfacsb.f90.o
-	$(FC) $(FFLAGS) -I$(B) -o $@ -c $<
-
 $(B)/rfactor.o: src/rfactor.f $(B)/PARAM $(B)/rfacsb.f90.o
 	$(FC) $(FFLAGS) -I$(B) -o $@ -c $<
 
-$(B)/rfactor: $(B)/rfacsb.f90.o $(B)/rfacsb.o $(B)/rfactor.o
+$(B)/rfactor: $(B)/rfacsb.f90.o $(B)/rfactor.o
 	$(FC) $(FFLAGS) -o $@ $^ $(LDLIBS)
 
 clean:
