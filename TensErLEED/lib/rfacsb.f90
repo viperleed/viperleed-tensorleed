@@ -1461,3 +1461,1319 @@ contains
     write(13, 27)
   end subroutine script
 end module plot_output
+
+!> Control parameters of an R-factor run, read from the head of WEXPEL
+!! (unit 8): namelists NL1 to NL3, the beam averaging, relation and
+!! labelling lists, and the title of the experiment.
+module control_input
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: control_parameters, nrfact, read_control
+
+  !> Number of R factors: R2, Zanazzi-Jona, Pendry and Smooth.
+  integer, parameter :: nrfact = 4
+
+  !> Input parameters of an R-factor run.
+  type :: control_parameters
+    ! NL1: theory energy range (emin, emax) and grid step (eincr), all in
+    ! eV; number of theory files (limfil); print level (ipr); imaginary
+    ! (vi) and real (v0rr) inner potential; range and step of the inner
+    ! potential shift (v01, v02, vincr); number of 3-point smoothings of
+    ! the experiment (ismoth); experiment (eot = 0) or pseudo-experiment
+    ! (eot = 1); plot output if plot = 1; gaps in the experiment if gap = 1
+    real(sp) :: emin, emax, eincr, vi, v0rr, v01, v02, vincr, plot
+    integer :: limfil, ipr, ismoth, eot, gap
+    ! NL2: geometries to skip (all 0), weights of the experimental beams
+    ! (wb) and of the R factors (wr; wrsum is their sum)
+    integer, allocatable :: nssk(:)
+    real(sp), allocatable :: wb(:)
+    real(sp) :: wr(nrfact), wrsum
+    ! NL3: plot normalisation (norm), maximum intensity (intmax), aspect
+    ! ratio (plsize) and energy tic interval (xtics)
+    integer :: norm, xtics
+    real(sp) :: intmax, plsize(2)
+    ! theory beam groups to average (kav), experimental beams to average
+    ! (nbea), theory beam group of each experimental beam (ibp), label of
+    ! each theory beam group (mittel: 1 integer, 2 fractional order) and
+    ! the number of integer (nint) and fractional (nfrac) groups
+    integer, allocatable :: kav(:), nbea(:), ibp(:), mittel(:)
+    integer :: nint, nfrac
+  end type control_parameters
+
+contains
+
+  !> Reads the control parameters from unit 8 for nbed experimental and
+  !! nbtd theory beams and ns geometries, echoes them to stdout, and
+  !! returns the number of geometries to use (nss) and the title of the
+  !! experiment. Stops on unsupported input.
+  subroutine read_control(ctl, nbed, nbtd, ns, nss, title)
+    type(control_parameters), intent(out) :: ctl
+    integer, intent(in) :: nbed, nbtd, ns
+    integer, intent(out) :: nss
+    character(len=80), intent(out) :: title
+
+    real(sp) :: emin, emax, eincr, vi, v0rr, v01, v02, vincr, plot
+    integer :: limfil, ipr, ismoth, eot, gap
+    integer :: nssk(ns)
+    real(sp) :: wb(nbed), wr(nrfact), wrsum
+    integer :: norm, xtics
+    real(sp) :: intmax, plsize(2)
+    integer :: i, j, is
+
+    namelist /nl1/ emin, emax, eincr, limfil, ipr, vi, v0rr, v01, v02, &
+                   vincr, ismoth, eot, plot, gap
+    namelist /nl2/ nssk, wb, wr
+    namelist /nl3/ norm, intmax, plsize, xtics
+
+3   format('*NBTD,NBED = ', 2I4)
+4   format(400(25I4, /))
+5   format('*AVERAGING SCHEME OF THEOR BEAMS', /, 400(25I4, /))
+6   format('*AVERAGING SCHEME OF EXP. BEAMS', /, 400(25I4, /))
+7   format('*RELATIONSHIP OF THEOR AND EXP BEAMS', /, 400(25I4, /))
+8   format('*LABELLING OF THEOR BEAM GROUPINGS', /, 400(25I4, /))
+9   format('MITTEL(,', I4, ') MUST BE EITHER 0, 1 OR 2', /, &
+           '   *****   PLEASE CORRECT   *****   ')
+22  format(A80)
+23  format('*', A80)
+
+    emin = 20.0_sp
+    emax = 220.0_sp
+    eincr = 1.0_sp
+    limfil = 1
+    ipr = 1
+    vi = 4.0_sp
+    v01 = -5.0_sp
+    v02 = 5.0_sp
+    vincr = 2.0_sp
+    v0rr = 0.0_sp
+    ismoth = 2
+    plot = 0.0_sp
+    gap = 0
+
+    wb = 1.0_sp
+    nssk = 0
+    ! default: Pendry R factor only
+    wr(1) = 0.0_sp
+    wr(2) = 0.0_sp
+    wr(3) = 1.0_sp
+    wr(4) = 0.0_sp
+
+    norm = 1
+    intmax = 999.99_sp
+    plsize(1) = 1.0_sp
+    plsize(2) = 1.0_sp
+    xtics = 50
+
+    ctl%nint = 0
+    ctl%nfrac = 0
+
+    read(8, nl1)
+    write(6, nl1)
+
+    if (limfil /= 1) then
+      write(0, *) 'rfactor: LIMFIL must be 1; reading several ', &
+                  'theory files is not supported'
+      stop 1
+    end if
+    if (v0rr /= 0.0_sp) then
+      write(0, *) 'rfactor: V0RR must be 0; a real inner-potential ', &
+                  'offset is not supported'
+      stop 1
+    end if
+
+    write(6, 3) nbtd, nbed
+
+    allocate(ctl%kav(nbtd), ctl%nbea(nbed), ctl%ibp(nbed), ctl%mittel(nbtd))
+
+    read(8, 4) (ctl%kav(j), j = 1, nbtd)
+    write(6, 5) (ctl%kav(j), j = 1, nbtd)
+
+    read(8, 4) (ctl%nbea(i), i = 1, nbed)
+    write(6, 6) (ctl%nbea(i), i = 1, nbed)
+    do i = 1, nbed
+      if (ctl%nbea(i) == 0) then
+        write(0, *) 'rfactor: NBEA = 0 (skipping an experimental ', &
+                    'beam) is not supported'
+        stop 1
+      end if
+    end do
+
+    read(8, 4) (ctl%ibp(j), j = 1, nbed)
+    write(6, 7) (ctl%ibp(j), j = 1, nbed)
+
+    read(8, 4) (ctl%mittel(j), j = 1, nbtd)
+    write(6, 8) (ctl%mittel(j), j = 1, nbtd)
+
+    do i = 1, nbtd
+      if (ctl%mittel(i) == 1) then
+        ctl%nint = ctl%nint + 1
+      else if (ctl%mittel(i) == 2) then
+        ctl%nfrac = ctl%nfrac + 1
+      else if (ctl%mittel(i) /= 0) then
+        write(6, 9) i
+        stop
+      end if
+    end do
+
+    read(8, nl2)
+    do is = 1, ns
+      if (nssk(is) /= 0) then
+        write(0, *) 'rfactor: NSSK must be 0; skipping geometries ', &
+                    'is not supported'
+        stop 1
+      end if
+    end do
+
+    ! viperleed writes only the first three weights; if they are all zero,
+    ! the smooth R factor R_S is used
+    wrsum = 0.0_sp
+    do i = 1, nrfact
+      wrsum = wrsum + wr(i)
+    end do
+    if (wrsum == 0.0_sp) then
+      wr(4) = 1.0_sp
+      wrsum = 1.0_sp
+    end if
+
+    nss = 0
+    do is = 1, ns
+      if (nssk(is) == 0) nss = nss + 1
+    end do
+
+    read(8, nl3)
+
+    read(8, 22) title
+    write(6, 23) title
+
+    ctl%emin = emin
+    ctl%emax = emax
+    ctl%eincr = eincr
+    ctl%vi = vi
+    ctl%v0rr = v0rr
+    ctl%v01 = v01
+    ctl%v02 = v02
+    ctl%vincr = vincr
+    ctl%plot = plot
+    ctl%limfil = limfil
+    ctl%ipr = ipr
+    ctl%ismoth = ismoth
+    ctl%eot = eot
+    ctl%gap = gap
+    ctl%nssk = nssk
+    ctl%wb = wb
+    ctl%wr = wr
+    ctl%wrsum = wrsum
+    ctl%norm = norm
+    ctl%xtics = xtics
+    ctl%intmax = intmax
+    ctl%plsize = plsize
+  end subroutine read_control
+end module control_input
+
+!> Experimental beams and their preparation for the R factors: averaging,
+!! smoothing, interpolation onto the working grid (steps of eincr),
+!! derivatives, Y functions and integrals over the whole curves.
+module experiment_preparation
+  use kinds, only: sp
+  use control_input, only: control_parameters
+  use interpolation, only: grid, interpolation_cache, intpol, yval
+  use derivatives, only: der, smooth, ysmooth
+  use rfactor_terms, only: varsum, ypend
+  use experiment_input, only: expav, gapin, reade, readt
+  implicit none
+
+  private
+
+  public :: experiment_beams, prepare_experiment, read_experiment
+
+  !> Experimental beams; after read_experiment the first nbe are the
+  !! averaged beams.
+  type :: experiment_beams
+    integer :: nbe
+    ! number of points (nee), names (bename), intensities (ae), energies
+    ! (ee), first and second derivatives (aep, aepp), Pendry and smooth
+    ! Y functions (ype, yse) of each beam
+    integer, allocatable :: nee(:)
+    character(len=4), allocatable :: bename(:, :)
+    real(sp), allocatable :: ae(:, :), ee(:, :), aep(:, :), aepp(:, :)
+    real(sp), allocatable :: ype(:, :), yse(:, :)
+    ! integrals over the intensity, the squared intensity and the squared
+    ! Pendry and smooth Y functions of each beam
+    real(sp), allocatable :: tse(:), tse2(:), tseyp2(:), tseys2(:)
+    ! gaps: total number (ngap), number per beam (gcount), beam of each
+    ! gap (gbm), its energy range (eg1, eg2) and grid indices (ng1, ng2)
+    integer :: ngap
+    integer, allocatable :: gcount(:), gbm(:), ng1(:), ng2(:)
+    real(sp), allocatable :: eg1(:), eg2(:)
+  end type experiment_beams
+
+contains
+
+  !> Reads the experiment (eot = 0) or pseudo-experiment from unit 8 into
+  !! ex, sized for nbed beams of ngp points and ngap gaps, reads the gaps
+  !! if ctl%gap = 1 and averages the beams as given by ctl%nbea. Stops if
+  !! an averaged beam has no theory beam.
+  subroutine read_experiment(ex, ctl, nbed, ngp, ngap)
+    type(experiment_beams), intent(out) :: ex
+    type(control_parameters), intent(inout) :: ctl
+    integer, intent(in) :: nbed, ngp, ngap
+
+    real(sp) :: work(ngp)
+    integer :: iwork(ngp)
+    integer :: ib
+
+    allocate(ex%nee(nbed), ex%bename(5, nbed), ex%gcount(nbed))
+    allocate(ex%ae(nbed, ngp), ex%ee(nbed, ngp), ex%aep(nbed, ngp), &
+             ex%aepp(nbed, ngp), ex%ype(nbed, ngp), ex%yse(nbed, ngp))
+    allocate(ex%tse(nbed), ex%tse2(nbed), ex%tseyp2(nbed), ex%tseys2(nbed))
+    allocate(ex%gbm(ngap), ex%ng1(ngap), ex%ng2(ngap), ex%eg1(ngap), &
+             ex%eg2(ngap))
+    ex%bename = repeat(char(0), 4)
+
+    if (ctl%eot <= 0) then
+      call reade(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename, ctl%ipr)
+    else
+      call readt(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename)
+    end if
+
+    ex%gcount = 0
+    if (ctl%gap == 1) then
+      call gapin(ex%ngap, ex%gbm, ex%eg1, ex%eg2, ex%gcount, nbed)
+    end if
+
+    call expav(ex%ae, ex%ee, nbed, ngp, ex%nee, ex%bename, ctl%nbea, ex%nbe, &
+               ctl%ipr, work, iwork, ex%gcount, ex%ngap, ex%eg1, ex%eg2, &
+               ex%ng1, ex%ng2)
+    do ib = 1, ex%nbe
+      if (ctl%ibp(ib) == 0) then
+        write(0, *) 'rfactor: IBP = 0 (skipping a theoretical beam) ', &
+                    'is not supported'
+        stop 1
+      end if
+    end do
+  end subroutine read_experiment
+
+  !> Smooths the averaged experimental beams, interpolates them onto the
+  !! working grid, and computes their derivatives, Y functions and
+  !! integrals. Beams with gaps are smoothed and interpolated section by
+  !! section; intensity and derivatives are zero inside a gap. grid_size
+  !! is passed to grid as the declared size of its arrays; the caller
+  !! never sets it (known issue, see tests/README.md).
+  subroutine prepare_experiment(ex, ctl, grid_size)
+    type(experiment_beams), intent(inout) :: ex
+    type(control_parameters), intent(in) :: ctl
+    integer, intent(in) :: grid_size
+
+    real(sp), dimension(size(ex%ae, 2)) :: a, e, ap, app, xpl, ypl, worx
+    type(interpolation_cache) :: ycache
+    real(sp) :: xval
+    integer :: nbed, ngp, ib, ie, ie2, ne, ne1, igap, igc, nz, newnz, npts, &
+               imin, nlen, ilen, ipts
+
+    nbed = size(ex%ae, 1)
+    ngp = size(ex%ae, 2)
+
+    igap = 0
+    do ib = 1, ex%nbe
+      if (ex%gcount(ib) == 0) then
+        ne = ex%nee(ib)
+        do ie = 1, ne
+          a(ie) = ex%ae(ib, ie)
+          e(ie) = ex%ee(ib, ie)
+        end do
+
+        if (ctl%ismoth > 0) then
+          call smooth(ctl%ismoth, a(1:ne), e(1:ne), ne, ctl%ipr, ib)
+        end if
+
+        call intpol(a, ne, e, ngp, ctl%eincr, ctl%ipr, xpl, ypl, ib)
+
+        if (ne > 0) then
+          call der(a(1:ne), ne, ap(1:ne), ctl%eincr)
+          call der(ap(1:ne), ne, app(1:ne), ctl%eincr)
+        end if
+
+        ex%nee(ib) = ne
+        do ie = 1, ne
+          ex%ae(ib, ie) = a(ie)
+          ex%ee(ib, ie) = e(ie)
+          ex%aep(ib, ie) = ap(ie)
+          ex%aepp(ib, ie) = app(ie)
+        end do
+
+      else
+        if (ctl%ismoth > 0) then
+          ! smooth the sections between the gaps
+          nz = 0
+          do igc = igap + 1, igap + ex%gcount(ib)
+            ne = ex%ng1(igc) - (nz + 1)
+            do ie = 1, ne
+              a(ie) = ex%ae(ib, ie + nz)
+              e(ie) = ex%ee(ib, ie + nz)
+            end do
+            call smooth(ctl%ismoth, a(1:ne), e(1:ne), ne, ctl%ipr, ib)
+            do ie = 1, ne
+              ex%ae(ib, ie + nz) = a(ie)
+              ex%ee(ib, ie + nz) = e(ie)
+            end do
+            nz = ex%ng2(igc)
+          end do
+          ne = ex%nee(ib) - (nz + 1)
+          do ie = 1, ne
+            a(ie) = ex%ae(ib, ie + nz)
+            e(ie) = ex%ee(ib, ie + nz)
+          end do
+          call smooth(ctl%ismoth, a(1:ne), e(1:ne), ne, ctl%ipr, ib)
+          do ie = 1, ne
+            ex%ae(ib, ie + nz) = a(ie)
+            ex%ee(ib, ie + nz) = e(ie)
+          end do
+        end if
+
+        ! energy working grid
+        ne = ex%nee(ib)
+        do ie = 1, ne
+          a(ie) = ex%ae(ib, ie)
+          e(ie) = ex%ee(ib, ie)
+        end do
+        call grid(a, ne, e, grid_size, ctl%eincr, worx, npts, imin)
+        ex%nee(ib) = ne
+
+        ! interpolate the sections between the gaps onto the working grid;
+        ! all sections of the beam share one interpolation cache
+        nz = 0
+        newnz = 0
+        ycache%il = 0
+        ycache%ih = 0
+        do igc = igap + 1, igap + ex%gcount(ib)
+          if (ex%ng1(igc) > imin) then
+            ne1 = ex%ng1(igc) - imin - nz
+            do ie = 1, ne1
+              xpl(ie) = ex%ee(ib, ie + nz)
+              ypl(ie) = ex%ae(ib, ie + nz)
+            end do
+            nz = ex%ng2(igc)
+
+            ex%ng1(igc) = 0
+            ex%ng2(igc) = npts
+            do ipts = 1, npts
+              if (worx(ipts) <= ex%eg1(igc)) then
+                ex%ng1(igc) = ipts
+              end if
+              if (worx(npts - ipts + 1) >= ex%eg2(igc)) then
+                ex%ng2(igc) = npts - ipts + 1
+              end if
+            end do
+            ex%eg1(igc) = worx(ex%ng1(igc))
+            ex%eg2(igc) = worx(ex%ng2(igc))
+
+            nlen = ex%ng1(igc) - newnz - 1
+            do ilen = 1, nlen
+              xval = worx(ilen + newnz)
+              a(ilen) = yval(xval, ypl(1:ne1), xpl(1:ne1), ne1, ycache)
+            end do
+
+            if (nlen > 0) then
+              call der(a(1:nlen), nlen, ap(1:nlen), ctl%eincr)
+              call der(ap(1:nlen), nlen, app(1:nlen), ctl%eincr)
+            end if
+
+            do ilen = 1, nlen
+              ex%ae(ib, ilen + newnz) = a(ilen)
+              ex%aep(ib, ilen + newnz) = ap(ilen)
+              ex%aepp(ib, ilen + newnz) = app(ilen)
+            end do
+
+            ! intensity and derivatives are zero inside the gap
+            do ipts = ex%ng1(igc), ex%ng2(igc)
+              ex%ae(ib, ipts) = 0.0_sp
+              ex%aep(ib, ipts) = 0.0_sp
+              ex%aepp(ib, ipts) = 0.0_sp
+            end do
+            newnz = ex%ng2(igc)
+
+          else if (imin >= ex%ng2(igc)) then
+            ! no nonzero intensity before the end of the gap
+            ex%ng1(igc) = 0
+            ex%ng2(igc) = 0
+            ex%eg1(igc) = 0.0_sp
+            ex%eg2(igc) = 0.0_sp
+          end if
+        end do
+
+        ! section after the last gap
+        ne1 = ne - imin - nz
+        do ie = 1, ne1
+          xpl(ie) = ex%ee(ib, ie + nz)
+          ypl(ie) = ex%ae(ib, ie + nz)
+        end do
+
+        nlen = npts - newnz
+        do ilen = 1, nlen
+          xval = worx(ilen + newnz)
+          a(ilen) = yval(xval, ypl(1:ne1), xpl(1:ne1), ne1, ycache)
+        end do
+
+        if (nlen > 0) then
+          call der(a(1:nlen), nlen, ap(1:nlen), ctl%eincr)
+          call der(ap(1:nlen), nlen, app(1:nlen), ctl%eincr)
+        end if
+
+        do ilen = 1, nlen
+          ex%ae(ib, ilen + newnz) = a(ilen)
+          ex%aep(ib, ilen + newnz) = ap(ilen)
+          ex%aepp(ib, ilen + newnz) = app(ilen)
+        end do
+        ex%nee(ib) = npts
+      end if
+      igap = igap + ex%gcount(ib)
+    end do
+
+    call ypend(ex%ae, ex%aep, nbed, ngp, ex%nbe, ex%nee, ex%ee, ex%ype, &
+               ctl%vi, ctl%ipr)
+    call ysmooth(ex%ae, ex%aep, nbed, ngp, ex%nbe, ex%nee, ex%ee, ex%yse, &
+                 ctl%vi, ctl%eincr, ctl%ipr)
+
+    ! integrals over the whole curves: intensity, squared intensity (R2
+    ! only) and squared Y functions (R_P and R_S only)
+    do ib = 1, ex%nbe
+      ie2 = ex%nee(ib)
+      if (ie2 > 0) then
+        ex%tse(ib) = 0.0_sp
+        ex%tse2(ib) = 0.0_sp
+        ex%tseyp2(ib) = 0.0_sp
+        ex%tseys2(ib) = 0.0_sp
+
+        call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ib, 1, 1, &
+                    ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, ex%tse(ib), ypl)
+
+        if (ctl%wr(1) > 1.e-6_sp) then
+          call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ib, 1, 1, &
+                      ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ex%tse2(ib), ypl)
+        end if
+
+        if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+          call varsum(ex%ype, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ib, 1, &
+                      1, ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ex%tseyp2(ib), &
+                      ypl)
+          call varsum(ex%yse, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ib, 1, &
+                      1, ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ex%tseys2(ib), &
+                      ypl)
+        end if
+      end if
+    end do
+  end subroutine prepare_experiment
+end module experiment_preparation
+
+!> Theory beams: reading and domain averaging of all geometries, and the
+!! preparation of one geometry for the R factors (interpolation onto the
+!! working grid, derivatives, Y functions and integrals).
+module theory_preparation
+  use kinds, only: sp
+  use control_input, only: control_parameters
+  use interpolation, only: intpol
+  use derivatives, only: der, ysmooth
+  use rfactor_terms, only: varsum, ypend
+  use domain_averaging, only: maxint, rintav
+  use theory_input, only: rdpl, strip2
+  implicit none
+
+  private
+
+  public :: prepare_theory, read_theory, theory_beams
+
+  !> Averaged theory beams of one geometry.
+  type :: theory_beams
+    ! number of averaged beams (nbt) and their parallel momenta (pqav)
+    integer :: nbt
+    real(sp), allocatable :: pqav(:, :)
+    ! number of points (net), intensities (at), energies (et), first and
+    ! second derivatives (atp, atpp), Pendry and smooth Y functions (ypt,
+    ! yst) of each beam
+    integer, allocatable :: net(:)
+    real(sp), allocatable :: at(:, :), et(:, :), atp(:, :), atpp(:, :)
+    real(sp), allocatable :: ypt(:, :), yst(:, :)
+    ! integrals over the intensity and the squared Pendry and smooth Y
+    ! functions of each beam
+    real(sp), allocatable :: tst(:), tstyp2(:), tstys2(:)
+  end type theory_beams
+
+contains
+
+  !> Reads the theory title, beam count nbtd and the intensities of nss
+  !! geometries from stdin into (es, ats; neti points, geometry codes
+  !! values, momenta pq, symmetry codes sym), averages the beam groups
+  !! into atsav and th%pqav, and stops if an averaged intensity exceeds 1.
+  !! th is sized like ats for the averaged beams of one geometry.
+  subroutine read_theory(ctl, th, nss, nbtd, neti, es, ats, atsav, values, &
+                         pq, sym, title)
+    type(control_parameters), intent(in) :: ctl
+    type(theory_beams), intent(out) :: th
+    integer, intent(in) :: nss
+    integer, intent(out) :: nbtd, neti
+    real(sp), contiguous, intent(inout) :: es(:), ats(:, :, :), atsav(:, :, :)
+    real(sp), contiguous, intent(inout) :: values(:)
+    real(sp), contiguous, intent(out) :: pq(:, :)
+    integer, contiguous, intent(out) :: sym(:)
+    character(len=80), intent(out) :: title
+
+    real(sp) :: am
+    integer :: mnbtd, ngp, ib
+
+22  format(A80)
+23  format('*', A80)
+26  format(I5)
+28  format(' ', //, ' MAX INTENSITY IN THEOR BEAM ', 1I3, ' IS SUSPECT(', &
+           1E13.5, ')- **** STOP PROGRAM ****')
+29  format(1X, /, 6X, 'BEAM', 12X, 'IBE', 3X, 'D12', 5X, 'V0R', 4X, 'EMIN', &
+           4X, 'EMAX', 5X, 'OVL', 5X, 'RAV')
+
+    mnbtd = size(ats, 2)
+    ngp = size(es)
+    allocate(th%pqav(2, mnbtd), th%net(mnbtd), th%tst(mnbtd), &
+             th%tstyp2(mnbtd), th%tstys2(mnbtd))
+    allocate(th%at(mnbtd, ngp), th%et(mnbtd, ngp), th%atp(mnbtd, ngp), &
+             th%atpp(mnbtd, ngp), th%ypt(mnbtd, ngp), th%yst(mnbtd, ngp))
+
+    read(5, 22) title
+    write(7, 22) title
+    write(6, 23) title
+
+    read(5, 26) nbtd
+
+    call rdpl(es, ngp, ats, nss, nbtd, size(ats, 3), neti, values, pq, &
+              ctl%kav, sym, ctl%emin, ctl%emax, ctl%limfil, ctl%nssk, &
+              size(ctl%nssk), mnbtd)
+
+    call rintav(ats, nss, nbtd, neti, pq, th%pqav, ctl%kav, sym, th%nbt, &
+                atsav)
+
+    do ib = 1, th%nbt
+      call maxint(atsav, nss, nbtd, ib, neti, am)
+      if (am > 1.0_sp) then
+        write(6, 28) ib, am
+        stop
+      end if
+    end do
+
+    write(7, 29)
+  end subroutine read_theory
+
+  !> Prepares geometry is of the averaged theory atsav (nss geometries,
+  !! nbtd beams, neti points on the energies es): interpolation onto the
+  !! working grid, derivatives, Y functions and integrals over the whole
+  !! curves.
+  subroutine prepare_theory(th, ctl, atsav, nss, nbtd, neti, is, es)
+    type(theory_beams), intent(inout) :: th
+    type(control_parameters), intent(in) :: ctl
+    real(sp), contiguous, intent(in) :: atsav(:, :, :), es(:)
+    integer, intent(in) :: nss, nbtd, neti, is
+
+    real(sp), dimension(size(th%at, 2)) :: a, e, ap, app, xpl, ypl
+    integer :: ngp, ib, ie, ie2, ne
+
+    ngp = size(th%at, 2)
+
+    call strip2(atsav, nss, nbtd, neti, is, th%at, es, th%et, ngp)
+
+    do ib = 1, th%nbt
+      do ie = 1, neti
+        a(ie) = th%at(ib, ie)
+        e(ie) = th%et(ib, ie)
+      end do
+
+      ne = neti
+      call intpol(a, ne, e, ngp, ctl%eincr, ctl%ipr, xpl, ypl, ib)
+
+      if (ne > 0) then
+        call der(a(1:ne), ne, ap(1:ne), ctl%eincr)
+        call der(ap(1:ne), ne, app(1:ne), ctl%eincr)
+      end if
+
+      th%net(ib) = ne
+      do ie = 1, ne
+        th%at(ib, ie) = a(ie)
+        th%et(ib, ie) = e(ie)
+        th%atp(ib, ie) = ap(ie)
+        th%atpp(ib, ie) = app(ie)
+      end do
+    end do
+
+    call ypend(th%at, th%atp, nbtd, ngp, th%nbt, th%net, th%et, th%ypt, &
+               ctl%vi, ctl%ipr)
+    call ysmooth(th%at, th%atp, nbtd, ngp, th%nbt, th%net, th%et, th%yst, &
+                 ctl%vi, ctl%eincr, ctl%ipr)
+
+    ! integrals over the whole curves: intensity and squared Y functions
+    do ib = 1, th%nbt
+      ie2 = th%net(ib)
+      if (ie2 > 0) then
+        call varsum(th%at, th%at, th%at, th%at, nbtd, nbtd, ngp, ib, 1, 1, &
+                    ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, th%tst(ib), ypl)
+        call varsum(th%ypt, th%at, th%at, th%at, nbtd, nbtd, ngp, ib, 1, 1, &
+                    ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, th%tstyp2(ib), ypl)
+        call varsum(th%yst, th%at, th%at, th%at, nbtd, nbtd, ngp, ib, 1, 1, &
+                    ie2, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, th%tstys2(ib), ypl)
+      end if
+    end do
+  end subroutine prepare_theory
+end module theory_preparation
+
+!> Scan of the inner potential shift for one geometry: R factors per beam,
+!! their averages over all, integer and fractional order beams, and the
+!! best fit over all geometries and shifts.
+module rfactor_scan
+  use kinds, only: sp
+  use control_input, only: control_parameters, nrfact
+  use experiment_preparation, only: experiment_beams
+  use theory_preparation, only: theory_beams
+  use common_interval, only: comnei
+  use rfactor_terms, only: epszj, varsum
+  use plot_output, only: column, script
+  implicit none
+
+  private
+
+  public :: beam_results, best_fit, report_best_fit, scan_v0, start_scan
+
+  !> Per-beam results of the latest inner potential shift: grid indices of
+  !! the common energy interval in experiment (nemin, nemax) and theory
+  !! (ntmin, ntmax), theory grid indices of the gaps (ngt1, ngt2),
+  !! integrals over experiment (sest) and theory (stst) in the common
+  !! interval, and the weighted average R factor of each beam (ravb).
+  type :: beam_results
+    integer, allocatable :: nemin(:), nemax(:), ntmin(:), ntmax(:)
+    integer, allocatable :: ngt1(:), ngt2(:)
+    real(sp), allocatable :: sest(:), stst(:), ravb(:)
+  end type beam_results
+
+  !> Best fit: average R factor (brav), geometry (nsb), inner potential
+  !! shift (bv0), ratio of fractional to integer order intensities in
+  !! experiment and theory (bcife, bcift), and copies of the beam_results,
+  !! experimental gap indices and theory curves (bet, bat) of that fit.
+  type :: best_fit
+    real(sp) :: brav, bv0, bcife, bcift
+    integer :: nsb
+    integer, allocatable :: neminb(:), nemaxb(:), ntminb(:), ntmaxb(:)
+    integer, allocatable :: ng1b(:), ng2b(:), ngt1b(:), ngt2b(:)
+    real(sp), allocatable :: tseb(:), tstb(:), bravb(:)
+    real(sp), allocatable :: bet(:, :), bat(:, :)
+  end type best_fit
+
+  !> Sums over the beams for one inner potential shift. Index 1:nrfact of
+  !! ar is R2, R_ZJ, R_P, R_S averaged over all beams, ar(:, kmit) the same
+  !! over the integer (kmit = 1) or fractional (kmit = 2) order beams;
+  !! razp/ranp and razs/rans are numerator and denominator of R_P and R_S
+  !! (m: per kmit); erang is the total common energy range; sem and stm
+  !! the experimental and theory integrals per kmit; rav and ravm the
+  !! weighted averages; cife and cift the fractional to integer order
+  !! intensity ratios of experiment and theory.
+  type :: rfactor_sums
+    real(sp) :: ar(nrfact) = 0.0_sp, arm(nrfact, 2) = 0.0_sp
+    real(sp) :: razp = 0.0_sp, ranp = 0.0_sp, razs = 0.0_sp, rans = 0.0_sp
+    real(sp) :: razmp(2) = 0.0_sp, ranmp(2) = 0.0_sp
+    real(sp) :: razms(2) = 0.0_sp, ranms(2) = 0.0_sp
+    real(sp) :: erang = 0.0_sp, erangm(2) = 0.0_sp
+    real(sp) :: sem(2) = 0.0_sp, stm(2) = 0.0_sp
+    real(sp) :: rav = 0.0_sp, ravm(2) = 0.0_sp
+    real(sp) :: cife = 0.0_sp, cift = 0.0_sp
+  end type rfactor_sums
+
+contains
+
+  !> Sizes the per-beam results and the best fit for nbed experimental
+  !! and nbtd theory beams, ngp grid points and ngap gaps.
+  subroutine start_scan(res, best, nbed, nbtd, ngp, ngap)
+    type(beam_results), intent(out) :: res
+    type(best_fit), intent(out) :: best
+    integer, intent(in) :: nbed, nbtd, ngp, ngap
+
+    allocate(res%nemin(nbed), res%nemax(nbed), res%sest(nbed), res%ravb(nbed))
+    allocate(res%ntmin(nbtd), res%ntmax(nbtd), res%stst(nbtd))
+    allocate(res%ngt1(ngap), res%ngt2(ngap))
+
+    allocate(best%neminb(nbed), best%nemaxb(nbed), best%tseb(nbed), &
+             best%bravb(nbed))
+    allocate(best%ntminb(nbtd), best%ntmaxb(nbtd), best%tstb(nbtd))
+    allocate(best%bet(nbtd, ngp), best%bat(nbtd, ngp))
+    allocate(best%ng1b(ngap), best%ng2b(ngap), best%ngt1b(ngap), &
+             best%ngt2b(ngap))
+    best%brav = 1.e2_sp
+  end subroutine start_scan
+
+  !> Scans the inner potential shift v0 = v01, v01 + vincr, ... up to v02
+  !! for geometry is (code d12) of the prepared theory th (nbtd beams as
+  !! read) against the experiment ex, and updates best. Writes the beam
+  !! R factors and averages to stdout and ROUT (unit 7), and the best
+  !! average R factor of the geometry to ROUTSHORT (unit 9).
+  subroutine scan_v0(ctl, ex, th, nbtd, is, d12, res, best)
+    type(control_parameters), intent(in) :: ctl
+    type(experiment_beams), intent(in) :: ex
+    type(theory_beams), intent(in) :: th
+    integer, intent(in) :: nbtd, is
+    real(sp), intent(in) :: d12
+    type(beam_results), intent(inout) :: res
+    type(best_fit), intent(inout) :: best
+
+    type(rfactor_sums) :: sums
+    real(sp) :: v0, v0r, bgrav
+    integer :: nv0, iv, ibe, igap
+
+60  format('*THEOR. INNER POTENTIAL SHIFTED BY', 1F7.2, ' EV')
+129 format(' ')
+130 format(F8.4)
+
+    bgrav = 1.e2_sp
+    nv0 = int((ctl%v02 - ctl%v01)/ctl%vincr + 0.0001_sp) + 1
+    v0 = ctl%v01
+
+    do iv = 1, nv0
+      write(6, 60) v0
+      v0r = -ctl%v0rr + v0
+
+      sums = rfactor_sums()
+      igap = 0
+      do ibe = 1, ex%nbe
+        call beam_rfactor(ctl, ex, th, nbtd, ibe, v0, v0r, d12, igap, res, &
+                          sums)
+      end do
+
+      call average_over_beams(ctl, v0, v0r, d12, sums)
+
+      if (sums%rav < bgrav) then
+        bgrav = sums%rav
+      end if
+      if (sums%rav < best%brav) then
+        call keep_best(ctl, ex, th, res, sums, is, v0, best)
+      end if
+
+      v0 = v0 + ctl%vincr
+    end do
+
+    write(7, 129)
+    write(9, 130) bgrav
+  end subroutine scan_v0
+
+  !> R factors of experimental beam ibe and its theory beam at inner
+  !! potential shift v0, added to sums. Integrals run over the energy
+  !! interval common to both, without the gaps; igap counts the gaps of
+  !! the previous beams and is not advanced for a beam without overlap.
+  subroutine beam_rfactor(ctl, ex, th, nbtd, ibe, v0, v0r, d12, igap, res, &
+                          sums)
+    type(control_parameters), intent(in) :: ctl
+    type(experiment_beams), intent(in) :: ex
+    type(theory_beams), intent(in) :: th
+    integer, intent(in) :: nbtd, ibe
+    real(sp), intent(in) :: v0, v0r, d12
+    integer, intent(inout) :: igap
+    type(beam_results), intent(inout) :: res
+    type(rfactor_sums), intent(inout) :: sums
+
+    ! eet: length of the common interval; epse: maximum of the derivative
+    ! of the experiment; ss*, su*, sg*: integrals below, above and in the
+    ! gaps of the common interval; se*, st*: integrals of experiment and
+    ! theory over it (2: squared intensity, yp2/ys2: squared Pendry/smooth
+    ! Y function); c: normalisation experiment/theory; s2, srzj, syp2,
+    ! sys2: integrands of R2, R_ZJ, R_P, R_S (sg2, sgzj: in the gaps)
+    real(sp) :: eet, epse, c
+    real(sp) :: ss, su, ss2, su2, ssyp2, suyp2, ssys2, suys2, sg, sgyp2, sgys2
+    real(sp) :: se, st, se2, seyp2, styp2, seys2, stys2
+    real(sp) :: s2, sg2, srzj, sgzj, syp2, sys2
+    real(sp) :: r2, rrzj, rpe, rsm
+    real(sp) :: ypl(size(ex%ae, 2))
+    integer :: nbed, ngp, ibt, kmit, ne1, ne2, nt1, nt2, neet, ne, nt, igc, i
+
+70  format('*BEAM NO.', 1I3, ' IN EXP. (', 5A4, '), WHICH IS BEAM NO.', 1I3, &
+           ' IN THEORY (', 2F6.3, ')')
+75  format('  **** NO OVERLAP THEOR./EXP. IN (EXP.) BEAM NO.', 1I5)
+80  format(5A4, I5, 1F8.4, 3F8.2, 1F10.2, 1F8.4)
+112 format(' NORMALIZATION C EXP/THEOR =', 1E13.5)
+115 format(a)
+120 format(' ', 1F7.2, 1F10.4, 5F7.4)
+
+    nbed = size(ex%ae, 1)
+    ngp = size(ex%ae, 2)
+
+    r2 = 0.0_sp
+    rrzj = 0.0_sp
+    rpe = 0.0_sp
+    rsm = 0.0_sp
+    res%ravb(ibe) = 0.0_sp
+    res%nemin(ibe) = 1
+    res%nemax(ibe) = ngp
+    res%sest(ibe) = 1.0_sp
+
+    ibt = ctl%ibp(ibe)
+
+    write(6, 70) ibe, (ex%bename(i, ibe), i = 1, 5), ibt, &
+      (th%pqav(i, ibt), i = 1, 2)
+
+    kmit = ctl%mittel(ibt)
+
+    ! energy interval of length eet common to experiment and theory,
+    ! bounded by the grid points (ne1, ne2) and (nt1, nt2)
+    call comnei(ex%ee, nbed, ex%nee, th%et, nbtd, ngp, th%net, ibe, ibt, v0, &
+                ctl%eincr, ne1, ne2, nt1, nt2)
+
+    if (ne2 > ne1) then
+      neet = nt1 - ne1
+      eet = ex%ee(ibe, ne2) - ex%ee(ibe, ne1)
+
+      ! theory grid points of the gaps; eet is reduced by the gaps inside
+      ! the common interval
+      if (ex%gcount(ibe) /= 0) then
+        do igc = igap + 1, igap + ex%gcount(ibe)
+          if (ex%ng1(igc) <= ne1) then
+            if (ex%ng2(igc) < ne2) then
+              res%ngt1(igc) = 0
+              res%ngt2(igc) = 0
+              ne1 = max(ne1, ex%ng1(igc))
+              nt1 = ne1 + neet
+              eet = ex%ee(ibe, ne2) - ex%ee(ibe, ne1)
+            else
+              eet = 0.0_sp
+            end if
+          else if (ex%ng1(igc) <= ne2) then
+            if (ex%ng2(igc) <= ne2) then
+              res%ngt1(igc) = ex%ng1(igc) + neet
+              res%ngt2(igc) = ex%ng2(igc) + neet
+              eet = eet - (ex%ng2(igc) - ex%ng1(igc)) * ctl%eincr
+            else
+              res%ngt1(igc) = 0
+              res%ngt2(igc) = 0
+              ne2 = min(ne2, ex%ng2(igc))
+              nt2 = ne2 + neet
+              eet = ex%ee(ibe, ne2) - ex%ee(ibe, ne1)
+            end if
+          else
+            res%ngt1(igc) = 0
+            res%ngt2(igc) = 0
+          end if
+        end do
+      end if
+    else
+      eet = 0.0_sp
+    end if
+
+    res%ntmin(ibt) = nt1
+    res%ntmax(ibt) = nt2
+    res%nemin(ibe) = ne1
+    res%nemax(ibe) = ne2
+
+    if (eet == 0.0_sp) then
+      write(6, 75) ibe
+      write(7, 80) (ex%bename(i, ibe), i = 1, 5), ibe, d12, v0r, ctl%emin, &
+        ctl%emax, 0.0_sp, 0.0_sp
+      return
+    end if
+
+    ! maximum |derivative| of the experiment, for R_ZJ
+    call epszj(ex%aep, nbed, ngp, ibe, ne1, ne2, epse)
+
+    ! integrals of the experiment over the common interval: whole curve
+    ! minus the parts below and above
+    ne = ex%nee(ibe)
+    nt = th%net(ibt)
+
+    ss = 0.0_sp
+    ss2 = 0.0_sp
+    ssyp2 = 0.0_sp
+    ssys2 = 0.0_sp
+    su = 0.0_sp
+    su2 = 0.0_sp
+    suyp2 = 0.0_sp
+    suys2 = 0.0_sp
+
+    if (ne1 > 1) then
+      call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, 1, &
+                  ne1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, ss, ypl)
+      if (ctl%wr(1) > 1.e-6_sp) then
+        call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, 1, &
+                    ne1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ss2, ypl)
+      end if
+      if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+        call varsum(ex%ype, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, 1, &
+                    ne1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ssyp2, ypl)
+        call varsum(ex%yse, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, 1, &
+                    ne1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ssys2, ypl)
+      end if
+    end if
+
+    if (ne2 < ne) then
+      call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, ne2, &
+                  ne, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, su, ypl)
+      if (ctl%wr(1) > 1.e-6_sp) then
+        call varsum(ex%ae, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, ne2, &
+                    ne, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, su2, ypl)
+      end if
+      if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+        call varsum(ex%ype, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, &
+                    ne2, ne, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, suyp2, ypl)
+        call varsum(ex%yse, ex%ae, ex%ae, ex%ae, nbed, nbed, ngp, ibe, 1, &
+                    ne2, ne, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, suys2, ypl)
+      end if
+    end if
+
+    se = ex%tse(ibe) - ss - su
+    se2 = ex%tse2(ibe) - ss2 - su2
+    seyp2 = ex%tseyp2(ibe) - ssyp2 - suyp2
+    seys2 = ex%tseys2(ibe) - ssys2 - suys2
+    res%sest(ibe) = se
+
+    ! integrals of the theory over the common interval: whole curve minus
+    ! the parts below, above and in the gaps
+    ss = 0.0_sp
+    ssyp2 = 0.0_sp
+    ssys2 = 0.0_sp
+    sg = 0.0_sp
+    sgyp2 = 0.0_sp
+    sgys2 = 0.0_sp
+    su = 0.0_sp
+    suyp2 = 0.0_sp
+    suys2 = 0.0_sp
+
+    if (nt1 /= 1) then
+      call varsum(th%at, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, 1, &
+                  nt1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, ss, ypl)
+      if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+        call varsum(th%ypt, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, 1, &
+                    nt1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ssyp2, ypl)
+        call varsum(th%yst, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, 1, &
+                    nt1, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, ssys2, ypl)
+      end if
+    end if
+
+    if (ex%gcount(ibe) /= 0) then
+      do igc = igap + 1, igap + ex%gcount(ibe)
+        call varsum(th%at, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, &
+                    res%ngt1(igc), res%ngt2(igc), 0, ctl%eincr, 0.0_sp, &
+                    0.0_sp, 1, sg, ypl)
+        if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+          call varsum(th%ypt, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, &
+                      res%ngt1(igc), res%ngt2(igc), 0, ctl%eincr, 0.0_sp, &
+                      0.0_sp, 2, sgyp2, ypl)
+          call varsum(th%yst, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, &
+                      res%ngt1(igc), res%ngt2(igc), 0, ctl%eincr, 0.0_sp, &
+                      0.0_sp, 2, sgys2, ypl)
+        end if
+      end do
+    end if
+
+    if (nt2 /= nt) then
+      call varsum(th%at, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, nt2, &
+                  nt, 0, ctl%eincr, 0.0_sp, 0.0_sp, 1, su, ypl)
+      if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+        call varsum(th%ypt, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, &
+                    nt2, nt, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, suyp2, ypl)
+        call varsum(th%yst, th%at, th%at, th%at, nbtd, nbtd, ngp, ibt, 1, &
+                    nt2, nt, 0, ctl%eincr, 0.0_sp, 0.0_sp, 2, suys2, ypl)
+      end if
+    end if
+
+    st = th%tst(ibt) - ss - sg - su
+    styp2 = th%tstyp2(ibt) - ssyp2 - sgyp2 - suyp2
+    stys2 = th%tstys2(ibt) - ssys2 - sgys2 - suys2
+    res%stst(ibt) = st
+
+    c = se / st
+
+    write(6, 112) c
+
+    if (kmit /= 0) then
+      sums%sem(kmit) = sums%sem(kmit) + se
+      sums%stm(kmit) = sums%stm(kmit) + st
+    end if
+
+    ! integrals over experiment and theory together, without the gaps
+    s2 = 0.0_sp
+    sg2 = 0.0_sp
+    srzj = 0.0_sp
+    sgzj = 0.0_sp
+    syp2 = 0.0_sp
+    sys2 = 0.0_sp
+    sgyp2 = 0.0_sp
+    sgys2 = 0.0_sp
+
+    if (ctl%wr(1) > 1.e-6_sp) then
+      call varsum(ex%ae, th%at, ex%ae, ex%ae, nbed, nbtd, ngp, ibe, ibt, ne1, &
+                  ne2, neet, ctl%eincr, 0.0_sp, c, 3, s2, ypl)
+      if (ex%gcount(ibe) /= 0) then
+        do igc = igap + 1, igap + ex%gcount(ibe)
+          call varsum(ex%ae, th%at, ex%ae, ex%ae, nbed, nbtd, ngp, ibe, ibt, &
+                      ex%ng1(igc), ex%ng2(igc), neet, ctl%eincr, 0.0_sp, c, &
+                      3, sg2, ypl)
+        end do
+      end if
+    end if
+
+    if (ctl%wr(2) > 1.e-6_sp) then
+      call varsum(ex%aep, th%atp, ex%aepp, th%atpp, nbed, nbtd, ngp, ibe, ibt, &
+                  ne1, ne2, neet, ctl%eincr, epse, c, 4, srzj, ypl)
+      if (ex%gcount(ibe) /= 0) then
+        do igc = igap + 1, igap + ex%gcount(ibe)
+          call varsum(ex%aep, th%atp, ex%aepp, th%atpp, nbed, nbtd, ngp, ibe, &
+                      ibt, ex%ng1(igc), ex%ng2(igc), neet, ctl%eincr, epse, &
+                      c, 4, sgzj, ypl)
+        end do
+      end if
+    end if
+
+    if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+      call varsum(ex%ype, th%ypt, ex%ype, ex%ype, nbed, nbtd, ngp, ibe, ibt, &
+                  ne1, ne2, neet, ctl%eincr, 0.0_sp, 1.0_sp, 3, syp2, ypl)
+      call varsum(ex%yse, th%yst, ex%yse, ex%yse, nbed, nbtd, ngp, ibe, ibt, &
+                  ne1, ne2, neet, ctl%eincr, 0.0_sp, 1.0_sp, 3, sys2, ypl)
+      if (ex%gcount(ibe) /= 0) then
+        do igc = igap + 1, igap + ex%gcount(ibe)
+          call varsum(ex%ype, th%ypt, ex%ype, ex%ype, nbed, nbtd, ngp, ibe, &
+                      ibt, ex%ng1(igc), ex%ng2(igc), neet, ctl%eincr, 0.0_sp, &
+                      1.0_sp, 3, sgyp2, ypl)
+          call varsum(ex%yse, th%yst, ex%yse, ex%yse, nbed, nbtd, ngp, ibe, &
+                      ibt, ex%ng1(igc), ex%ng2(igc), neet, ctl%eincr, 0.0_sp, &
+                      1.0_sp, 3, sgys2, ypl)
+        end do
+      end if
+    end if
+
+    s2 = s2 - sg2
+    srzj = srzj - sgzj
+    syp2 = syp2 - sgyp2
+    sys2 = sys2 - sgys2
+
+    ! R factors, normalised to about 1 for anticorrelated curves (sin**2
+    ! against cos**2 over one period); the averages over the beams are
+    ! weighted by the beam weight times the common energy range
+    eet = ctl%wb(ibe) * eet
+
+    ! R2 from the integral of (experiment - c*theory)**2
+    if (ctl%wr(1) > 1.e-6_sp) then
+      r2 = 0.5_sp * s2 / se2
+      sums%ar(1) = sums%ar(1) + eet*r2
+      if (kmit /= 0) then
+        sums%arm(1, kmit) = sums%arm(1, kmit) + eet*r2
+      end if
+    end if
+
+    ! reduced Zanazzi-Jona R factor (times 0.5)
+    if (ctl%wr(2) > 1.e-6_sp) then
+      rrzj = srzj / (0.027_sp*se)
+      sums%ar(2) = sums%ar(2) + eet*rrzj
+      if (kmit /= 0) then
+        sums%arm(2, kmit) = sums%arm(2, kmit) + eet*rrzj
+      end if
+    end if
+
+    ! Pendry and smooth R factors; the averages over the beams are ratios
+    ! of the weighted sums of numerators and denominators
+    if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
+      rpe = syp2 / (seyp2 + styp2)
+      rsm = sys2 / (seys2 + stys2)
+      sums%razp = sums%razp + ctl%wb(ibe) * syp2
+      sums%ranp = sums%ranp + ctl%wb(ibe) * (seyp2 + styp2)
+      sums%razs = sums%razs + ctl%wb(ibe) * sys2
+      sums%rans = sums%rans + ctl%wb(ibe) * (seys2 + stys2)
+      if (kmit /= 0) then
+        sums%razmp(kmit) = sums%razmp(kmit) + ctl%wb(ibe) * syp2
+        sums%ranmp(kmit) = sums%ranmp(kmit) + ctl%wb(ibe) * (seyp2 + styp2)
+        sums%razms(kmit) = sums%razms(kmit) + ctl%wb(ibe) * sys2
+        sums%ranms(kmit) = sums%ranms(kmit) + ctl%wb(ibe) * (seys2 + stys2)
+      end if
+    end if
+
+    ! weighted average of the R factors of this beam (read by viperleed)
+    res%ravb(ibe) = (ctl%wr(1)*r2 + ctl%wr(2)*rrzj + &
+                     ctl%wr(3)*rpe + ctl%wr(4)*rsm)/ctl%wrsum
+    sums%erang = sums%erang + eet
+    if (kmit /= 0) then
+      sums%erangm(kmit) = sums%erangm(kmit) + eet
+    end if
+
+    eet = eet / ctl%wb(ibe)
+
+    write(6, 115) '   V0        EET    R_2    R_ZJ   R_P    R_S     RAV'
+    write(6, 120) v0, eet, r2, rrzj, rpe, rsm, res%ravb(ibe)
+    write(7, 80) (ex%bename(i, ibe), i = 1, 5), ibe, d12, v0r, ctl%emin, &
+      ctl%emax, eet, res%ravb(ibe)
+
+    igap = igap + ex%gcount(ibe)
+  end subroutine beam_rfactor
+
+  !> Averages the beam sums of one inner potential shift v0 into R
+  !! factors over all, integer and fractional order beams, and writes them
+  !! to stdout and ROUT.
+  subroutine average_over_beams(ctl, v0, v0r, d12, sums)
+    type(control_parameters), intent(in) :: ctl
+    real(sp), intent(in) :: v0, v0r, d12
+    type(rfactor_sums), intent(inout) :: sums
+
+    integer :: i, imit
+
+120 format(' ', 1F7.2, 1F10.4, 5F7.4)
+125 format('AV.-INT             ', I5, F8.4, 3F8.2, 1F10.2, F8.4, '  <---')
+126 format('AV.-FRAC ORD        ', I5, F8.4, 3F8.2, 1F10.2, F8.4, '  <---')
+127 format('AVERAGE             ', I5, F8.4, 3F8.2, 1F10.2, F8.4, '  <---')
+128 format('RELATION FRAC TO INT BEAM INTENSITIES:', F6.3, &
+           ' FOR EXP DATA,', F6.3, ' FOR THEOR DATA')
+140 format('*AVERAGE OVER ALL BEAMS')
+
+    write(6, 140)
+
+    do i = 1, 2
+      sums%ar(i) = sums%ar(i)/sums%erang
+      do imit = 1, 2
+        if (sums%erangm(imit) /= 0.0_sp) then
+          sums%arm(i, imit) = sums%arm(i, imit)/sums%erangm(imit)
+        end if
+      end do
+    end do
+
+    if (ctl%wr(3) > 1e-6_sp .or. ctl%wr(4) > 1e-6_sp) then
+      sums%ar(3) = sums%razp/sums%ranp
+      sums%ar(4) = sums%razs/sums%rans
+      do imit = 1, 2
+        if (sums%ranmp(imit) /= 0.0_sp) then
+          sums%arm(3, imit) = sums%razmp(imit)/sums%ranmp(imit)
+        end if
+        if (sums%ranms(imit) /= 0.0_sp) then
+          sums%arm(4, imit) = sums%razms(imit)/sums%ranms(imit)
+        end if
+      end do
+    end if
+
+    sums%rav = (ctl%wr(1)*sums%ar(1) + ctl%wr(2)*sums%ar(2) + &
+                ctl%wr(3)*sums%ar(3) + ctl%wr(4)*sums%ar(4)) / ctl%wrsum
+    do imit = 1, 2
+      sums%ravm(imit) = (ctl%wr(1)*sums%arm(1, imit) + &
+                         ctl%wr(2)*sums%arm(2, imit) + &
+                         ctl%wr(3)*sums%arm(3, imit) + &
+                         ctl%wr(4)*sums%arm(4, imit)) / ctl%wrsum
+    end do
+
+    ! ratio of fractional to integer order intensities
+    if (ctl%nint /= 0 .and. ctl%nfrac /= 0) then
+      sums%cife = (sums%sem(2) * real(ctl%nint, sp)) / &
+                  (sums%sem(1) * real(ctl%nfrac, sp))
+      sums%cift = (sums%stm(2) * real(ctl%nint, sp)) / &
+                  (sums%stm(1) * real(ctl%nfrac, sp))
+    end if
+
+    if (ctl%nint /= 0) then
+      write(6, 120) v0, sums%erangm(1), (sums%arm(i, 1), i = 1, nrfact), &
+        sums%ravm(1)
+      write(7, 125) -1, d12, v0r, ctl%emin, ctl%emax, sums%erangm(1), &
+        sums%ravm(1)
+    end if
+
+    if (ctl%nfrac /= 0) then
+      write(6, 120) v0, sums%erangm(2), (sums%arm(i, 2), i = 1, nrfact), &
+        sums%ravm(2)
+      write(7, 126) -1, d12, v0r, ctl%emin, ctl%emax, sums%erangm(2), &
+        sums%ravm(2)
+    end if
+
+    write(6, 120) v0, sums%erang, (sums%ar(i), i = 1, nrfact), sums%rav
+    write(7, 127) 0, d12, v0r, ctl%emin, ctl%emax, sums%erang, sums%rav
+
+    if (ctl%nfrac /= 0 .and. ctl%nint /= 0) then
+      write(6, 128) sums%cife, sums%cift
+    end if
+  end subroutine average_over_beams
+
+  !> Makes the fit of geometry is at shift v0 the best fit.
+  subroutine keep_best(ctl, ex, th, res, sums, is, v0, best)
+    type(control_parameters), intent(in) :: ctl
+    type(experiment_beams), intent(in) :: ex
+    type(theory_beams), intent(in) :: th
+    type(beam_results), intent(in) :: res
+    type(rfactor_sums), intent(in) :: sums
+    integer, intent(in) :: is
+    real(sp), intent(in) :: v0
+    type(best_fit), intent(inout) :: best
+
+    integer :: igap, ibe, ibt, igc, iet
+
+    best%brav = sums%rav
+    best%nsb = is
+    best%bv0 = v0
+
+    igap = 0
+    do ibe = 1, ex%nbe
+      ibt = ctl%ibp(ibe)
+
+      if (ex%gcount(ibe) /= 0) then
+        do igc = igap + 1, igap + ex%gcount(ibe)
+          best%ng1b(igc) = ex%ng1(igc)
+          best%ng2b(igc) = ex%ng2(igc)
+          best%ngt1b(igc) = res%ngt1(igc)
+          best%ngt2b(igc) = res%ngt2(igc)
+        end do
+      end if
+      igap = igap + ex%gcount(ibe)
+
+      best%neminb(ibe) = res%nemin(ibe)
+      best%nemaxb(ibe) = res%nemax(ibe)
+      best%tseb(ibe) = res%sest(ibe)
+      best%bravb(ibe) = res%ravb(ibe)
+
+      best%ntminb(ibt) = res%ntmin(ibt)
+      best%ntmaxb(ibt) = res%ntmax(ibt)
+      do iet = 1, th%net(ibt)
+        best%bat(ibt, iet) = th%at(ibt, iet)
+        best%bet(ibt, iet) = th%et(ibt, iet)
+      end do
+      best%tstb(ibt) = res%stst(ibt)
+    end do
+
+    if (ctl%nfrac /= 0 .and. ctl%nint /= 0) then
+      best%bcife = sums%cife
+      best%bcift = sums%cift
+    end if
+  end subroutine keep_best
+
+  !> Writes the best fit: the experimental and best-fit theory curves and
+  !! the plot scripts if ctl%plot = 1, then the best geometry (code from
+  !! values), shift and R factor to stdout and ROUT. nbtd is the number of
+  !! theory beams as read; title is the title of the theory.
+  subroutine report_best_fit(ctl, ex, best, nbtd, title, values)
+    type(control_parameters), intent(in) :: ctl
+    type(experiment_beams), intent(in) :: ex
+    type(best_fit), intent(in) :: best
+    integer, intent(in) :: nbtd
+    character(len=80), intent(in) :: title
+    real(sp), intent(in) :: values(:)
+
+    integer :: nbed
+
+128 format('RELATION FRAC TO INT BEAM INTENSITIES:', F6.3, &
+           ' FOR EXP DATA,', F6.3, ' FOR THEOR DATA')
+175 format('BEST GEOMETRY ENCOUNTERED, NO.', 1I5, &
+           ', CHARACTERIZED BY VALUE ', 1F7.4, /, &
+           'WITH INNER POTENTIAL SHIFT ', 1F7.2, &
+           ' EV, AVERAGE R-FACTOR = ', 1F7.4)
+180 format('*CORRECT TERMINATION')
+
+    nbed = size(ex%ae, 1)
+
+    if (ctl%plot == 1.0_sp) then
+      call column(best%neminb, best%nemaxb, best%ntminb, best%ntmaxb, ex%ee, &
+                  ex%ae, best%bet, best%bat, nbed, nbtd, size(ex%ae, 2), &
+                  ex%nbe, ctl%ibp, ex%gcount, best%ng1b, best%ng2b, &
+                  best%ngt1b, best%ngt2b, size(best%ng1b), best%tseb, &
+                  best%tstb, best%bv0, ctl%intmax, ctl%norm)
+      call script(ctl%emin, ctl%emax, ctl%intmax, ctl%plsize, ctl%xtics, &
+                  ex%nbe, ex%bename, best%bravb, nbed, title, best%brav, &
+                  ctl%ibp)
+    end if
+
+    write(6, 175) best%nsb, values(best%nsb), best%bv0, best%brav
+    write(7, 175) best%nsb, values(best%nsb), best%bv0, best%brav
+    if (ctl%nfrac /= 0 .and. ctl%nint /= 0) then
+      write(7, 128) best%bcife, best%bcift
+    end if
+
+    write(6, 180)
+  end subroutine report_best_fit
+end module rfactor_scan
