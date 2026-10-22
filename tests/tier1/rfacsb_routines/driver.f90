@@ -18,7 +18,7 @@ program rfacsb_routines_driver
   integer :: n, ismoth
   real(sp) :: h, vi, eincr
   real(sp), allocatable :: x(:), y(:), ap(:)
-  real(sp), allocatable :: a2(:, :), ap2(:, :), e2(:, :), y2(:, :)
+  real(sp), allocatable :: a2(:, :), ap2(:, :), y2(:, :)
 
   read(5, '(A)') name
   select case (trim(name))
@@ -35,7 +35,7 @@ program rfacsb_routines_driver
     allocate(x(n), y(n))
     call read_reals(x)
     call read_reals(y)
-    call smooth(ismoth, y, x, n, 0, 1)
+    call smooth(ismoth, y, x, n)
     call write_reals(y)
   case ('YSMOOTH')
     read(5, *) n
@@ -44,12 +44,11 @@ program rfacsb_routines_driver
     allocate(x(n), ap(n))
     call read_reals(x)
     call read_reals(ap)
-    allocate(a2(1, n), ap2(1, n), e2(1, n), y2(1, n))
+    allocate(a2(1, n), ap2(1, n), y2(1, n))
     a2(1, :) = x
     ap2(1, :) = ap
-    e2 = 0.0_sp
     y2 = 0.0_sp
-    call ysmooth(a2, ap2, 1, n, 1, [n], e2, y2, vi, eincr, 0)
+    call ysmooth(a2, ap2, 1, n, 1, [n], y2, vi, eincr)
     call write_reals(y2(1, :))
   case default
     error stop 'unknown routine'

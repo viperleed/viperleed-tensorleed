@@ -63,15 +63,20 @@
 
 program rfactor
   use kinds, only: sp
-  use control_input, only: control_parameters, read_control
-  use experiment_preparation, only: experiment_beams, experiment_grid_size, &
-                                    prepare_experiment, read_experiment
+  use control_input, only: check_beam_relation, control_parameters, &
+                           read_control
+  use experiment_input, only: experiment_beams, read_experiment
+  use experiment_preparation, only: expav, experiment_grid_size, &
+                                    prepare_experiment
   use theory_input, only: read_theory_records, select_energies, &
                           theory_records
   use theory_preparation, only: average_theory, prepare_theory, &
                                 theory_beams, theory_grid_size
-  use rfactor_scan, only: beam_results, best_fit, report_best_fit, &
-                          scan_v0, start_scan
+  use rfactor_scan, only: beam_results, best_fit, scan_v0, start_scan
+  use rfactor_output, only: column, script, write_averaged_experiment, &
+                            write_best_fit, write_rout_header, &
+                            write_structure, write_suspect_intensity, &
+                            write_theory_header
 
   implicit none
 
@@ -80,16 +85,16 @@ program rfactor
   ! es, ats, atsav: theory energies and intensities of all geometries as
   !         selected and after averaging the beam groups
   ! values: code of each geometry
+  ! suspect, am: averaged theory beam with a maximum intensity am above 1
   type(control_parameters) :: ctl
   type(theory_records) :: tr
   type(experiment_beams) :: ex
   type(theory_beams) :: th
   type(beam_results) :: res
   type(best_fit) :: best
-  integer :: nss, neti, ngp, is
+  integer :: nbed, nss, neti, ngp, is, suspect
+  real(sp) :: am
   real(sp), allocatable :: es(:), ats(:, :, :), atsav(:, :, :), values(:)
-
-30 format('*STRUCTURE NO.', 1I5, ' CHARACTERIZED BY VALUE', 1F7.4)
 
   open(7, file='ROUT')
   open(9, file='ROUTSHORT')
@@ -99,6 +104,13 @@ program rfactor
   call read_theory_records(tr)
   call read_control(ctl, tr%nbtd, tr%ns, nss)
   call read_experiment(ex, ctl)
+  nbed = size(ctl%nbea)
+  call expav(ex%ae, ex%ee, nbed, ex%nee, ex%bename, ctl%nbea, ex%nbe, &
+             ex%gcount, ex%ngap, ex%eg1, ex%eg2, ex%ng1, ex%ng2)
+  if (ctl%ipr == 2) then
+    call write_averaged_experiment(ex%nbe, ex%nee, ex%ee, ex%ae)
+  end if
+  call check_beam_relation(ctl%ibp, ex%nbe)
   call select_energies(tr, ctl%emin, ctl%emax, es, ats, values, neti)
   deallocate(tr%e, tr%spac, tr%y)
 
@@ -107,17 +119,35 @@ program rfactor
   call prepare_experiment(ex, ctl, ngp)
   close(8)
 
-  call average_theory(ctl, th, tr, nss, neti, ngp, ats, values, atsav)
+  call write_theory_header(tr%title, tr%pq, ctl%kav, values(1:nss))
+  call average_theory(ctl, th, tr, nss, neti, ngp, ats, atsav, suspect, am)
+  if (suspect /= 0) then
+    call write_suspect_intensity(suspect, am)
+    stop
+  end if
+  call write_rout_header()
   deallocate(ats)
 
-  call start_scan(res, best, size(ctl%nbea), tr%nbtd, ngp, ex%ngap)
+  call start_scan(res, best, nbed, tr%nbtd, ngp, ex%ngap)
   do is = 1, nss
-    write(6, 30) is, values(is)
+    call write_structure(is, values(is))
     call prepare_theory(th, ctl, atsav, nss, tr%nbtd, neti, is, es)
     call scan_v0(ctl, ex, th, tr%nbtd, is, values(is), res, best)
   end do
 
-  call report_best_fit(ctl, ex, best, tr%nbtd, tr%title, values)
+  ! the experimental and best-fit theory curves and their plot scripts
+  if (ctl%plot == 1.0_sp) then
+    call column(best%neminb, best%nemaxb, best%ntminb, best%ntmaxb, ex%ee, &
+                ex%ae, best%bet, best%bat, nbed, tr%nbtd, size(ex%ae, 2), &
+                ex%nbe, ctl%ibp, ex%gcount, best%ng1b, best%ng2b, &
+                best%ngt1b, best%ngt2b, size(best%ng1b), best%tseb, &
+                best%tstb, best%bv0, ctl%intmax, ctl%norm)
+    call script(ctl%emin, ctl%emax, ctl%intmax, ctl%plsize, ctl%xtics, &
+                ex%nbe, ex%bename, best%bravb, nbed, tr%title, best%brav, &
+                ctl%ibp)
+  end if
+  call write_best_fit(best%nsb, values(best%nsb), best%bv0, best%brav, &
+                      ctl%nint, ctl%nfrac, best%bcife, best%bcift)
 
   stop
 
