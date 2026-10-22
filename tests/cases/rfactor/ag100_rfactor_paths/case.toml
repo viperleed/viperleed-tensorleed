@@ -8,25 +8,25 @@ name = "theo_past_exp"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_theo_past_exp" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "permuted_weighted"
 stdin = "inputs/spectrum_permuted_weighted"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_permuted_weighted" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "r2_gap"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_r2_gap" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "zj_gap"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_zj_gap" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]

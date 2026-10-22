@@ -8,11 +8,11 @@ name = "pseudo_exp"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_pseudo_exp" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "norm_max"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_norm_max" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]

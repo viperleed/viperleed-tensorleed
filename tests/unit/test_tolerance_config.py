@@ -66,7 +66,8 @@ def test_titles_in_outputs_are_the_fixed_case_title():
         case = path.parents[2].name
         for line in path.read_text(errors="replace").splitlines():
             if "tl-test" in line:
-                assert line.strip() in (f"tl-test {case}", f"*tl-test {case}"), (path, line)
+                assert line.strip() in (f"tl-test {case}", f"*tl-test {case}",
+                                        f"* tl-test {case}"), (path, line)
 
 
 def _dropped_text(text, ignore_line_patterns, skip_lines):

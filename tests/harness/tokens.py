@@ -5,8 +5,10 @@ separators, omits the leading zero (-.1653E+00), and writes three-digit
 exponents without the 'E' (0.123-100). With an 'E', the exponent always
 has two digits (0.142878E+020.61E-06 is two numbers; see _FLOAT_E). A field filled with '*' means the
 value did not fit the format; this is always an error, also a lone '*'
-(a field of width 1). The only exception are the two '*' of an rfactor
-beam label such as '*( 1  0)*', which are text.
+(a field of width 1). The exceptions are text: the two '*' of an rfactor
+beam label such as '*( 1  0)*', and a single '*' in column 1 followed by a
+letter or a blank, which marks a comment line of rfactor's standard output
+('*BEAM NO.  1 ...', '* <title>').
 """
 
 __authors__ = (
@@ -83,6 +85,8 @@ def number_format(s: str, kind: str) -> str:
 
 # rfactor beam label (ROUT): *( 1  0)*
 _BEAM_LABEL_RE = re.compile(r"\*\([^()*]*\)\*")
+# comment-line marker (rfactor stdout): *BEAM NO., * <title>
+_COMMENT_MARK_RE = re.compile(r"\*(?=[A-Za-z ])")
 
 
 def _to_float(s: str) -> float:
@@ -111,11 +115,13 @@ def tokenize(text, ignore_line_patterns=(), skip_lines=()):
     """
     tokens = []
     for lineno, line in kept_lines(text, ignore_line_patterns, skip_lines):
-        label_stars = {i for b in _BEAM_LABEL_RE.finditer(line) for i in (b.start(), b.end() - 1)}
+        text_stars = {i for b in _BEAM_LABEL_RE.finditer(line) for i in (b.start(), b.end() - 1)}
+        if _COMMENT_MARK_RE.match(line):
+            text_stars.add(0)
         for m in _TOKEN_RE.finditer(line):
             kind = m.lastgroup
             s = m.group()
-            if kind == "stars" and s == "*" and m.start() in label_stars:
+            if kind == "stars" and s == "*" and m.start() in text_stars:
                 kind = "text"
             if kind == "stars":
                 raise FortranOverflowError(f"line {lineno}: overflow field {s!r}")

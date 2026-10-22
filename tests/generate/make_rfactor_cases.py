@@ -51,7 +51,7 @@ from harness.runner import run_program
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases" / "rfactor"
-OUTPUTS = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+OUTPUTS = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 # Debug build without bounds checks: the baseline's gap path fails the bounds
 # checks for any gap input because of dummy-argument declarations
 # (GAPIN: BM(NGAP) with NGAP = 0 on entry; GRID: A(NGP) with NGP undefined),
