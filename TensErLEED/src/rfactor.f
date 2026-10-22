@@ -64,6 +64,8 @@ C  cf purpose of quantity FAC in subroutine READE.
 
       PROGRAM RFACTOR
 
+      USE INTERPOLATION, ONLY: GRID, INTPOL, YVAL
+
 C  include problem dependent parameter statements for dimensions
 
       INCLUDE "PARAM"
@@ -669,7 +671,8 @@ C  interpolate intensities of sections between gaps onto working grid
               LEN = NG1(IGC) - NEWNZ - 1
               DO ILEN = 1,LEN
                 XVAL = WORX(ILEN+NEWNZ)
-                A(ILEN) = YVAL(XVAL,YPL,XPL,NE1,ITIL,ITIH)
+                A(ILEN) = YVAL(XVAL,YPL(1:NE1),XPL(1:NE1),NE1,
+     *                         ITIL,ITIH)
               ENDDO
 
 C  produce 1st and 2nd derivative of intensities
@@ -718,7 +721,7 @@ C  derivative for the section after the last gap
           LEN = NPTS - NEWNZ
           DO ILEN = 1,LEN
             XVAL = WORX(ILEN+NEWNZ)
-            A(ILEN) = YVAL(XVAL,YPL,XPL,NE1,ITIL,ITIH)
+            A(ILEN) = YVAL(XVAL,YPL(1:NE1),XPL(1:NE1),NE1,ITIL,ITIH)
           ENDDO
 
           IF (LEN.GT.0) THEN
