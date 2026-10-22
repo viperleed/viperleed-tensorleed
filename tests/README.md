@@ -54,7 +54,8 @@ tests/
                                  runner.py (+ rusage_launcher.c), build.py, cases.py, paths.py, perf.py, tier2.py
   unit/                          tests of the harness (marked unit + tier1)
   tier1/                         test_refcalc.py, test_rfactor.py, test_array_temporaries.py,
-                                 test_debug_build.py, test_performance.py
+                                 test_debug_build.py, test_performance.py, test_rfacsb_routines.py
+                                 (+ rfacsb_routines/: driver.f90, values.json)
   tier2/                         test_viperleed.py, systems/<name>/ (frozen viperleed inputs + expected.toml)
   benchmark/                     test_benchmark.py, README.md
   cases/refcalc|rfactor|benchmark/<case>/   case.toml, inputs/, expected/<run>/
@@ -108,6 +109,8 @@ Release flags: `-O2`. Debug flags: `-O0 -g -fcheck=all -ffpe-trap=invalid,zero,o
 
 A run fails if the exit code is non-zero; stdout/stderr contain `Fortran runtime error`, `Program received signal`, `Error termination` or a `STOP <n≠0>` line; or the output is incomplete (ref-calc: `fd.out` lacks an energy of the EI,EF,DE range; rfactor: `ROUT` lacks the `AVERAGE R-FACTOR =` summary). The last check is needed because many legacy error paths print a message and `STOP` with exit code 0. Comparisons fail on missing files, a different number of lines or of tokens on a line, a number in a different format, overflow fields (`*`, `**…`; except the two `*` of an rfactor beam label `*( 1  0)*` and a `*` in column 1 before a letter or blank, which marks a comment line of rfactor's standard output), and any differing integer or text token.
 
+Routine check (`tier1/test_rfacsb_routines.py`): single routines of `lib/rfacsb.f90` (DER, SMOOTH, YSMOOTH) are called by a small driver (`tier1/rfacsb_routines/driver.f90`, built with gfortran at the release and the debug flags) on curves of 1, 2, 3 and a few more points, and their results must equal, bit for bit, those of the legacy routines on the same inputs (`tier1/rfacsb_routines/values.json`, reals as hex bit patterns). The values come from `generate/make_rfacsb_routine_values.py`, which builds `generate/rfacsb_routines_legacy_driver.f` against the baseline's `lib/rfacsb.f` at `-O2` and `-O0` and requires both to agree.
+
 Static check (`tier1/test_array_temporaries.py`): each program is built with `-O2 -Warray-temporaries`; any warning fails (large arrays must not get compiler-generated temporaries; the baseline has none, and array temporaries are invisible to the peak-RSS gate unless they coincide with the peak).
 
 ## Case format
@@ -144,6 +147,7 @@ conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root=<baseli
 python -m generate.make_tier2_expected [--only NAME] [--calibrate]
 python -m generate.make_refcalc_cases --benchmark
 conda run -n tl-tests  python -m generate.make_hand_cases [--only CASE] [--check]   # hand-made cases from frozen inputs
+conda run -n tl-tests  python -m generate.make_rfacsb_routine_values --tl-root=<baseline>  # tier1/rfacsb_routines/values.json
 ```
 
 The viperleed generators keep their work directories in `generate_workroot` and run viperleed with `-t <baseline tree>` (`baseline_tl_root`, see Quick start) and its own `eeasisss`. The tree must be at the baseline commit with an unmodified `TensErLEED/`, and `eeasisss` must have been built there with `make gcc GCC_FFLAGS="-O3 -fno-finite-math-only -std=legacy"` (gfortran ≥ 14 rejects a legacy FORMAT in eeasisss at run time otherwise); the generators check this. viperleed compiles in its own work directories and does not modify the tree. Regenerating the existing cases this way reproduces the committed inputs except for the time stamp in the phase-shift header line of the FIN, and except for `ag100_mix` (ref-calc case and tier-2 system): viperleed's phase shifts for its mixed Ag/Pd site vary from run to run. They write the fixed title `tl-test <case>` into all inputs, so outputs contain no directory names or timestamps and no output line needs to be skipped. `make_expected.py` refuses a tree whose HEAD is not the baseline unless `--allow-non-baseline` is given, and always a modified `TensErLEED/`; `BASELINE.txt` records the commit, not the path of the tree.

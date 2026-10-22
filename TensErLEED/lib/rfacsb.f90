@@ -280,3 +280,157 @@ contains
     end if
   end subroutine intpol
 end module interpolation
+
+!> Derivatives, smoothing and the smooth-R-factor Y function of intensity
+!! curves.
+module derivatives
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: der, smooth, ysmooth
+
+contains
+
+  !> First derivative y1 of y (tabulated on ne points with step h), after
+  !! Zanazzi and Jona, by ne:
+  !! ne >= 23: 7-point central formula, 4-point one-sided at 3 end points;
+  !! 3 <= ne <= 22: central differences, 3-point one-sided at end points;
+  !! ne = 2: two-point difference; ne = 1: derivative set to zero.
+  subroutine der(y, ne, y1, h)
+    integer, intent(in) :: ne
+    real(sp), intent(in) :: y(ne), h
+    real(sp), intent(out) :: y1(ne)
+
+    integer :: j, jf, m
+
+    if (ne >= 23) then
+      jf = ne - 3
+      do j = 4, jf
+        y1(j) = (y(j + 3) - 9._sp*y(j + 2) + 45._sp*y(j + 1) - 45._sp*y(j - 1) &
+                 + 9._sp*y(j - 2) - y(j - 3)) / (60._sp*h)
+      end do
+      do j = 1, 3
+        y1(j) = (2._sp*y(j + 3) - 9._sp*y(j + 2) + 18._sp*y(j + 1) - 11._sp*y(j)) &
+                / (6._sp*h)
+        m = ne - j + 1
+        y1(m) = (11._sp*y(m) - 18._sp*y(m - 1) + 9._sp*y(m - 2) - 2._sp*y(m - 3)) &
+                / (6._sp*h)
+      end do
+    else if (ne >= 3) then
+      jf = ne - 1
+      do j = 2, jf
+        y1(j) = (y(j + 1) - y(j - 1)) / (2._sp*h)
+      end do
+      y1(1) = (-3._sp*y(1) + 4._sp*y(2) - y(3)) / (2._sp*h)
+      y1(jf + 1) = (3._sp*y(jf + 1) - 4._sp*y(jf) + y(jf - 1)) / (2._sp*h)
+    else if (ne == 1) then
+      y1(1) = 0._sp
+    else
+      y1(1) = (y(2) - y(1)) / h
+      y1(2) = y1(1)
+    end if
+  end subroutine der
+
+  !> Smooths the curve (ee, ae) of n points ismoth times by weighted
+  !! three-point averaging; on equal intervals a simplified formula is used.
+  !! Curves of fewer than 3 points are left unchanged. ipr = 2 prints the
+  !! result for beam ib.
+  subroutine smooth(ismoth, ae, ee, n, ipr, ib)
+    integer, intent(in) :: ismoth, n, ipr, ib
+    real(sp), intent(inout) :: ae(n)
+    real(sp), intent(in) :: ee(n)
+
+    real(sp) :: am, af, e21, e32
+    integer :: i, ie
+
+10  format('*EXP. ENERG. AND INTENS. AFTER SMOOTHING IN BEAM', 1I3, &
+           /, 2000(5(1F7.2, 1E13.4, 3X), /))
+
+    do i = 1, ismoth
+      if (n >= 3) then
+        am = ae(1)
+        do ie = 2, n - 1
+          af = ae(ie)
+          e21 = ee(ie) - ee(ie - 1)
+          e32 = ee(ie + 1) - ee(ie)
+          if (abs(e21 - e32) < 0.0001_sp) then
+            ae(ie) = 0.25_sp * (2._sp*af + am + ae(ie + 1))
+          else
+            ae(ie) = 0.5_sp * (af + (e32*am + e21*ae(ie + 1))/(e21 + e32))
+          end if
+          am = af
+        end do
+      end if
+    end do
+
+    if (ipr == 2 .and. n > 0) then
+      write(6, 10) ib, (ee(ie), ae(ie), ie = 1, n)
+    end if
+  end subroutine smooth
+
+  !> Y function of the smooth R factor R_S (Imre et al., J. Phys.: Condens.
+  !! Matter 38, 105001) for beams 1..nb of the curves a(ib, 1:ne(ib)) with
+  !! first derivatives ap (per eV). The output y is 2*vi times Y_S of the
+  !! paper; the constant factor cancels in R_S (same vi for experiment and
+  !! theory). The second derivative is taken from three points of a (grid
+  !! step eincr); at the ends from the nearest three, and zero for curves of
+  !! fewer than 3 points. Entries beyond ne(ib) are not set. e is used only
+  !! for printing (ipr >= 2).
+  subroutine ysmooth(a, ap, nbd, ngp, nb, ne, e, y, vi, eincr, ipr)
+    integer, intent(in) :: nbd, ngp, nb, ipr
+    real(sp), intent(in) :: a(nbd, ngp), ap(nbd, ngp), e(nbd, ngp)
+    integer, intent(in) :: ne(nbd)
+    real(sp), intent(inout) :: y(nbd, ngp)
+    real(sp), intent(in) :: vi, eincr
+
+    real(sp), parameter :: alpha = 4.0_sp, beta = 0.15_sp
+    real(sp) :: af, deriv1, deriv2, ydensq, y1, y2
+    integer :: ib, ie, n
+
+40  format(' SMOOTH Y FUNCTION IN BEAM', 1I5, /, 1000(5(1F7.2, 1E13.4, 3X), /))
+
+    do ib = 1, nb
+      n = ne(ib)
+      if (n /= 0) then
+        do ie = 1, n
+          af = a(ib, ie)
+          ! avoids division by 0 in I'/sqrt(I*I+...)
+          if (af <= 1.0e-10_sp) then
+            af = 1.0e-10_sp
+          end if
+          deriv1 = ap(ib, ie)*vi
+          if (n < 3) then
+            deriv2 = 0.0_sp
+          else if (ie == 1) then
+            deriv2 = a(ib, ie + 2) + a(ib, ie) - 2*a(ib, ie + 1)
+          else if (ie < n) then
+            deriv2 = a(ib, ie + 1) + a(ib, ie - 1) - 2*af
+          else
+            deriv2 = a(ib, ie) + a(ib, ie - 2) - 2*a(ib, ie - 1)
+          end if
+          ydensq = af*af + 4*deriv1*deriv1
+          ! threshold 1e-10, not 0, avoids overflow in the division by I''
+          if (deriv2 > 1.0e-10_sp) then
+            deriv2 = deriv2*(vi/eincr)**2
+            y1 = alpha*af/deriv2 - (0.5_sp*alpha)*deriv1*deriv1/(deriv2*deriv2) + beta
+            if (y1 > 0) then
+              y2 = y1/sqrt(1.0_sp + y1*y1)
+              ydensq = ydensq + y2*y2*deriv2*deriv2
+            end if
+          end if
+          y(ib, ie) = 2*deriv1/sqrt(ydensq)
+        end do
+      end if
+    end do
+    if (ipr >= 2) then
+      do ib = 1, nb
+        n = ne(ib)
+        if (n /= 0) then
+          write(6, 40) ib, (e(ib, ie), y(ib, ie), ie = 1, n)
+        end if
+      end do
+    end if
+  end subroutine ysmooth
+end module derivatives

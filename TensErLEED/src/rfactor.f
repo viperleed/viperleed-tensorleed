@@ -65,6 +65,7 @@ C  cf purpose of quantity FAC in subroutine READE.
       PROGRAM RFACTOR
 
       USE INTERPOLATION, ONLY: GRID, INTPOL, YVAL
+      USE DERIVATIVES, ONLY: DER, SMOOTH, YSMOOTH
 
 C  include problem dependent parameter statements for dimensions
 
@@ -566,7 +567,7 @@ C  average data from different experiments and order by increasing energy
 C  smooth experimental data
 
           IF (ISMOTH.GT.0) THEN
-            CALL SMOOTH(ISMOTH,A,E,NE,IPR,IB) ! 3 point smoothing
+            CALL SMOOTH(ISMOTH,A(1:NE),E(1:NE),NE,IPR,IB) ! 3 point smoothing
           ENDIF
 
 C  interpolate experimental data on working grid (multiples of EINCR eV)
@@ -576,8 +577,8 @@ C  interpolate experimental data on working grid (multiples of EINCR eV)
 C  produce 1st and 2nd derivatives of experimental data
 
           IF (NE.GT.0) THEN
-            CALL DER(A,NE,AP,EINCR)
-            CALL DER(AP,NE,APP,EINCR)
+            CALL DER(A(1:NE),NE,AP(1:NE),EINCR)
+            CALL DER(AP(1:NE),NE,APP(1:NE),EINCR)
           ENDIF
 
           NEE(IB) = NE
@@ -605,7 +606,7 @@ C  smooth sections between the gaps
                 E(IE) = EE(IB,IE+NZ)
               ENDDO
 
-              CALL SMOOTH(ISMOTH,A,E,NE,IPR,IB)
+              CALL SMOOTH(ISMOTH,A(1:NE),E(1:NE),NE,IPR,IB)
 
               DO IE = 1,NE
                 AE(IB,IE+NZ) = A(IE)
@@ -620,7 +621,7 @@ C  smooth sections between the gaps
               E(IE) = EE(IB,IE+NZ)
             ENDDO
 
-            CALL SMOOTH(ISMOTH,A,E,NE,IPR,IB)
+            CALL SMOOTH(ISMOTH,A(1:NE),E(1:NE),NE,IPR,IB)
 
             DO IE = 1,NE
               AE(IB,IE+NZ) = A(IE)
@@ -678,8 +679,8 @@ C  interpolate intensities of sections between gaps onto working grid
 C  produce 1st and 2nd derivative of intensities
 
               IF (LEN.GT.0) THEN
-                CALL DER(A,LEN,AP,EINCR)
-                CALL DER(AP,LEN,APP,EINCR)
+                CALL DER(A(1:LEN),LEN,AP(1:LEN),EINCR)
+                CALL DER(AP(1:LEN),LEN,APP(1:LEN),EINCR)
               ENDIF
 
               DO ILEN = 1,LEN
@@ -725,8 +726,8 @@ C  derivative for the section after the last gap
           ENDDO
 
           IF (LEN.GT.0) THEN
-            CALL DER(A,LEN,AP,EINCR)
-            CALL DER(AP,LEN,APP,EINCR)
+            CALL DER(A(1:LEN),LEN,AP(1:LEN),EINCR)
+            CALL DER(AP(1:LEN),LEN,APP(1:LEN),EINCR)
           ENDIF
 
           DO ILEN = 1,LEN
@@ -744,7 +745,7 @@ C  derivative for the section after the last gap
 C  produce Pendry & smooth Y-function for experimental data
 
       CALL YPEND(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YPE,VI,IPR)
-      CALL YSMOOTH(AE,AEP,1,NBED,MNGP,1,NBE,NEE,EE,YSE,VI,EINCR,IPR)
+      CALL YSMOOTH(AE,AEP,NBED,MNGP,NBE,NEE,EE,YSE,VI,EINCR,IPR)
 
 C  produce some integrals over experimental data
 
@@ -846,8 +847,8 @@ C  interpolate theoretical data on working grid
 C  produce 1st and 2nd derivative of theoretical spectra
 
         IF (NE.GT.0) THEN
-          CALL DER(A,NE,AP,EINCR)
-          CALL DER(AP,NE,APP,EINCR)
+          CALL DER(A(1:NE),NE,AP(1:NE),EINCR)
+          CALL DER(AP(1:NE),NE,APP(1:NE),EINCR)
         ENDIF
 
         NET(IB) = NE
@@ -862,7 +863,7 @@ C  produce 1st and 2nd derivative of theoretical spectra
 C  produce Pendry Y-function of theoretical data
 
       CALL YPEND(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YPT,VI,IPR)
-      CALL YSMOOTH(AT,ATP,1,NBTD,MNGP,1,NBT,NET,ET,YST,VI,EINCR,IPR)
+      CALL YSMOOTH(AT,ATP,NBTD,MNGP,NBT,NET,ET,YST,VI,EINCR,IPR)
 
 C  produce some integrals over theoretical data
 

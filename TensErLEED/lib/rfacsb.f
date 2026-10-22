@@ -301,56 +301,6 @@ C     LEVEL 2, ET,EE
       RETURN
       END
 C-------------------------------------------------------------------------------
-C  Subroutine DER calculates 1st derivative (after Zanazzi-Jona) of input
-C  function Y (tabulated on NE points with step H), by NE:
-C  NE >= 23: 7-point central formula, 4-point one-sided at 3 end points;
-C  3 <= NE <= 22: central differences, 3-point one-sided at end points;
-C  NE = 2: two-point difference; NE = 1: derivative set to zero.
-
-      SUBROUTINE DER(Y,NE,Y1,H)
-
-      REAL Y(NE), Y1(NE), H
-      INTEGER NE
-
-      IF (NE.GE.23) THEN
-
-        JF = NE - 3
-
-        DO J = 4,JF
-          Y1(J) = (Y(J+3) - 9.*Y(J+2) + 45.*Y(J+1) - 45.*Y(J-1) +
-     *             9.*Y(J-2) - Y(J-3)) / (60.*H)
-        ENDDO
-        DO J = 1,3
-          Y1(J) = (2.*Y(J+3) - 9.*Y(J+2) + 18.*Y(J+1) - 11.*Y(J)) / 
-     *            (6.*H)
-          M = NE - J + 1
-          Y1(M) = (11.*Y(M) - 18.*Y(M-1) + 9.*Y(M-2) - 2.*Y(M-3)) /
-     *            (6.*H)
-        ENDDO
-
-      ELSE IF (NE.GE.3) THEN
-
-        JF = NE - 1
-        DO J = 2,JF
-          Y1(J) = (Y(J+1) - Y(J-1)) / (2.*H)
-        ENDDO
-        Y1(1) = (-3.*Y(1) + 4.*Y(2) - Y(3)) / (2.*H)
-        Y1(JF+1) = (3.*Y(JF+1) - 4.*Y(JF) + Y(JF-1)) / (2.*H)
-
-      ELSE IF (NE.EQ.1) THEN
-
-        Y1(1) = 0.
-
-      ELSE
-
-        Y1(1) = (Y(2) - Y(1)) / H
-        Y1(2) = Y1(1)
-
-      ENDIF
-
-      RETURN
-      END
-C-------------------------------------------------------------------------------
 C  SUBROUTINE EPSZJ CALCULATES THE ZANAZZI-JONA
 C  EPS = MAX( ABS( DERIVATIVE ) )
       SUBROUTINE EPSZJ(AEP,NBED,NGP,IB,NE1,NE2,EPS)
@@ -958,51 +908,6 @@ C  create a new page for each plot (beam) in the output document
 
       RETURN
       END
-C------------------------------------------------------------------------------
-C  Subroutine SMOOTH smoothes a set of data (given on a non-uniform grid, but
-C  choosing a simplified formula when equal intervals are found) by weighted
-C  three-point averaging
-
-      SUBROUTINE SMOOTH(ISMOTH,AE,EE,N,IPR,IB)
-
-      REAL AE(N),EE(N), AM, AF, E21, E32
-      INTEGER ISMOTH, N, IPR, IB
-
- 10   FORMAT(48H*EXP. ENERG. AND INTENS. AFTER SMOOTHING IN BEAM,1I3,
-     *       /,2000(5(1F7.2,1E13.4,3X),/))
-
-C  no smoothing possible for less then 3 points
-
-      DO I = 1,ISMOTH
-
-        IF (N.GE.3) THEN
-          AM = AE(1)                                                     020780
-          DO IE = 2,N-1
-
-            AF  = AE(IE)
-            E21 = EE(IE) - EE(IE-1)
-            E32 = EE(IE+1) - EE(IE)
-
-            IF (ABS(E21-E32).LT.0.0001) THEN
-              AE(IE) = 0.25 * (2.*AF + AM + AE(IE+1))
-            ELSE
-              AE(IE) = 0.5 * (AF + (E32*AM + E21*AE(IE+1))/(E21 + E32))  020780
-            ENDIF
-
-            AM = AF                                                      020780
-          ENDDO
-        ENDIF
-
-      ENDDO
-
-C  print energies and smoothed beam intensities if desired
-
-      IF (IPR.EQ.2.AND.N.GT.0) THEN
-        WRITE(6,10) IB, (EE(IE), AE(IE), IE=1,N)
-      ENDIF
-
-      RETURN
-      END
 C-----------------------------------------------------------------------
 C  Subroutine STRIP2 copies energies and intensities for a given geometry IS
 
@@ -1166,84 +1071,6 @@ C  IPR                  Print Y function if IPR>=2
           IF (N.NE.0) THEN
             WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
 40          FORMAT(26H PENDRY Y FUNCTION IN BEAM,1I3,
-     1      /,1000(5(1F7.2,1E13.4,3X),
-     1      /))
-          END IF
-        END DO
-      END IF
-      RETURN
-      END
-C-----------------------------------------------------------------------
-C  SUBROUTINE YSMOOTH CALCULATES THE Y FUNCTION OF THE SMOOTH R FACTOR
-C
-C  See Imre et al., J. Phys.: Condens. Matter 38, 105001.
-C  Note: the output Y is 2*V0i times Y_S of the paper. The constant
-C  factor cancels in R_S (same V0i for experiment and theory).
-
-C  Arguments
-C  A(NS,NBD,NGP)     function value (1, beam#, energy points)
-C  AP(NS,NBD,NGP)    A Prime, derivative dA/dE (per eV, from DER)
-C  NS                   unused in search; always 1
-C  NBD                  Number of beams in array
-C  NGP                  max number of energy points
-C  IS                   unused in search; always 1
-C  NB                   Number of beams used
-C  NE(NBD)              Number of energy points for each beam
-C  E(NBD,NGP)           Energy values (only for printing)
-C  Y(NBD,NGP)           Y function output (beam, energy points)
-C  VI                   V0i (eV)
-C  EINCR                Energy step of the grid (eV)
-C  IPR                  Print Y function if IPR>=2
-
-      SUBROUTINE YSMOOTH(A,AP,NS,NBD,NGP,IS,NB,NE,E,Y,VI,EINCR,IPR)
-
-      REAL A(NS,NBD,NGP),AP(NS,NBD,NGP)
-      INTEGER NE(NBD)
-      REAL E(NBD,NGP),Y(NBD,NGP)
-
-      PARAMETER(ALPHA = 4.0, BETA = 0.15)
-
-      DO IB=1,NB                                                        !for all beams
-        N=NE(IB)
-        IF (N.NE.0) THEN
-          DO IE=1,N                                                     !for all energies
-            AF=A(IS,IB,IE)                                              !intensity value
-            IF (AF.LE.1.0E-10) THEN
-              AF=1.0E-10                                                !avoids division by 0 in I'/sqrt(I*I+...)
-            ENDIF
-            DERIV1=AP(IS,IB,IE)*VI;                                     !1st derivative*V0i
-C           For simplicity, we calculate the 2nd derivative DERIV2 from 3 points.
-C           This works well if the curves are sufficiently smooth
-C           At the borders, we take the nearest defined value (or 0 if less than 3 points in the curve)
-            IF (N.LT.3) THEN
-              DERIV2=0.0
-            ELSE IF (IE.EQ.1) THEN
-              DERIV2=A(IS,IB,IE+2) + A(IS,IB,IE) - 2*A(IS,IB,IE+1)
-            ELSE IF (IE.LT.N) THEN
-              DERIV2=A(IS,IB,IE+1) + A(IS,IB,IE-1) - 2*AF
-            ELSE
-              DERIV2=A(IS,IB,IE) + A(IS,IB,IE-2) - 2*A(IS,IB,IE-1)
-            ENDIF
-            YDENSQ=AF*AF + 4*DERIV1*DERIV1;                             !square of the denominator of Y
-            IF (DERIV2.GT.1.0E-10) THEN                                 !min not 0 but 1e-10 to avoid overflow in division by I"
-              DERIV2=DERIV2*(VI/EINCR)**2                               !2nd derivative (per eV^2)*V0i*V0i
-              Y1 = ALPHA*AF/DERIV2 -
-     1             (0.5*ALPHA)*DERIV1*DERIV1/(DERIV2*DERIV2) + BETA
-              IF (Y1.GT.0) THEN
-                Y2=Y1/SQRT(1.0 + Y1*Y1)
-                YDENSQ=YDENSQ + Y2*Y2*DERIV2*DERIV2
-              END IF
-            END IF
-            Y(IB,IE)=2*DERIV1/SQRT(YDENSQ)
-          END DO                                                        !for all energies
-        END IF                                                          !if (N.NE.0)
-      END DO                                                            !for all beams
-      IF (IPR.GE.2) THEN
-        DO IB=1,NB
-          N=NE(IB)
-          IF (N.NE.0) THEN
-            WRITE(6,40)IB,(E(IB,IE),Y(IB,IE),IE=1,N)
-40          FORMAT(26H SMOOTH Y FUNCTION IN BEAM,1I5,
      1      /,1000(5(1F7.2,1E13.4,3X),
      1      /))
           END IF
