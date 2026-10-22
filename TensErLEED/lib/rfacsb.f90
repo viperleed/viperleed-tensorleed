@@ -700,3 +700,352 @@ contains
     end do
   end subroutine rintav
 end module domain_averaging
+
+!> Reading of the experimental (or pseudo-experimental) beams and averaging
+!! of experimental beams with the same group label.
+module experiment_input
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: expav, reade, readt
+
+contains
+
+  !> Reads nbed experimental beams from unit 8: a format line, then per beam
+  !! its name, the number of points nee(ib) with a factor fac, and the pairs
+  !! (ee(ib, ie), ae(ib, ie)). The intensities are divided by fac, meant to
+  !! bring them to the order of 1 and to match curves averaged together.
+  subroutine reade(ae, ee, nbed, ngp, nee, bename, ipr)
+    integer, intent(in) :: nbed, ngp, ipr
+    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+    integer, intent(out) :: nee(nbed)
+    character(len=4), intent(out) :: bename(5, nbed)
+
+    character(len=4) :: fmt(19)
+    real(sp) :: fac
+    integer :: i, ib, ie, n
+
+10  format(19A4)
+35  format(1I4, 1E14.4)
+70  format('*EXP. BEAM ', 1I4, ' (', 5A4, ')')
+80  format('* EXP. ENERGIES AND INTENSITIES', /, 100(5(1F7.2, 1E13.4, 3X), /))
+
+    read(8, 10) (fmt(i), i = 1, 19)
+    do ib = 1, nbed
+      read(8, 10) (bename(i, ib), i = 1, 5)
+      write(6, 70) ib, (bename(i, ib), i = 1, 5)
+      read(8, 35) nee(ib), fac
+      n = nee(ib)
+      read(8, fmt) (ee(ib, ie), ae(ib, ie), ie = 1, n)
+      if (ipr >= 1) write(6, 80) (ee(ib, ie), ae(ib, ie), ie = 1, n)
+      do ie = 1, n
+        ae(ib, ie) = ae(ib, ie)/fac
+      end do
+    end do
+  end subroutine reade
+
+  !> Reads theoretical curves from unit 8 as pseudo-experiment: the number
+  !! of beams (must equal nbed), the beam names, then per energy the
+  !! intensities of all beams. Leading points with intensity <= 1e-20 are
+  !! dropped per beam; nee(ib) counts the points above 1e-20.
+  subroutine readt(ae, ee, nbed, ngp, nee, bename)
+    integer, intent(in) :: nbed, ngp
+    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+    integer, intent(out) :: nee(nbed)
+    character(len=4), intent(out) :: bename(5, nbed)
+
+    real(sp) :: eeh(ngp), dummy
+    integer :: ioff(nbed)
+    integer :: i, ib, inn, j, k, nbeams
+
+101 format(I5, 22A4)
+103 format(I5, E13.4)
+105 format(F7.2, F7.4, 4E14.5, /, 2000(5E14.5, /))
+
+    read(8, 103) nbeams
+    write(6, 103) nbeams
+    if (nbed /= nbeams) then
+      write(7, '(A33)') '*********************************'
+      write(7, '(A33)') 'SOMETHING IS WRONG WITH NUMBER OF'
+      write(7, '(A33)') 'PSEUDOEXPERIMENTAL BEAMS!        '
+      write(7, '(A33)') 'NO AVERAGING ALLOWED!            '
+      write(7, '(A33)') '*********************************'
+      stop 'ERROR 1 IN PSEUDOEXPERIMENT'
+    end if
+    do ib = 1, nbed
+      read(8, 101) inn, (bename(i, ib), i = 1, 5)
+      write(6, 101) inn, (bename(i, ib), i = 1, 5)
+    end do
+
+    do k = 1, nbed
+      nee(k) = 0
+      ioff(k) = 0
+      do j = 1, ngp
+        ae(k, j) = 0._sp
+      end do
+    end do
+
+    do j = 1, ngp
+      read(8, 105, end=250) eeh(j), dummy, (ae(k, j), k = 1, nbed)
+      do k = 1, nbed
+        if (ae(k, j) > 1.e-20_sp) then
+          nee(k) = nee(k) + 1
+        else if (nee(k) == 0) then
+          ioff(k) = ioff(k) + 1
+        end if
+      end do
+    end do
+
+250 continue
+    do k = 1, nbed
+      do j = 1, nee(k)
+        ee(k, j) = eeh(j + ioff(k))
+        ae(k, j) = ae(k, j + ioff(k))
+      end do
+    end do
+  end subroutine readt
+
+  !> Averages the experimental beams with the same group label nbea(ib) onto
+  !! a common energy grid in increasing order, leaving out points inside
+  !! the gaps (eg1, eg2) of each beam. The nbe averaged beams replace the
+  !! first rows of ae, ee, nee and bename (each named after its first beam);
+  !! their gaps are returned in eg1, eg2 (energies), ng1, ng2 (indices),
+  !! ngap in total and gcount per beam. nbea is set to 0. a and nv are work
+  !! space.
+  subroutine expav(ae, ee, nbed, ngp, nee, bename, nbea, nbe, ipr, a, nv, &
+                   gcount, ngap, eg1, eg2, ng1, ng2)
+    integer, intent(in) :: nbed, ngp, ipr
+    real(sp), intent(inout) :: ae(nbed, ngp), ee(nbed, ngp)
+    integer, intent(inout) :: nee(nbed), nbea(nbed), gcount(nbed)
+    character(len=4), intent(inout) :: bename(5, nbed)
+    integer, intent(out) :: nbe, ngap
+    real(sp), intent(inout) :: a(ngp), eg1(:), eg2(:)
+    integer, intent(inout) :: nv(ngp), ng1(:), ng2(:)
+
+    integer :: gc(nbed)
+    real(sp) :: de, e, ediff, emax, emin
+    integer :: gin, i, ib, ib1, ibmin, ie, iemax, ien, ig, igap, igc, n, &
+               nbeat, nemax
+
+10  format('*EXP. ENERG. AND INTENS. AFTER AVERAGING IN BEAM', 1I4, /, &
+           100(5(1F7.2, 1E13.4, 3X), /))
+
+    nbe = 1
+    igap = 0
+    ngap = 0
+
+    do ib = 1, nbed
+      if (nbea(ib) /= 0) then
+        emin = 1.e6_sp
+        emax = 0._sp
+        de = 1.e6_sp
+
+        ! energy range of all beams averaged with ib (including ib)
+        do ib1 = ib, nbed
+          if (nbea(ib1) == nbea(ib)) then
+            do ie = 1, nee(ib1)
+              if (emin > ee(ib1, ie)) then
+                emin = ee(ib1, ie)
+                ibmin = ib1
+              end if
+              if (emax < ee(ib1, ie)) then
+                emax = ee(ib1, ie)
+              end if
+            end do
+          end if
+        end do
+
+        ! energy step: smallest step above 0.01 from emin in beam ibmin
+        do ie = 1, nee(ibmin)
+          ediff = ee(ibmin, ie) - emin
+          if (ediff < de .and. ediff > 0.01_sp) then
+            de = ediff
+          end if
+        end do
+        nemax = int((emax - emin)/de + 0.0001_sp) + 1
+        do ie = 1, nemax
+          nv(ie) = 0
+          a(ie) = 0._sp
+        end do
+
+        ! sum over the same beams again, leaving out points inside gaps
+        iemax = 0
+        nbeat = nbea(ib)
+        do ib1 = ib, nbed
+          if (nbea(ib1) == nbeat) then
+            do ie = 1, nee(ib1)
+              e = ee(ib1, ie)
+              ien = int((e - emin)/de + 0.0001_sp) + 1
+              if (ien > iemax) then
+                iemax = ien
+              end if
+              if (gcount(ib1) == 0) then
+                nv(ien) = nv(ien) + 1
+                a(ien) = a(ien) + ae(ib1, ie)
+              else
+                gin = 0
+                igc = igap
+                do i = 1, gcount(ib1)
+                  igc = igc + 1
+                  if (e >= eg1(igc) .and. e <= eg2(igc)) then
+                    gin = 1
+                  end if
+                end do
+                if (gin /= 1) then
+                  nv(ien) = nv(ien) + 1
+                  a(ien) = a(ien) + ae(ib1, ie)
+                end if
+              end if
+            end do
+            nbea(ib1) = 0
+          end if
+        end do
+
+        ! averages; grid points without data form the gaps of beam nbe
+        gin = 0
+        ig = 0
+        do ie = 1, iemax
+          ee(nbe, ie) = emin + real(ie - 1, sp)*de
+          if (nv(ie) /= 0) then
+            ae(nbe, ie) = a(ie)/real(nv(ie), sp)
+            gin = 0
+          else if (gin == 0) then
+            ig = ig + 1
+            eg1(ngap + ig) = ee(nbe, ie)
+            eg2(ngap + ig) = ee(nbe, ie)
+            ng1(ngap + ig) = ie
+            ng2(ngap + ig) = ie
+            gin = 1
+          else
+            eg2(ngap + ig) = ee(nbe, ie)
+            ng2(ngap + ig) = ie
+          end if
+        end do
+
+        nee(nbe) = iemax
+        gc(nbe) = ig
+        do i = 1, 5
+          bename(i, nbe) = bename(i, ib)
+        end do
+        ngap = ngap + ig
+        nbe = nbe + 1
+      end if
+      igap = igap + gcount(ib)
+    end do
+
+    nbe = nbe - 1
+    do ib = 1, nbe
+      gcount(ib) = gc(ib)
+    end do
+
+    if (ipr == 2) then
+      do ib = 1, nbe
+        n = nee(ib)
+        write(6, 10) ib, (ee(ib, ie), ae(ib, ie), ie = 1, n)
+      end do
+    end if
+  end subroutine expav
+end module experiment_input
+
+!> Reading of the theoretical beams written by the LEED program, for all
+!! geometries, and extraction of one geometry.
+module theory_input
+  use kinds, only: sp
+  implicit none
+
+  private
+
+  public :: rdpl, strip2
+
+contains
+
+  !> Reads the theoretical beams from unit 5: per beam its label, name
+  !! pq(:, j) and symmetry code sym(j); then per energy e(i) and geometry
+  !! its value spac and the nb intensities ydata(:, :, i). Energies above
+  !! emax end the reading, those below emin are overwritten by the next.
+  !! At an end of file, up to limfil files are read, skipping the nb + 2
+  !! header records of each further file. Geometries listed in nssk are
+  !! skipped; nss is the number left. ne returns the number of energies.
+  subroutine rdpl(e, ngp, ydata, nss, nb, mne, ne, spac, pq, kav, sym, &
+                  emin, emax, limfil, nssk, ns, mnbtd)
+    integer, intent(in) :: ngp, nss, nb, mne, limfil, ns, mnbtd
+    real(sp), intent(inout) :: e(ngp), ydata(nss, nb, mne), spac(nss)
+    real(sp), intent(out) :: pq(2, nb)
+    integer, intent(in) :: kav(nb), nssk(ns)
+    integer, intent(out) :: sym(nb), ne
+    real(sp), intent(in) :: emin, emax
+
+    integer :: lab(mnbtd)
+    real(sp) :: spacj(nss), yd(mnbtd)
+    character(len=4) :: idum
+    integer :: i, ifile, j, js, kk
+
+20  format(I5, 2F10.5, I3)
+25  format('DIMENSION MNET TOO SMALL, PLEASE CORRECT!', /, &
+           '      ****   PROGRAM STOPPED   ****')
+27  format('*THEOR. BEAM GROUPINGS')
+29  format(' ', 2F10.5, I5)
+40  format(F7.2, F7.4, 4E14.5, /, 2000(5E14.5, /))
+57  format(A4)
+65  format('*SURFACE STRUCTURE NO. AND CHARACTERIZATION')
+75  format(18X, I3, F15.4)
+
+    do j = 1, nb
+      read(5, 20) lab(j), (pq(i, j), i = 1, 2), sym(j)
+    end do
+    write(6, 27)
+    do j = 1, nb
+      write(6, 29) (pq(i, j), i = 1, 2), kav(j)
+    end do
+
+    ifile = 1
+    i = 1
+    energies: do
+      js = 0
+      if (i > mne + 1) then
+        write(6, 25)
+        stop
+      end if
+      do j = 1, ns
+        read(5, 40, end=55) e(i), spacj(j), yd(1:nb)
+        if (any(nssk(1:ns) == j)) cycle
+        js = js + 1
+        spac(js) = spacj(j)
+        ydata(js, 1:nb, i) = yd(1:nb)
+      end do
+      if (e(i) > emax) exit energies
+      if (e(i) >= emin) i = i + 1
+      cycle energies
+55    ifile = ifile + 1
+      if (ifile > limfil) exit energies
+      do kk = 1, nb + 2
+        read(5, 57) idum
+      end do
+    end do energies
+    ne = i - 1
+
+    write(6, 65)
+    do j = 1, nss
+      write(6, 75) j, spac(j)
+    end do
+  end subroutine rdpl
+
+  !> Copies the intensities ys(is, :, 1:ne) of geometry is to y and the
+  !! energies es to every beam of et.
+  subroutine strip2(ys, ns, nbd, ne, is, y, es, et, ngp)
+    integer, intent(in) :: ns, nbd, ne, is, ngp
+    real(sp), intent(in) :: ys(ns, nbd, ne), es(ngp)
+    real(sp), intent(inout) :: y(nbd, ngp), et(nbd, ngp)
+
+    integer :: ib, ie
+
+    do ib = 1, nbd
+      do ie = 1, ne
+        et(ib, ie) = es(ie)
+        y(ib, ie) = ys(is, ib, ie)
+      end do
+    end do
+  end subroutine strip2
+end module theory_input

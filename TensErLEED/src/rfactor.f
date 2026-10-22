@@ -68,6 +68,8 @@ C  cf purpose of quantity FAC in subroutine READE.
       USE DERIVATIVES, ONLY: DER, SMOOTH, YSMOOTH
       USE RFACTOR_TERMS, ONLY: EPSZJ, VARSUM, YPEND
       USE DOMAIN_AVERAGING, ONLY: MAXINT, RINTAV
+      USE EXPERIMENT_INPUT, ONLY: EXPAV, READE, READT
+      USE THEORY_INPUT, ONLY: RDPL, STRIP2
 
 C  include problem dependent parameter statements for dimensions
 
@@ -170,7 +172,8 @@ C          beams in which they occur and in order of energy in the same beam)
 C  EG1,EG2:energy range of gap IGAP (before and after averaging)
 C  GCOUNT: number of gaps in experimental beam IB (before and after averaging)
 
-      REAL AE(MNBED,MNGP), EE(MNBED,MNGP), BENAME(5,MNBED)
+      REAL AE(MNBED,MNGP), EE(MNBED,MNGP)
+      CHARACTER*4 BENAME(5,MNBED)
       INTEGER NEE(MNBED), NBEA(MNBED)
       INTEGER NGAP, GBM(MNGAP), GCOUNT(MNBED)
       REAL EG1(MNGAP), EG2(MNGAP)
@@ -387,8 +390,8 @@ C  default values in namelist NL2
 
       DO IB = 1,MNBED
         WB(IB)  = 1.
-        BENAME(1,IB) = 0.
-        BENAME(2,IB) = 0.
+        BENAME(1,IB) = REPEAT(CHAR(0),4)
+        BENAME(2,IB) = REPEAT(CHAR(0),4)
       ENDDO
       DO IS = 1,MNS
         NSSK(IS) = 0
@@ -530,7 +533,7 @@ C  read data from experiment or pseudoexperiment
       IF (EOT.LE.0.5) THEN                                               RTHTH
         CALL READE(AE,EE,NBED,MNGP,NEE,BENAME,IPR)                       RTHTH
       ELSE                                                               RTHTH
-        CALL READT(AE,EE,NBED,MNGP,NEE,BENAME,IPR)                       RTHTH
+        CALL READT(AE,EE,NBED,MNGP,NEE,BENAME)                           RTHTH
       END IF                                                             RTHTH
 
 C  read information about gaps in the experimental spectra .... BRANCH OFF HERE
