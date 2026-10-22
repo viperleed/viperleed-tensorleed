@@ -6,6 +6,8 @@
 !  OUTPUT expanded for error curve calculations   L.Hammer Mar. 2021
 !  INPUT formats expanded to allow for 9999 exp. and theo. beams  L.Hammer Mar. 2021
 !  R_Smooth added (see J. Phys.: Condens. Matter 38, 105001).     M.Schmid Mar. 2026
+!  Fortran 90 version: main program logic in modules of rfacsb.f90, arrays
+!  sized from the input.                                                 2026
 !
 !##############################################################################
 !  R-FACTOR PROGRAM FOR COMPARING LEED EXPERIMENT AND THEORY

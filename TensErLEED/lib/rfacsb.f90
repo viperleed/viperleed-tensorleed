@@ -1,6 +1,106 @@
 !> \file rfacsb.f90
 !! \brief Modules of the R-factor program rfactor, in dependency order.
 
+! Circumvented allocation error in subroutine RINTAV by introduction
+! of a second field ATAV and PQ1.        Oct. 2018 L. Hammer
+! Changed the intensity limit of GRID and INTPOL to 1.E-8.
+! Output for gnuplot adapted to particular computer settings. LH
+! INPUT formats expanded to allow for 9999 exp. and theo. beams
+!                                                    L.Hammer Mar. 2021
+! Note: Y function output in YPEND and YSMOOTH is still limited to 999 beams
+! Y_Smooth implementation (and nicer format of Y_Pendry) M. Schmid 2026
+! Fortran 90 version: modules, explicit interfaces, arrays sized from the
+! input.                                                              2026
+
+!-----------------------------------------------------------------------
+! R factors
+!-----------------------------------------------------------------------
+!
+! Each experimental beam Ie(E) is compared with its theory beam It(E) over
+! the energy interval common to both, without the gaps of the experiment.
+! The theory is normalised to the experiment by c = int(Ie)/int(It); all
+! integrals run over that interval (trapezoid rule on the working grid of
+! step eincr), ' is d/dE:
+!   R2   = 0.5 int((Ie - c*It)**2) / int(Ie**2)
+!   R_ZJ = int(|Ie'' - c*It''| |Ie' - c*It'| / (|Ie'| + max|Ie'|))
+!          / (0.027 int(Ie))
+!          (reduced Zanazzi-Jona R factor; Zanazzi and Jona, Surf. Sci. 62,
+!          61 (1977); integrand on a 10 times denser grid)
+!   R_P  = int((Ye - Yt)**2) / int(Ye**2 + Yt**2)
+!          (Pendry, J. Phys. C 13, 937 (1980)), with the Y function
+!          Y = L/(1 + V0i**2 L**2) of the logarithmic derivative L = I'/I,
+!          V0i the imaginary part of the inner potential (vi)
+!   R_S  = as R_P with the smooth Y function Y_S (Imre et al., J. Phys.:
+!          Condens. Matter 38, 105001 (2026)), which differs from Y_P
+!          near intensity minima by a term in I'' (ysmooth)
+! Averages over the beams: R2 and R_ZJ weighted by the beam weight wb
+! times the length of the common interval; R_P and R_S as the ratio of the
+! wb-weighted sums of numerators and denominators. The average R factor is
+! the wr-weighted mean of the four, also per integer and fractional order
+! beams (mittel).
+!
+! Inner potential: the theory energies are shifted rigidly by
+! v0 = v01, v01 + vincr, ..., v02 (the real part of the inner potential
+! relative to v0rr), and the common interval is found anew for each shift.
+! The best fit is the lowest average R factor over all geometries and
+! shifts.
+!
+! Beam averaging: experimental beams with the same label nbea are averaged
+! (expav); theory beams with the same label kav are averaged with weights
+! from their symmetry codes (rintav), e.g. for symmetry-equivalent beams
+! or domains.
+!
+! Gaps: energy ranges of an experimental beam that are left out of the
+! smoothing, the interpolation and the R-factor integrals; the theory
+! integrals over the shifted gap are subtracted as well.
+!
+!-----------------------------------------------------------------------
+! Legacy names (rfactor.f and rfacsb.f, fixed form)
+!-----------------------------------------------------------------------
+!
+! Routines (same name unless given):
+!   BINSRX, STFPTS, XNTERP, XNTRP2, YVAL, GRID, INTPOL     -> interpolation
+!   COMMON /DATBLK/ (YVAL interval and points)  -> type interpolation_cache
+!   DER, SMOOTH, YSMOOTH                                   -> derivatives
+!   YPEND, VARSUM, EPSZJ; SUM -> trapezoid                 -> rfactor_terms
+!   RINTAV, MAXINT                                      -> domain_averaging
+!   READE, READT, GAPIN                                 -> experiment_input
+!   EXPAV                                         -> experiment_preparation
+!   RDPL -> read_theory_records                             -> theory_input
+!        -> select_energies, average_theory (calls RINTAV, MAXINT)
+!   STRIP2                                           -> theory_preparation
+!   COMNEI                                               -> common_interval
+!   COLUMN, SCRIPT; all WRITEs -> write_*                 -> rfactor_output
+! Main program rfactor.f -> program rfactor (rfactor.f90) and
+!   reading NL1-NL3, KAV, IBP, MITTEL                -> read_control
+!   reading the experiment and gaps                  -> read_experiment
+!   smoothing, interpolation, derivatives, Y functions and integrals of
+!   the experiment / of one geometry -> prepare_experiment / prepare_theory
+!   V0 loop -> scan_v0; beam loop -> beam_rfactor; averages over the
+!   beams -> average_over_beams; best fit -> keep_best
+!
+! Variables of the main program (same name unless given):
+!   NL1-NL3, KAV, IBP, MITTEL, NBEA, NINT, NFRAC
+!                                           -> ctl%  (control_parameters)
+!   theory TEXT, NBTD, PQ, SYM -> tr%title, nbtd, pq, sym (theory_records)
+!   AE, EE, NEE, BENAME, AEP, AEPP, YPE, YSE, TSE, TSE2, TSEYP2, TSEYS2,
+!     NBE, NGAP, GCOUNT, GBM, EG1, EG2, NG1, NG2  -> ex%  (experiment_beams)
+!   AT, ET, NET, ATP, ATPP, YPT, YST, TST, TSTYP2, TSTYS2, NBT, PQAV
+!                                                 -> th%  (theory_beams)
+!   NEMIN, NEMAX, NTMIN, NTMAX, NGT1, NGT2, SEST, STST, RAVB
+!                                                 -> res% (beam_results)
+!   BRAV, NSB, BV0, BCIFE, BCIFT -> best%rav, geometry, v0, cife, cift
+!   NEMINB, NEMAXB, NTMINB, NTMAXB, NG1B, NG2B, NGT1B, NGT2B, TSEB, TSTB,
+!     BRAVB, BET, BAT -> best%  without the B (TSEB, TSTB -> sest, stst;
+!     BRAVB -> ravb)                                    (best_fit)
+!   AR, ARM -> sums%rf, rf_m; RAZP, RANP, RAZS, RANS -> sums%rp_num,
+!     rp_den, rs_num, rs_den; RAZMP, RANMP, RAZMS, RANMS -> sums%rp_num_m,
+!     rp_den_m, rs_num_m, rs_den_m; ERANG, ERANGM, SEM, STM, RAV, RAVM,
+!     CIFE, CIFT -> sums%                               (rfactor_sums)
+!   integrals SS, SU, SG, SE, ST, S2, SRZJ, SYP2, SYS2, ... and the beam
+!     R factors R2, RRZJ, RPE, RSM: locals of beam_rfactor
+!   V0, V0R, NV0, BGRAV: locals of scan_v0
+
 !> Kind parameters for reals and complexes.
 !!
 !! sp is the precision of the legacy default REAL (REAL(4)); dp is double
