@@ -137,17 +137,17 @@ program rfactor
 
   ! the experimental and best-fit theory curves and their plot scripts
   if (ctl%plot == 1.0_sp) then
-    call column(best%neminb, best%nemaxb, best%ntminb, best%ntmaxb, ex%ee, &
-                ex%ae, best%bet, best%bat, nbed, tr%nbtd, size(ex%ae, 2), &
-                ex%nbe, ctl%ibp, ex%gcount, best%ng1b, best%ng2b, &
-                best%ngt1b, best%ngt2b, size(best%ng1b), best%tseb, &
-                best%tstb, best%bv0, ctl%intmax, ctl%norm)
+    call column(best%nemin, best%nemax, best%ntmin, best%ntmax, ex%ee, &
+                ex%ae, best%et, best%at, nbed, tr%nbtd, size(ex%ae, 2), &
+                ex%nbe, ctl%ibp, ex%gcount, best%ng1, best%ng2, &
+                best%ngt1, best%ngt2, size(best%ng1), best%sest, &
+                best%stst, best%v0, ctl%intmax, ctl%norm)
     call script(ctl%emin, ctl%emax, ctl%intmax, ctl%plsize, ctl%xtics, &
-                ex%nbe, ex%bename, best%bravb, nbed, tr%title, best%brav, &
+                ex%nbe, ex%bename, best%ravb, nbed, tr%title, best%rav, &
                 ctl%ibp)
   end if
-  call write_best_fit(best%nsb, values(best%nsb), best%bv0, best%brav, &
-                      ctl%nint, ctl%nfrac, best%bcife, best%bcift)
+  call write_best_fit(best%geometry, values(best%geometry), best%v0, best%rav, &
+                      ctl%nint, ctl%nfrac, best%cife, best%cift)
 
   stop
 

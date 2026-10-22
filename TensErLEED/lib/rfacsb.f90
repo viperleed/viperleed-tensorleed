@@ -2674,32 +2674,34 @@ module rfactor_scan
     real(sp), allocatable :: sest(:), stst(:), ravb(:)
   end type beam_results
 
-  !> Best fit: average R factor (brav), geometry (nsb), inner potential
-  !! shift (bv0), ratio of fractional to integer order intensities in
-  !! experiment and theory (bcife, bcift), and copies of the beam_results,
-  !! experimental gap indices and theory curves (bet, bat) of that fit.
+  !> Best fit: average R factor (rav), geometry index, inner potential
+  !! shift (v0), ratio of fractional to integer order intensities in
+  !! experiment and theory (cife, cift), and copies of the beam_results,
+  !! experimental gap indices (ng1, ng2) and theory curves (et, at) of
+  !! that fit.
   type :: best_fit
-    real(sp) :: brav, bv0, bcife, bcift
-    integer :: nsb
-    integer, allocatable :: neminb(:), nemaxb(:), ntminb(:), ntmaxb(:)
-    integer, allocatable :: ng1b(:), ng2b(:), ngt1b(:), ngt2b(:)
-    real(sp), allocatable :: tseb(:), tstb(:), bravb(:)
-    real(sp), allocatable :: bet(:, :), bat(:, :)
+    real(sp) :: rav, v0, cife, cift
+    integer :: geometry
+    integer, allocatable :: nemin(:), nemax(:), ntmin(:), ntmax(:)
+    integer, allocatable :: ng1(:), ng2(:), ngt1(:), ngt2(:)
+    real(sp), allocatable :: sest(:), stst(:), ravb(:)
+    real(sp), allocatable :: et(:, :), at(:, :)
   end type best_fit
 
   !> Sums over the beams for one inner potential shift. Index 1:nrfact of
-  !! ar is R2, R_ZJ, R_P, R_S averaged over all beams, ar(:, kmit) the same
-  !! over the integer (kmit = 1) or fractional (kmit = 2) order beams;
-  !! razp/ranp and razs/rans are numerator and denominator of R_P and R_S
-  !! (m: per kmit); erang is the total common energy range; sem and stm
-  !! the experimental and theory integrals per kmit; rav and ravm the
-  !! weighted averages; cife and cift the fractional to integer order
+  !! rf is R2, R_ZJ, R_P, R_S averaged over all beams, rf_m(:, kmit) the
+  !! same over the integer (kmit = 1) or fractional (kmit = 2) order beams;
+  !! rp_num/rp_den and rs_num/rs_den are numerator and denominator of R_P
+  !! and R_S (_m: per kmit); erang is the total common energy range; sem
+  !! and stm the experimental and theory integrals per kmit; rav and ravm
+  !! the weighted averages; cife and cift the fractional to integer order
   !! intensity ratios of experiment and theory.
   type :: rfactor_sums
-    real(sp) :: ar(nrfact) = 0.0_sp, arm(nrfact, 2) = 0.0_sp
-    real(sp) :: razp = 0.0_sp, ranp = 0.0_sp, razs = 0.0_sp, rans = 0.0_sp
-    real(sp) :: razmp(2) = 0.0_sp, ranmp(2) = 0.0_sp
-    real(sp) :: razms(2) = 0.0_sp, ranms(2) = 0.0_sp
+    real(sp) :: rf(nrfact) = 0.0_sp, rf_m(nrfact, 2) = 0.0_sp
+    real(sp) :: rp_num = 0.0_sp, rp_den = 0.0_sp
+    real(sp) :: rs_num = 0.0_sp, rs_den = 0.0_sp
+    real(sp) :: rp_num_m(2) = 0.0_sp, rp_den_m(2) = 0.0_sp
+    real(sp) :: rs_num_m(2) = 0.0_sp, rs_den_m(2) = 0.0_sp
     real(sp) :: erang = 0.0_sp, erangm(2) = 0.0_sp
     real(sp) :: sem(2) = 0.0_sp, stm(2) = 0.0_sp
     real(sp) :: rav = 0.0_sp, ravm(2) = 0.0_sp
@@ -2719,13 +2721,13 @@ contains
     allocate(res%ntmin(nbtd), res%ntmax(nbtd), res%stst(nbtd))
     allocate(res%ngt1(ngap), res%ngt2(ngap))
 
-    allocate(best%neminb(nbed), best%nemaxb(nbed), best%tseb(nbed), &
-             best%bravb(nbed))
-    allocate(best%ntminb(nbtd), best%ntmaxb(nbtd), best%tstb(nbtd))
-    allocate(best%bet(nbtd, ngp), best%bat(nbtd, ngp))
-    allocate(best%ng1b(ngap), best%ng2b(ngap), best%ngt1b(ngap), &
-             best%ngt2b(ngap))
-    best%brav = 1.e2_sp
+    allocate(best%nemin(nbed), best%nemax(nbed), best%sest(nbed), &
+             best%ravb(nbed))
+    allocate(best%ntmin(nbtd), best%ntmax(nbtd), best%stst(nbtd))
+    allocate(best%et(nbtd, ngp), best%at(nbtd, ngp))
+    allocate(best%ng1(ngap), best%ng2(ngap), best%ngt1(ngap), &
+             best%ngt2(ngap))
+    best%rav = 1.e2_sp
   end subroutine start_scan
 
   !> Scans the inner potential shift v0 = v01, v01 + vincr, ... up to v02
@@ -2775,13 +2777,13 @@ contains
 
       call average_over_beams(ctl, sums)
       call write_averages(v0, d12, v0r, ctl%emin, ctl%emax, ctl%nint, &
-                          ctl%nfrac, sums%erangm, sums%arm, sums%ravm, &
-                          sums%erang, sums%ar, sums%rav, sums%cife, sums%cift)
+                          ctl%nfrac, sums%erangm, sums%rf_m, sums%ravm, &
+                          sums%erang, sums%rf, sums%rav, sums%cife, sums%cift)
 
       if (sums%rav < bgrav) then
         bgrav = sums%rav
       end if
-      if (sums%rav < best%brav) then
+      if (sums%rav < best%rav) then
         call keep_best(ctl, ex, th, res, sums, is, v0, best)
       end if
 
@@ -3071,18 +3073,18 @@ contains
     ! R2 from the integral of (experiment - c*theory)**2
     if (ctl%wr(1) > 1.e-6_sp) then
       r2 = 0.5_sp * s2 / se2
-      sums%ar(1) = sums%ar(1) + eet*r2
+      sums%rf(1) = sums%rf(1) + eet*r2
       if (kmit /= 0) then
-        sums%arm(1, kmit) = sums%arm(1, kmit) + eet*r2
+        sums%rf_m(1, kmit) = sums%rf_m(1, kmit) + eet*r2
       end if
     end if
 
     ! reduced Zanazzi-Jona R factor (times 0.5)
     if (ctl%wr(2) > 1.e-6_sp) then
       rrzj = srzj / (0.027_sp*se)
-      sums%ar(2) = sums%ar(2) + eet*rrzj
+      sums%rf(2) = sums%rf(2) + eet*rrzj
       if (kmit /= 0) then
-        sums%arm(2, kmit) = sums%arm(2, kmit) + eet*rrzj
+        sums%rf_m(2, kmit) = sums%rf_m(2, kmit) + eet*rrzj
       end if
     end if
 
@@ -3091,15 +3093,17 @@ contains
     if (ctl%wr(3) > 1.e-6_sp .or. ctl%wr(4) > 1.e-6_sp) then
       rpe = syp2 / (seyp2 + styp2)
       rsm = sys2 / (seys2 + stys2)
-      sums%razp = sums%razp + ctl%wb(ibe) * syp2
-      sums%ranp = sums%ranp + ctl%wb(ibe) * (seyp2 + styp2)
-      sums%razs = sums%razs + ctl%wb(ibe) * sys2
-      sums%rans = sums%rans + ctl%wb(ibe) * (seys2 + stys2)
+      sums%rp_num = sums%rp_num + ctl%wb(ibe) * syp2
+      sums%rp_den = sums%rp_den + ctl%wb(ibe) * (seyp2 + styp2)
+      sums%rs_num = sums%rs_num + ctl%wb(ibe) * sys2
+      sums%rs_den = sums%rs_den + ctl%wb(ibe) * (seys2 + stys2)
       if (kmit /= 0) then
-        sums%razmp(kmit) = sums%razmp(kmit) + ctl%wb(ibe) * syp2
-        sums%ranmp(kmit) = sums%ranmp(kmit) + ctl%wb(ibe) * (seyp2 + styp2)
-        sums%razms(kmit) = sums%razms(kmit) + ctl%wb(ibe) * sys2
-        sums%ranms(kmit) = sums%ranms(kmit) + ctl%wb(ibe) * (seys2 + stys2)
+        sums%rp_num_m(kmit) = sums%rp_num_m(kmit) + ctl%wb(ibe) * syp2
+        sums%rp_den_m(kmit) = sums%rp_den_m(kmit) &
+                              + ctl%wb(ibe) * (seyp2 + styp2)
+        sums%rs_num_m(kmit) = sums%rs_num_m(kmit) + ctl%wb(ibe) * sys2
+        sums%rs_den_m(kmit) = sums%rs_den_m(kmit) &
+                              + ctl%wb(ibe) * (seys2 + stys2)
       end if
     end if
 
@@ -3128,34 +3132,34 @@ contains
     integer :: i, imit
 
     do i = 1, 2
-      sums%ar(i) = sums%ar(i)/sums%erang
+      sums%rf(i) = sums%rf(i)/sums%erang
       do imit = 1, 2
         if (sums%erangm(imit) /= 0.0_sp) then
-          sums%arm(i, imit) = sums%arm(i, imit)/sums%erangm(imit)
+          sums%rf_m(i, imit) = sums%rf_m(i, imit)/sums%erangm(imit)
         end if
       end do
     end do
 
     if (ctl%wr(3) > 1e-6_sp .or. ctl%wr(4) > 1e-6_sp) then
-      sums%ar(3) = sums%razp/sums%ranp
-      sums%ar(4) = sums%razs/sums%rans
+      sums%rf(3) = sums%rp_num/sums%rp_den
+      sums%rf(4) = sums%rs_num/sums%rs_den
       do imit = 1, 2
-        if (sums%ranmp(imit) /= 0.0_sp) then
-          sums%arm(3, imit) = sums%razmp(imit)/sums%ranmp(imit)
+        if (sums%rp_den_m(imit) /= 0.0_sp) then
+          sums%rf_m(3, imit) = sums%rp_num_m(imit)/sums%rp_den_m(imit)
         end if
-        if (sums%ranms(imit) /= 0.0_sp) then
-          sums%arm(4, imit) = sums%razms(imit)/sums%ranms(imit)
+        if (sums%rs_den_m(imit) /= 0.0_sp) then
+          sums%rf_m(4, imit) = sums%rs_num_m(imit)/sums%rs_den_m(imit)
         end if
       end do
     end if
 
-    sums%rav = (ctl%wr(1)*sums%ar(1) + ctl%wr(2)*sums%ar(2) + &
-                ctl%wr(3)*sums%ar(3) + ctl%wr(4)*sums%ar(4)) / ctl%wrsum
+    sums%rav = (ctl%wr(1)*sums%rf(1) + ctl%wr(2)*sums%rf(2) + &
+                ctl%wr(3)*sums%rf(3) + ctl%wr(4)*sums%rf(4)) / ctl%wrsum
     do imit = 1, 2
-      sums%ravm(imit) = (ctl%wr(1)*sums%arm(1, imit) + &
-                         ctl%wr(2)*sums%arm(2, imit) + &
-                         ctl%wr(3)*sums%arm(3, imit) + &
-                         ctl%wr(4)*sums%arm(4, imit)) / ctl%wrsum
+      sums%ravm(imit) = (ctl%wr(1)*sums%rf_m(1, imit) + &
+                         ctl%wr(2)*sums%rf_m(2, imit) + &
+                         ctl%wr(3)*sums%rf_m(3, imit) + &
+                         ctl%wr(4)*sums%rf_m(4, imit)) / ctl%wrsum
     end do
 
     ! ratio of fractional to integer order intensities
@@ -3180,9 +3184,9 @@ contains
 
     integer :: igap, ibe, ibt, igc, iet
 
-    best%brav = sums%rav
-    best%nsb = is
-    best%bv0 = v0
+    best%rav = sums%rav
+    best%geometry = is
+    best%v0 = v0
 
     igap = 0
     do ibe = 1, ex%nbe
@@ -3190,31 +3194,31 @@ contains
 
       if (ex%gcount(ibe) /= 0) then
         do igc = igap + 1, igap + ex%gcount(ibe)
-          best%ng1b(igc) = ex%ng1(igc)
-          best%ng2b(igc) = ex%ng2(igc)
-          best%ngt1b(igc) = res%ngt1(igc)
-          best%ngt2b(igc) = res%ngt2(igc)
+          best%ng1(igc) = ex%ng1(igc)
+          best%ng2(igc) = ex%ng2(igc)
+          best%ngt1(igc) = res%ngt1(igc)
+          best%ngt2(igc) = res%ngt2(igc)
         end do
       end if
       igap = igap + ex%gcount(ibe)
 
-      best%neminb(ibe) = res%nemin(ibe)
-      best%nemaxb(ibe) = res%nemax(ibe)
-      best%tseb(ibe) = res%sest(ibe)
-      best%bravb(ibe) = res%ravb(ibe)
+      best%nemin(ibe) = res%nemin(ibe)
+      best%nemax(ibe) = res%nemax(ibe)
+      best%sest(ibe) = res%sest(ibe)
+      best%ravb(ibe) = res%ravb(ibe)
 
-      best%ntminb(ibt) = res%ntmin(ibt)
-      best%ntmaxb(ibt) = res%ntmax(ibt)
+      best%ntmin(ibt) = res%ntmin(ibt)
+      best%ntmax(ibt) = res%ntmax(ibt)
       do iet = 1, th%net(ibt)
-        best%bat(ibt, iet) = th%at(ibt, iet)
-        best%bet(ibt, iet) = th%et(ibt, iet)
+        best%at(ibt, iet) = th%at(ibt, iet)
+        best%et(ibt, iet) = th%et(ibt, iet)
       end do
-      best%tstb(ibt) = res%stst(ibt)
+      best%stst(ibt) = res%stst(ibt)
     end do
 
     if (ctl%nfrac /= 0 .and. ctl%nint /= 0) then
-      best%bcife = sums%cife
-      best%bcift = sums%cift
+      best%cife = sums%cife
+      best%cift = sums%cift
     end if
   end subroutine keep_best
 end module rfactor_scan
