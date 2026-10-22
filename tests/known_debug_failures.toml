@@ -66,6 +66,20 @@ reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rf
 spec_ref = "tests/README.md, known baseline issues (GAPIN)"
 
 [[failure]]
+case = "ag100_rfactor_params"
+run = "weights_all"
+match = "rfacsb\\.f.*\\n.*array 'y'"
+reason = "SUM declares Y(1,1,NGP) but VARSUM passes YY(10*NGP) with up to 10*(N-1)+1 points (rfacsb.f:1216, from rfacsb.f:1294); declaration artefact"
+spec_ref = "tests/README.md, known baseline issues"
+
+[[failure]]
+case = "ag100_rfactor_params"
+run = "smooth_gap"
+match = "rfacsb\\.f.*\\n.*array 'bm'"
+reason = "GAPIN declares BM(NGAP) with the output argument NGAP = 0 on entry (rfacsb.f:598); fails for every GAP = 1 input; declaration artefact"
+spec_ref = "tests/README.md, known baseline issues (GAPIN)"
+
+[[failure]]
 case = "cu111"
 run = "E050_L05"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"

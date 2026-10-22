@@ -44,6 +44,22 @@ stays the same and only the input form differs:
   zero intensities (not yet emerging), which READT skips. norm_max sets
   NORM = 2, so exp.column and theo.column are normalised to the highest
   intensity of each beam instead of the integral.
+- ag100_rfactor_params: rfactor input parameters, one run each, from the
+  ag100_rfactor pendry run unless noted. The 2001 CPC paper (Table 7 and
+  p. 415) describes them only for the R-factor input of search (rf.info).
+  theory_beam_unmatched: experimental beam 3 is removed, so theory beam 3
+  has no experimental counterpart; as viperleed writes it, KAV = 0 for that
+  beam, MITTEL = 0 after the experimental beams and MNBED = 3. CPC: KAV(k) = j
+  puts theory beam k into group j, whose beams are averaged; KAV = 0 is not
+  described. weights_all: WR = 0.1, 0.2, 0.3, 0.4 weights R2, R_ZJ, R_P and
+  R_S in the average R factor; not in CPC, where search uses either R_P or
+  R2. smooth_gap: the explicit_gap run of ag100_rfactor_gaps (one gap) with
+  ISMOTH = 2; CPC: ISMOTH smooths the experimental data that many times
+  with a three-point formula; gaps are not described. all_fractional:
+  MITTEL = 2 for every beam, so there are no integer beams (NINT = 0); CPC:
+  MITTEL groups the beams into two sets for R-factor averaging, e.g.
+  integer and fractional. ipr2: IPR = 2; CPC: IPR (0, 1, 2) sets the amount
+  of standard output, for debugging.
 
 Writes tests/cases/<program>/<case>/{case.toml, inputs/}; the expected
 outputs come from make_expected.py. With --check, the cases are derived
@@ -263,7 +279,77 @@ def ag100_rfactor_hand():
             "runs": [pseudo, norm_max], "inputs": inputs}
 
 
-CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2, ag100_rfactor_hand)}
+def set_beam_lines(wexpel, kav, nbea, ibp, mittel):
+    """Replace the four beam-index lines after &NL1 of an rfactor WEXPEL
+    (KAV, NBEA, IBP, MITTEL; format 25I4)."""
+    lines = wexpel.split("\n")
+    first = lines.index(" &END") + 1
+    lines[first:first + 4] = ["".join(f"{k:4d}" for k in row)
+                              for row in (kav, nbea, ibp, mittel)]
+    return "\n".join(lines)
+
+
+def drop_exp_beam(wexpel, beam):
+    """Remove experimental beam `beam` (1-based) from an rfactor WEXPEL: its
+    label line, the NEE/FAC line and its data, up to the next label."""
+    lines = wexpel.split("\n")
+    labels = [i for i, l in enumerate(lines) if re.fullmatch(r"\*\(.*\)\*\s*", l)]
+    if beam >= len(labels):
+        raise ValueError("only beams followed by another beam can be dropped")
+    del lines[labels[beam - 1]:labels[beam]]
+    return "\n".join(lines)
+
+
+def set_param(param, name, value):
+    """Set one PARAMETER value (NAME = value) in a PARAM file."""
+    new, n = re.subn(rf"\b{name} = \d+", f"{name} = {value}", param)
+    if n != 1:
+        raise ValueError(f"expected one '{name} =' in PARAM, found {n}")
+    return new
+
+
+def ag100_rfactor_params():
+    """Spec of ag100_rfactor_params: rfactor input parameters, one run each."""
+    case = "ag100_rfactor_params"
+    (pendry,), inputs = _source_runs("rfactor", "ag100_rfactor", ["pendry"])
+    title = f"tl-test {case}"
+    inputs[pendry["stdin"]] = set_first_line_title(inputs[pendry["stdin"]], title)
+    wexpel = set_wexpel_title(inputs.pop(pendry["files"]["WEXPEL"]), title)
+    runs = []
+
+    def add(name, text, **source):
+        path = f"inputs/WEXPEL_{name}"
+        inputs[path] = text
+        runs.append({**pendry, **source, "name": name, "files": {"WEXPEL": path}})
+
+    # experimental beam 3, (2 0), removed: theory beam 3 has no experimental
+    # counterpart, and viperleed writes KAV = 0 for it, MITTEL = 0 after the
+    # experimental beams, and PARAM with MNBED = 3
+    inputs["inputs/PARAM_unmatched"] = set_param(inputs[pendry["param"]], "MNBED", 3)
+    add("theory_beam_unmatched",
+        set_beam_lines(drop_exp_beam(wexpel, 3), kav=[1, 2, 0, 3], nbea=[1, 2, 3],
+                       ibp=[1, 2, 3], mittel=[1, 1, 1, 0]),
+        param="inputs/PARAM_unmatched")
+    add("weights_all", set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,"))
+    (gap,), gap_inputs = _source_runs("rfactor", "ag100_rfactor_gaps", ["explicit_gap"])
+    add("smooth_gap", set_namelist_value(
+        set_wexpel_title(gap_inputs[gap["files"]["WEXPEL"]], title), "ISMOTH", 2))
+    add("all_fractional", set_beam_lines(wexpel, kav=[1, 2, 3, 4], nbea=[1, 2, 3, 4],
+                                         ibp=[1, 2, 3, 4], mittel=[2, 2, 2, 2]))
+    add("ipr2", set_namelist_value(wexpel, "IPR", 2))
+    return {"program": "rfactor", "name": case,
+            "description": "Ag(100) rfactor input parameters, one run each: a theory beam "
+                           "without experimental counterpart (KAV = 0), all four R-factor "
+                           "weights, smoothing with a gap, only fractional beams "
+                           "(MITTEL = 2), IPR = 2; CPC 2001 Table 7 "
+                           "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
+            "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
+                       "ipr-2"],
+            "runs": runs, "inputs": inputs}
+
+
+CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2, ag100_rfactor_hand,
+                                 ag100_rfactor_params)}
 
 
 def _write(spec, cases_dir):

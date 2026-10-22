@@ -57,4 +57,9 @@ rfactor = [
     "ag100_rfactor_short/rs",
     "ag100_rfactor_hand/pseudo_exp",
     "ag100_rfactor_hand/norm_max",
+    "ag100_rfactor_params/theory_beam_unmatched",
+    "ag100_rfactor_params/weights_all",
+    "ag100_rfactor_params/smooth_gap",
+    "ag100_rfactor_params/all_fractional",
+    "ag100_rfactor_params/ipr2",
 ]
