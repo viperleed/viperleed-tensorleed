@@ -122,7 +122,8 @@ program rfactor
   close(8)
 
   call write_theory_header(tr%title, tr%pq, ctl%kav, values(1:tr%ns))
-  call average_theory(ctl, th, tr, tr%ns, neti, ngp, ats, atsav, suspect, am)
+  call average_theory(ctl, th, tr, tr%ns, neti, ngp, ex%ngap, ats, atsav, &
+                      suspect, am)
   if (suspect /= 0) then
     call write_suspect_intensity(suspect, am)
     stop

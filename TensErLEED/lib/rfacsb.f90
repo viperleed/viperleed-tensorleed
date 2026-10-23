@@ -129,7 +129,7 @@ module array_growth
   public :: grow
 
   !> Makes the last dimension of an allocated array at least n long. The
-  !! existing elements are kept; new elements are zero.
+  !! existing elements are kept; new elements are undefined.
   interface grow
     module procedure grow_integer, grow_real, grow_real_2d
   end interface grow
@@ -145,7 +145,6 @@ contains
     if (n <= size(a)) return
     allocate(b(n))
     b(1:size(a)) = a
-    b(size(a)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_integer
 
@@ -158,7 +157,6 @@ contains
     if (n <= size(a)) return
     allocate(b(n))
     b(1:size(a)) = a
-    b(size(a)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_real
 
@@ -171,7 +169,6 @@ contains
     if (n <= size(a, 2)) return
     allocate(b(size(a, 1), n))
     b(:, 1:size(a, 2)) = a
-    b(:, size(a, 2)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_real_2d
 end module array_growth
@@ -2333,7 +2330,6 @@ contains
     call grow(ex%ee, ngp)
     allocate(ex%aep(nbed, ngp), ex%aepp(nbed, ngp), ex%ype(nbed, ngp), &
              ex%yse(nbed, ngp))
-    ex%aep = 0; ex%aepp = 0; ex%ype = 0; ex%yse = 0
 
     igap = 0
     do ib = 1, ex%nbe
@@ -2644,13 +2640,15 @@ contains
   !> Averages the beam groups of the nss geometries and neti energies in
   !! ats into atsav and th%pqav. suspect is the first averaged beam whose
   !! maximum intensity am exceeds 1, or 0 if there is none. th is sized for
-  !! the averaged beams of one geometry on ngp points.
-  subroutine average_theory(ctl, th, tr, nss, neti, ngp, ats, atsav, suspect, &
-                            am)
+  !! the averaged beams of one geometry on ngp points; with ngap > 0
+  !! experimental gaps, its intensities, derivatives and Y functions start
+  !! at zero.
+  subroutine average_theory(ctl, th, tr, nss, neti, ngp, ngap, ats, atsav, &
+                            suspect, am)
     type(control_parameters), intent(in) :: ctl
     type(theory_beams), intent(out) :: th
     type(theory_records), intent(in) :: tr
-    integer, intent(in) :: nss, neti, ngp
+    integer, intent(in) :: nss, neti, ngp, ngap
     real(sp), contiguous, intent(in) :: ats(:, :, :)
     real(sp), allocatable, intent(out) :: atsav(:, :, :)
     integer, intent(out) :: suspect
@@ -2663,8 +2661,12 @@ contains
              th%tstyp2(nbtd), th%tstys2(nbtd))
     allocate(th%at(nbtd, ngp), th%et(nbtd, ngp), th%atp(nbtd, ngp), &
              th%atpp(nbtd, ngp), th%ypt(nbtd, ngp), th%yst(nbtd, ngp))
-    th%pqav = 0; th%net = 0; th%tst = 0; th%tstyp2 = 0; th%tstys2 = 0
-    th%at = 0; th%et = 0; th%atp = 0; th%atpp = 0; th%ypt = 0; th%yst = 0
+    ! The gap integrals of beam_rfactor run over the experimental gap
+    ! shifted onto the theory grid, which can reach past the last point of
+    ! a theory curve; there the legacy static arrays read zero.
+    if (ngap > 0) then
+      th%at = 0; th%atp = 0; th%atpp = 0; th%ypt = 0; th%yst = 0
+    end if
     allocate(atsav(nss, nbtd, neti))
 
     call rintav(ats, nss, nbtd, neti, tr%pq, th%pqav, ctl%kav, tr%sym, &
@@ -2830,9 +2832,11 @@ contains
     allocate(best%et(nbtd, ngp), best%at(nbtd, ngp))
     allocate(best%ng1(ngap), best%ng2(ngap), best%ngt1(ngap), &
              best%ngt2(ngap))
+    ! If no beam overlaps, the best fit is never set and the column
+    ! output and the best-fit line read these as the legacy static zeros
     best%nemin = 0; best%nemax = 0; best%ntmin = 0; best%ntmax = 0
     best%ng1 = 0; best%ng2 = 0; best%ngt1 = 0; best%ngt2 = 0
-    best%sest = 0; best%stst = 0; best%ravb = 0; best%et = 0; best%at = 0
+    best%sest = 0; best%stst = 0; best%ravb = 0
     best%v0 = 0; best%cife = 0; best%cift = 0; best%geometry = 0
     best%rav = 1.e2_sp
   end subroutine start_scan
