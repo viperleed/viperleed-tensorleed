@@ -60,6 +60,12 @@ stays the same and only the input form differs:
   MITTEL groups the beams into two sets for R-factor averaging, e.g.
   integer and fractional. ipr2: IPR = 2; CPC: IPR (0, 1, 2) sets the amount
   of standard output, for debugging.
+- ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
+  experimental and theory beams instead of 4, each a copy of one of the 4
+  beams with its intensities scaled by a smooth factor that differs between
+  beams. KAV, NBEA, IBP and MITTEL are read as records of 25 entries: nb25
+  fills one record exactly (followed by a blank line, as viperleed writes
+  it), nb30 needs two.
 
 Writes tests/cases/<program>/<case>/{case.toml, inputs/}; the expected
 outputs come from make_expected.py. With --check, the cases are derived
@@ -77,6 +83,7 @@ __created__ = '2026-10-14'
 __license__ = 'GPLv3+'
 
 import argparse
+import math
 import re
 import sys
 import tempfile
@@ -97,6 +104,8 @@ HARTREE = 27.211396   # eV, as in TensErLEED's GLOBAL
 # from 1.1504 so that the three sublayers of the composite layer have
 # distinct heights
 DEEPER_IR_X = 1.2004
+# ag100_rfactor_beams: number of experimental and theory beams per run
+N_BEAMS = (25, 30)
 
 
 def _source_runs(program, source, run_names):
@@ -280,12 +289,17 @@ def ag100_rfactor_hand():
 
 
 def set_beam_lines(wexpel, kav, nbea, ibp, mittel):
-    """Replace the four beam-index lines after &NL1 of an rfactor WEXPEL
-    (KAV, NBEA, IBP, MITTEL; format 25I4)."""
+    """Replace the beam-index lines between &NL1 and &NL2 of an rfactor WEXPEL
+    (KAV, NBEA, IBP, MITTEL; format 25I4, 25 entries per line). As viperleed
+    writes them, a list whose last line is full is followed by a blank line."""
     lines = wexpel.split("\n")
-    first = lines.index(" &END") + 1
-    lines[first:first + 4] = ["".join(f"{k:4d}" for k in row)
-                              for row in (kav, nbea, ibp, mittel)]
+    first, nl2 = lines.index(" &END") + 1, lines.index("&NL2")
+    block = []
+    for row in (kav, nbea, ibp, mittel):
+        block += ["".join(f"{k:4d}" for k in row[i:i + 25]) for i in range(0, len(row), 25)]
+        if len(row) % 25 == 0:
+            block.append("")
+    lines[first:nl2] = block
     return "\n".join(lines)
 
 
@@ -348,8 +362,97 @@ def ag100_rfactor_params():
             "runs": runs, "inputs": inputs}
 
 
+def fortran_e14_5(x):
+    """x in Fortran format E14.5 (0.ddddd E+xx)."""
+    if x == 0:
+        return "   0.00000E+00"
+    mantissa, exponent = f"{x:.4E}".split("E")
+    digits = mantissa.lstrip("-").replace(".", "")
+    return f"{'-' if x < 0 else ''}0.{digits}E{int(exponent) + 1:+03d}".rjust(14)
+
+
+def beam_scale(k, energy):
+    """Intensity factor of the copies of a beam: smooth in energy, different for
+    each beam k (0-based), so that every copy has its own R factor."""
+    return 1.0 + 0.25 * math.sin(0.037 * energy * (k + 1) + k)
+
+
+def copy_exp_beams(wexpel, n):
+    """Experimental data of an rfactor WEXPEL with n beams: beam k (0-based) is
+    beam k mod 4 of the source with its intensities scaled by beam_scale."""
+    lines = wexpel.split("\n")
+    i_data = lines.index(" (12E14.5)") + 1
+    source, i = [], i_data
+    while i < len(lines) and lines[i].strip():
+        npts, rest = int(lines[i + 1][:4]), lines[i + 1][4:]
+        values, i = [], i + 2
+        while len(values) < 2 * npts:
+            values += [float(v) for v in lines[i].split()]
+            i += 1
+        source.append((rest, values[0::2], values[1::2]))
+    data = []
+    for k in range(n):
+        rest, energies, intensities = source[k % len(source)]
+        data += [f"*({k:3d}  0)*", f"{len(energies):4d}{rest}"]
+        pairs = [v for e, a in zip(energies, intensities) for v in (e, a * beam_scale(k, e))]
+        data += ["".join(fortran_e14_5(v) for v in pairs[j:j + 12])
+                 for j in range(0, len(pairs), 12)]
+    return "\n".join(lines[:i_data] + data + lines[i:])
+
+
+def copy_theory_beams(spectrum, n):
+    """A theory spectrum of 4 beams with n beams, as copy_exp_beams: beam k is
+    beam k mod 4 scaled by beam_scale. Each record is the energy and geometry
+    (F7.2, F7.4) with the first 4 intensities, then 5 intensities per line."""
+    lines = spectrum.split("\n")
+    if int(lines[1]) != 4:
+        raise ValueError("the source spectrum must have 4 beams")
+    out = [lines[0], f"{n:5d}"]
+    out += [f"{k + 1:5d}{1.0 + k:10.5f}{0.0:10.5f}{1:3d}" for k in range(n)]
+    for line in lines[6:]:
+        if not line.strip():
+            continue
+        energy = float(line[:7])
+        source = [float(line[14 + 14 * j:28 + 14 * j]) for j in range(4)]
+        values = [fortran_e14_5(source[k % 4] * beam_scale(k, energy)) for k in range(n)]
+        out.append(line[:14] + "".join(values[:4]))
+        out += ["".join(values[j:j + 5]) for j in range(4, n, 5)]
+        if (n - 4) % 5 == 0:
+            out.append("")
+    return "\n".join(out) + "\n"
+
+
+def ag100_rfactor_beams():
+    """Spec of ag100_rfactor_beams: more experimental and theory beams than one
+    25I4 record of KAV/NBEA/IBP/MITTEL holds."""
+    case = "ag100_rfactor_beams"
+    (pendry,), inputs = _source_runs("rfactor", "ag100_rfactor", ["pendry"])
+    title = f"tl-test {case}"
+    spectrum = set_first_line_title(inputs.pop(pendry["stdin"]), title)
+    wexpel = set_wexpel_title(inputs.pop(pendry["files"]["WEXPEL"]), title)
+    param = inputs.pop(pendry["param"])
+    runs = []
+    for n in N_BEAMS:
+        name = f"nb{n}"
+        inputs[f"inputs/spectrum_{name}"] = copy_theory_beams(spectrum, n)
+        inputs[f"inputs/PARAM_{name}"] = set_param(set_param(param, "MNBED", n), "MNBTD", n)
+        beams = list(range(1, n + 1))
+        inputs[f"inputs/WEXPEL_{name}"] = set_beam_lines(
+            copy_exp_beams(wexpel, n), kav=beams, nbea=beams, ibp=beams,
+            mittel=[1 + k % 2 for k in range(n)])
+        runs.append({**pendry, "name": name, "stdin": f"inputs/spectrum_{name}",
+                     "param": f"inputs/PARAM_{name}",
+                     "files": {"WEXPEL": f"inputs/WEXPEL_{name}"}})
+    return {"program": "rfactor", "name": case,
+            "description": "Ag(100) rfactor as ag100_rfactor pendry with 25 and 30 "
+                           "experimental and theory beams (scaled copies of the 4 beams): "
+                           "beam lists of one full 25I4 record and of two records",
+            "covers": ["beams-25", "beams-over-25"],
+            "runs": runs, "inputs": inputs}
+
+
 CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2, ag100_rfactor_hand,
-                                 ag100_rfactor_params)}
+                                 ag100_rfactor_params, ag100_rfactor_beams)}
 
 
 def _write(spec, cases_dir):
