@@ -81,6 +81,14 @@ def test_overflow_raises(text):
         tokenize(text)
 
 
+def test_overflow_mode_returns_overflow_tokens():
+    """With overflow=True, an overflow field is a token with its text and end column."""
+    toks = tokenize(" 1 *******  0.5000 *( 1  0)*", overflow=True)
+    assert [(t.kind, t.value) for t in toks if t.kind != "text"] == [
+        ("int", 1), ("overflow", "*******"), ("float", 0.5), ("int", 1), ("int", 0)]
+    assert next(t for t in toks if t.kind == "overflow").end == 10
+
+
 def test_ignored_lines_are_skipped_and_line_numbers_kept():
     """Ignored lines give no tokens, and later tokens keep their line numbers."""
     toks = tokenize("Ag100_kept 261005\n 1.5\n", ignore_line_patterns=[r"^Ag100"])

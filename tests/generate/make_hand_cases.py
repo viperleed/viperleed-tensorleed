@@ -70,8 +70,8 @@ stays the same and only the input form differs:
   to theory and experiment for some inner-potential shifts. no_overlap: all experimental
   points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
   overlaps the theory (up to 216 eV); legacy ends normally and prints
-  asterisks for the R factors, so only ROUTSHORT and the plot columns are
-  compared. Both runs are not run in the debug build
+  asterisks for the average R factors in ROUT and stdout. Both runs are not
+  run in the debug build
   (README, 'Rules'): their inputs drive undefined behaviour that the legacy
   code shares, named in case.toml.
 - ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
@@ -415,9 +415,7 @@ def ag100_rfactor_params():
     no_overlap = set_namelist_value(wexpel, "EMAX", f"{NO_OVERLAP_EMAX:.2f}")
     for beam in range(1, 5):
         no_overlap = drop_exp_points(no_overlap, beam, 0.0, NO_OVERLAP_EXP_MIN - 0.01)
-    # ROUT and stdout print the undefined average R factor as an overflow
-    # field, which the comparison rejects
-    add("no_overlap", no_overlap, outputs=["ROUTSHORT", "exp.column", "theo.column"],
+    add("no_overlap", no_overlap,
         no_debug=["No beam overlaps the theory: the averages over the beams divide",
                   "0 by 0, as in legacy rfactor.f (the legacy debug build stops with",
                   "SIGFPE there)."])

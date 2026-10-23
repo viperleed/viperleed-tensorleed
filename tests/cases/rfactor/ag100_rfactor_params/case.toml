@@ -61,7 +61,7 @@ name = "no_overlap"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_no_overlap" }
-outputs = ["ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 # No beam overlaps the theory: the averages over the beams divide
 # 0 by 0, as in legacy rfactor.f (the legacy debug build stops with
 # SIGFPE there).

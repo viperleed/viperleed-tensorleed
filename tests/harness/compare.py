@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .tensor import TensorLayoutError, block_scales, label_tensor
-from .tokens import FortranOverflowError, kept_lines, tokenize
+from .tokens import kept_lines, tokenize
 
 
 @dataclass(frozen=True)
@@ -73,17 +73,13 @@ def compare_texts(actual, expected, tol, ignore_line_patterns=(), skip_lines=())
     Floats match if |a-b| <= tol.allowed(b, ulp(b), scale), i.e.
     rtol*|b| + atol_frac*max|expected float| (of the file or of b's line)
     + atol + ulps*ulp(b), where ulp(b) is b's unit in the last printed digit;
-    ints and text must be identical. A line or token count mismatch, an empty
-    expected text, or an overflow field ('***') is a failure.
+    ints and text must be identical. An overflow field ('***') matches only
+    an identical overflow field ending in the same column. A line or token
+    count mismatch or an empty expected text is a failure.
     """
     res = CompareResult(ok=True)
-    try:
-        act = tokenize(actual, ignore_line_patterns, skip_lines)
-        exp = tokenize(expected, ignore_line_patterns, skip_lines)
-    except FortranOverflowError as err:
-        res.ok = False
-        res.first_failures.append(f"overflow field: {err}")
-        return res
+    act = tokenize(actual, ignore_line_patterns, skip_lines, overflow=True)
+    exp = tokenize(expected, ignore_line_patterns, skip_lines, overflow=True)
     if not exp:
         res.ok = False
         res.first_failures.append("expected output contains no tokens")

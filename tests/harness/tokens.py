@@ -3,12 +3,13 @@
 Fortran fixed-width output frequently concatenates numbers without
 separators, omits the leading zero (-.1653E+00), and writes three-digit
 exponents without the 'E' (0.123-100). With an 'E', the exponent always
-has two digits (0.142878E+020.61E-06 is two numbers; see _FLOAT_E). A field filled with '*' means the
-value did not fit the format; this is always an error, also a lone '*'
-(a field of width 1). The exceptions are text: the two '*' of an rfactor
-beam label such as '*( 1  0)*', and a single '*' in column 1 followed by a
-letter or a blank, which marks a comment line of rfactor's standard output
-('*BEAM NO.  1 ...', '* <title>').
+has two digits (0.142878E+020.61E-06 is two numbers; see _FLOAT_E). A
+field filled with '*' (also a lone '*', a field of width 1) means the
+value did not fit the format: tokenize raises FortranOverflowError, or,
+with overflow=True, returns it as an "overflow" token. The exceptions are
+text: the two '*' of an rfactor beam label such as '*( 1  0)*', and a
+single '*' in column 1 followed by a letter or a blank, which marks a
+comment line of rfactor's standard output ('*BEAM NO.  1 ...', '* <title>').
 """
 
 __authors__ = (
@@ -28,13 +29,13 @@ class FortranOverflowError(ValueError):
 
 class Token(NamedTuple):
     """One number or text item of Fortran output; numbers carry their print format."""
-    kind: Literal["float", "int", "text"]
+    kind: Literal["float", "int", "text", "overflow"]
     value: object
     line: int
     ulp: float = 0.0  # floats: unit in the last printed digit
     fixed: bool = False  # floats: printed without exponent (F format)
     fmt: str = ""  # numbers: format as compared (number_format)
-    end: int = 0  # numbers: column of the last character (1-based)
+    end: int = 0  # numbers, overflow fields: column of the last character (1-based)
 
 
 def _ulp(s: str) -> float:
@@ -106,12 +107,13 @@ def kept_lines(text, ignore_line_patterns=(), skip_lines=()):
             if lineno not in skip and not any(p.search(line) for p in ignore)]
 
 
-def tokenize(text, ignore_line_patterns=(), skip_lines=()):
+def tokenize(text, ignore_line_patterns=(), skip_lines=(), overflow=False):
     """Split text into Token(kind, value, line, ...); skip ignored lines.
 
     ignore_line_patterns: regexes; a line matching any is skipped.
     skip_lines: 1-based line numbers to skip.
-    Raises FortranOverflowError on '*' overflow fields.
+    overflow: if False, raise FortranOverflowError on '*' overflow fields;
+    if True, return each as Token("overflow", <the '*' text>, line, end=...).
     """
     tokens = []
     for lineno, line in kept_lines(text, ignore_line_patterns, skip_lines):
@@ -123,9 +125,11 @@ def tokenize(text, ignore_line_patterns=(), skip_lines=()):
             s = m.group()
             if kind == "stars" and s == "*" and m.start() in text_stars:
                 kind = "text"
-            if kind == "stars":
+            if kind == "stars" and overflow:
+                tokens.append(Token("overflow", s, lineno, end=m.end()))
+            elif kind == "stars":
                 raise FortranOverflowError(f"line {lineno}: overflow field {s!r}")
-            if kind in ("fe", "f3", "fp"):
+            elif kind in ("fe", "f3", "fp"):
                 tokens.append(Token("float", _to_float(s), lineno, _ulp(s), kind == "fp",
                                     number_format(s, kind), m.end()))
             elif kind == "int":
