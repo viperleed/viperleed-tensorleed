@@ -1060,10 +1060,8 @@ contains
       return
     end if
 
-    lmin = int((e(imin) - 0.0001_sp) / eincr) + 1
-    lmin = max(lmin, 0)
+    call grid_bounds(e(imin), e(ne), eincr, lmin, lmax)
     xmin = real(lmin, sp) * eincr
-    lmax = int((e(ne) + 0.0001_sp) / eincr)
 
     do i = imin, ne
       e(i - imin + 1) = e(i)
@@ -1090,11 +1088,20 @@ contains
       grid_points = 0
       return
     end if
-    lmin = int((minval(e) - 0.0001_sp) / eincr) + 1
-    lmin = max(lmin, 0)
-    lmax = int((maxval(e) + 0.0001_sp) / eincr)
+    call grid_bounds(minval(e), maxval(e), eincr, lmin, lmax)
     grid_points = lmax - lmin + 1
   end function grid_points
+
+  !> First and last working grid point (multiples lmin and lmax of eincr)
+  !! for a curve from energy elow to ehigh.
+  pure subroutine grid_bounds(elow, ehigh, eincr, lmin, lmax)
+    real(sp), intent(in) :: elow, ehigh, eincr
+    integer, intent(out) :: lmin, lmax
+
+    lmin = int((elow - 0.0001_sp) / eincr) + 1
+    lmin = max(lmin, 0)
+    lmax = int((ehigh + 0.0001_sp) / eincr)
+  end subroutine grid_bounds
 
   !> Interpolates the intensities a(e) onto the working grid (steps of
   !! eincr), replacing (a, e, ne); negative values become zero. Leading
@@ -1126,10 +1133,8 @@ contains
       return
     end if
 
-    lmin = int((e(imin) - 0.0001_sp) / eincr) + 1
-    lmin = max(lmin, 0)
+    call grid_bounds(e(imin), e(ne), eincr, lmin, lmax)
     xmin = real(lmin, sp) * eincr
-    lmax = int((e(ne) + 0.0001_sp) / eincr)
 
     do i = imin, ne
       x(i - imin + 1) = e(i)
@@ -1896,7 +1901,7 @@ contains
     integer, intent(out) :: nee(nbed)
     character(len=4), intent(out) :: bename(5, nbed)
 
-    real(sp), allocatable :: eeh(:)
+    real(sp), allocatable :: eeh(:), aeh(:, :)
     real(sp) :: dummy
     integer :: ioff(nbed)
     integer :: i, ib, inn, j, k, nbeams
@@ -1929,8 +1934,10 @@ contains
     j = 0
     do
       j = j + 1
-      call grow(eeh, j)
-      call grow(ae, j)
+      if (j > size(eeh)) then
+        call grow(eeh, 2*j - 1)
+        call grow(ae, 2*j - 1)
+      end if
       read(8, 105, end=250) eeh(j), dummy, (ae(k, j), k = 1, nbed)
       do k = 1, nbed
         if (ae(k, j) > 1.e-20_sp) then
@@ -1942,7 +1949,12 @@ contains
     end do
 
 250 continue
-    call grow(ee, size(ae, 2))
+    ! ae keeps j columns, the records read and the one at the end of file;
+    ! the size of the working grid depends on it
+    allocate(aeh(nbed, j))
+    aeh = ae(:, 1:j)
+    call move_alloc(aeh, ae)
+    call grow(ee, j)
     do k = 1, nbed
       do j = 1, nee(k)
         ee(k, j) = eeh(j + ioff(k))
