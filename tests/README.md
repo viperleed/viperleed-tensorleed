@@ -58,9 +58,11 @@ tests/
                                  (+ rfacsb_routines/: driver.f90, values.json)
   tier2/                         test_viperleed.py, systems/<name>/ (frozen viperleed inputs + expected.toml)
   benchmark/                     test_benchmark.py, README.md
-  cases/refcalc|rfactor|benchmark/<case>/   case.toml, inputs/, expected/<run>/
+  cases/refcalc|rfactor|benchmark/<case>/   case.toml, inputs/, expected/<run>/ (benchmark: no expected/;
+                                 bench_ag100_rfactor: inputs/ generated at test time, see benchmark/README.md)
   cases/MANIFEST.toml            all (case, run) pairs; tier 1 fails if the loaded cases differ
-  generate/                      generators (run in an environment with viperleed installed unless noted; not run by pytest)
+  generate/                      generators (run in an environment with viperleed installed unless noted; not run by pytest,
+                                 except rfactor_inputs.py, which the benchmark tests use to generate inputs)
 ```
 
 ## Rules: tolerances, reference data, known debug failures
@@ -145,7 +147,7 @@ Run the generators as modules from `tests/` (`cd tests`):
 
 ```bash
 python -m generate.make_refcalc_cases [--only CASE] [--check-only]                          # FINs, PARAMs
-python -m generate.make_rfactor_cases [--only CASE] [--benchmark] [--verify-only]           # WEXPEL, spectra
+python -m generate.make_rfactor_cases [--only CASE] [--benchmark] [--verify-only]           # WEXPEL, spectra (--benchmark: case.toml only)
 conda run -n tl-tests  python -m generate.make_expected --tl-root=<baseline>                # expected/
 conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root=<baseline> [--write]
 python -m generate.make_tier2_expected [--only NAME] [--calibrate]

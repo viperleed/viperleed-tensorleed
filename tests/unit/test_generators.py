@@ -1,5 +1,6 @@
-"""Baseline-tree and coverage guards of the generators (tests/generate), and
-the hand-made cases' identity with their source cases.
+"""Baseline-tree and coverage guards of the generators (tests/generate),
+the hand-made cases' identity with their source cases, and the generated
+benchmark inputs.
 
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
@@ -20,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from generate import baseline_tree, make_expected, make_hand_cases
+from generate import baseline_tree, make_expected, make_hand_cases, rfactor_inputs
 from generate.baseline_tree import GeneratorError, check_baseline_tree
-from harness.cases import CASES_DIR
+from harness.cases import CASES_DIR, load_cases_from
 from unit.gitrepo import git
 
 
@@ -232,3 +233,38 @@ def test_changed_expected_line_breaks_identity(tmp_path):
     fd.write_text("\n".join(lines))
     assert _differ_beyond_title(tmp_path / case, tmp_path / source, runs, files) == [
         f"{runs[0]}/fd.out"]
+
+
+# ------------------------------------------------ generated benchmark inputs ---
+
+def _files(case_dir):
+    """{relative path: bytes} of every file in case_dir."""
+    return {p.relative_to(case_dir): p.read_bytes() for p in case_dir.rglob("*") if p.is_file()}
+
+
+def test_benchmark_case_toml_is_the_generated_one(tmp_path):
+    """The committed case.toml of the generated benchmark case is the one its generator writes."""
+    case_dir = rfactor_inputs.build_benchmark_case(tmp_path)
+    committed = rfactor_inputs.BENCHMARK_DIR / case_dir.name / "case.toml"
+    assert (case_dir / "case.toml").read_bytes() == committed.read_bytes()
+
+
+def test_benchmark_inputs_are_not_committed():
+    """The generated benchmark case has only its case.toml in the cases directory."""
+    case_dir = rfactor_inputs.BENCHMARK_DIR / "bench_ag100_rfactor"
+    assert sorted(p.name for p in case_dir.iterdir()) == ["case.toml"]
+
+
+def test_benchmark_inputs_are_deterministic(tmp_path):
+    """Two generations of the benchmark case are byte-identical."""
+    first = rfactor_inputs.build_benchmark_case(tmp_path / "a")
+    second = rfactor_inputs.build_benchmark_case(tmp_path / "b")
+    assert _files(first) == _files(second)
+
+
+def test_generated_benchmark_case_loads_with_its_inputs(tmp_path):
+    """The generated case loads like a committed one, and every input of its runs exists."""
+    rfactor_inputs.build_benchmark_case(tmp_path / "benchmark")
+    (case,) = load_cases_from(tmp_path, "benchmark")
+    inputs = [p for run in case.runs for p in (run.stdin, run.param, *run.files.values())]
+    assert case.runs and all(p.is_file() for p in inputs)
