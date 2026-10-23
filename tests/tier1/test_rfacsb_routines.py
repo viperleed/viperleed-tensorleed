@@ -34,12 +34,20 @@ def driver(request, tl_root, tmp_path_factory):
     flags = request.param
     workdir = tmp_path_factory.mktemp(f"rfacsb-driver-{flags.name}")
     exe = workdir / "driver"
-    subprocess.run(["gfortran", *flags.compile.split(), "-std=f2018", "-w",
-                    "-J", str(workdir), "-o", str(exe),
-                    str(tl_root / "TensErLEED" / "lib" / "rfacsb.f90"),
-                    str(DATA / "driver.f90")],
-                   check=True, capture_output=True, text=True)
+    proc = subprocess.run(["gfortran", *flags.compile.split(), "-std=f2018", "-w",
+                           "-J", str(workdir), "-o", str(exe),
+                           str(tl_root / "TensErLEED" / "lib" / "rfacsb.f90"),
+                           str(DATA / "driver.f90")],
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        pytest.fail(f"driver build failed:\n{proc.stdout}{proc.stderr}")
     return exe
+
+
+@pytest.mark.tier1
+def test_values_hold_cases():
+    """values.json holds input sets (without them the comparison below is skipped)."""
+    assert CASES, f"no cases in {DATA / 'values.json'}"
 
 
 @pytest.mark.tier1
