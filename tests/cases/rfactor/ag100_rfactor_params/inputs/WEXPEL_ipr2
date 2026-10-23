@@ -9,7 +9,7 @@
  V01=     -3.00,
  V02=      3.00,
  VINCR=    0.50,
- ISMOTH=      0,
+ ISMOTH=      1,
  EOT=         0,
  PLOT=        1,
  GAP=         0,

@@ -58,8 +58,9 @@ stays the same and only the input form differs:
   with a three-point formula; gaps are not described. all_fractional:
   MITTEL = 2 for every beam, so there are no integer beams (NINT = 0); CPC:
   MITTEL groups the beams into two sets for R-factor averaging, e.g.
-  integer and fractional. ipr2: IPR = 2; CPC: IPR (0, 1, 2) sets the amount
-  of standard output, for debugging. gaps3_all: GAPS3, one explicit gap in
+  integer and fractional. ipr2: IPR = 2 with ISMOTH = 1, so the smoothed
+  curves are printed as well; CPC: IPR (0, 1, 2) sets the amount of
+  standard output, for debugging. gaps3_all: GAPS3, one explicit gap in
   each of experimental beams 1, 2 and 4, with all four weights of
   weights_all; MNGAP = 3. Each beam has at most one gap: the gap integrals
   of several gaps in one beam are overwritten in legacy (README, known
@@ -367,7 +368,7 @@ def ag100_rfactor_params():
         set_wexpel_title(gap_inputs[gap["files"]["WEXPEL"]], title), "ISMOTH", 2))
     add("all_fractional", set_beam_lines(wexpel, kav=[1, 2, 3, 4], nbea=[1, 2, 3, 4],
                                          ibp=[1, 2, 3, 4], mittel=[2, 2, 2, 2]))
-    add("ipr2", set_namelist_value(wexpel, "IPR", 2))
+    add("ipr2", set_namelist_value(set_namelist_value(wexpel, "IPR", 2), "ISMOTH", 1))
     # one gap in each of three beams, so that the gap offsets of the later
     # beams are those of the earlier ones; MNGAP = number of gaps
     inputs["inputs/PARAM_gaps3"] = set_param(inputs[pendry["param"]], "MNGAP", len(GAPS3))
@@ -377,7 +378,7 @@ def ag100_rfactor_params():
             "description": "Ag(100) rfactor input parameters, one run each: a theory beam "
                            "without experimental counterpart (KAV = 0), all four R-factor "
                            "weights, smoothing with a gap, only fractional beams "
-                           "(MITTEL = 2), IPR = 2, gaps in three beams; CPC 2001 Table 7 "
+                           "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
                        "ipr-2", "gaps-several-beams"],
