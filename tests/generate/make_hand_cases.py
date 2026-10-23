@@ -59,7 +59,11 @@ stays the same and only the input form differs:
   MITTEL = 2 for every beam, so there are no integer beams (NINT = 0); CPC:
   MITTEL groups the beams into two sets for R-factor averaging, e.g.
   integer and fractional. ipr2: IPR = 2; CPC: IPR (0, 1, 2) sets the amount
-  of standard output, for debugging.
+  of standard output, for debugging. gaps3_all: GAPS3, one explicit gap in
+  each of experimental beams 1, 2 and 4, with all four weights of
+  weights_all; MNGAP = 3. Each beam has at most one gap: the gap integrals
+  of several gaps in one beam are overwritten in legacy (README, known
+  baseline issues).
 - ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
   experimental and theory beams instead of 4, each a copy of one of the 4
   beams with its intensities scaled by a smooth factor that differs between
@@ -104,6 +108,9 @@ HARTREE = 27.211396   # eV, as in TensErLEED's GLOBAL
 # from 1.1504 so that the three sublayers of the composite layer have
 # distinct heights
 DEEPER_IR_X = 1.2004
+# ag100_rfactor_params/gaps3_all: explicit gaps, (experimental beam, first and
+# last energy in eV), one in each of three beams
+GAPS3 = ((1, 70.0, 75.0), (2, 120.0, 126.0), (4, 190.0, 195.0))
 # ag100_rfactor_beams: number of experimental and theory beams per run
 N_BEAMS = (25, 30)
 
@@ -322,6 +329,16 @@ def set_param(param, name, value):
     return new
 
 
+def add_gaps(wexpel, gaps):
+    """GAP = 1 and the gap list read by GAPIN (I3, then I3,2F7.2 per gap) after
+    the experimental data, before the trailing blank line."""
+    lines = set_namelist_value(wexpel, "GAP", 1).split("\n")
+    if lines[-2:] != ["", ""]:
+        raise ValueError("WEXPEL must end with a blank line")
+    block = [f"{len(gaps):3d}"] + [f"{beam:3d}{e1:7.2f}{e2:7.2f}" for beam, e1, e2 in gaps]
+    return "\n".join(lines[:-2] + block + lines[-2:])
+
+
 def ag100_rfactor_params():
     """Spec of ag100_rfactor_params: rfactor input parameters, one run each."""
     case = "ag100_rfactor_params"
@@ -351,14 +368,19 @@ def ag100_rfactor_params():
     add("all_fractional", set_beam_lines(wexpel, kav=[1, 2, 3, 4], nbea=[1, 2, 3, 4],
                                          ibp=[1, 2, 3, 4], mittel=[2, 2, 2, 2]))
     add("ipr2", set_namelist_value(wexpel, "IPR", 2))
+    # one gap in each of three beams, so that the gap offsets of the later
+    # beams are those of the earlier ones; MNGAP = number of gaps
+    inputs["inputs/PARAM_gaps3"] = set_param(inputs[pendry["param"]], "MNGAP", len(GAPS3))
+    add("gaps3_all", add_gaps(set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,"), GAPS3),
+        param="inputs/PARAM_gaps3")
     return {"program": "rfactor", "name": case,
             "description": "Ag(100) rfactor input parameters, one run each: a theory beam "
                            "without experimental counterpart (KAV = 0), all four R-factor "
                            "weights, smoothing with a gap, only fractional beams "
-                           "(MITTEL = 2), IPR = 2; CPC 2001 Table 7 "
+                           "(MITTEL = 2), IPR = 2, gaps in three beams; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
-                       "ipr-2"],
+                       "ipr-2", "gaps-several-beams"],
             "runs": runs, "inputs": inputs}
 
 

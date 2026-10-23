@@ -62,6 +62,7 @@ rfactor = [
     "ag100_rfactor_params/smooth_gap",
     "ag100_rfactor_params/all_fractional",
     "ag100_rfactor_params/ipr2",
+    "ag100_rfactor_params/gaps3_all",
     "ag100_rfactor_beams/nb25",
     "ag100_rfactor_beams/nb30",
 ]
