@@ -129,7 +129,7 @@ module array_growth
   public :: grow
 
   !> Makes the last dimension of an allocated array at least n long. The
-  !! existing elements are kept; new elements are undefined.
+  !! existing elements are kept; new elements are zero.
   interface grow
     module procedure grow_integer, grow_real, grow_real_2d
   end interface grow
@@ -145,6 +145,7 @@ contains
     if (n <= size(a)) return
     allocate(b(n))
     b(1:size(a)) = a
+    b(size(a)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_integer
 
@@ -157,6 +158,7 @@ contains
     if (n <= size(a)) return
     allocate(b(n))
     b(1:size(a)) = a
+    b(size(a)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_real
 
@@ -169,6 +171,7 @@ contains
     if (n <= size(a, 2)) return
     allocate(b(size(a, 1), n))
     b(:, 1:size(a, 2)) = a
+    b(:, size(a, 2)+1:) = 0
     call move_alloc(b, a)
   end subroutine grow_real_2d
 end module array_growth
@@ -2333,6 +2336,7 @@ contains
     call grow(ex%ee, ngp)
     allocate(ex%aep(nbed, ngp), ex%aepp(nbed, ngp), ex%ype(nbed, ngp), &
              ex%yse(nbed, ngp))
+    ex%aep = 0; ex%aepp = 0; ex%ype = 0; ex%yse = 0
 
     igap = 0
     do ib = 1, ex%nbe
@@ -2662,6 +2666,8 @@ contains
              th%tstyp2(nbtd), th%tstys2(nbtd))
     allocate(th%at(nbtd, ngp), th%et(nbtd, ngp), th%atp(nbtd, ngp), &
              th%atpp(nbtd, ngp), th%ypt(nbtd, ngp), th%yst(nbtd, ngp))
+    th%pqav = 0; th%net = 0; th%tst = 0; th%tstyp2 = 0; th%tstys2 = 0
+    th%at = 0; th%et = 0; th%atp = 0; th%atpp = 0; th%ypt = 0; th%yst = 0
     allocate(atsav(nss, nbtd, neti))
 
     call rintav(ats, nss, nbtd, neti, tr%pq, th%pqav, ctl%kav, tr%sym, &
@@ -2827,6 +2833,10 @@ contains
     allocate(best%et(nbtd, ngp), best%at(nbtd, ngp))
     allocate(best%ng1(ngap), best%ng2(ngap), best%ngt1(ngap), &
              best%ngt2(ngap))
+    best%nemin = 0; best%nemax = 0; best%ntmin = 0; best%ntmax = 0
+    best%ng1 = 0; best%ng2 = 0; best%ngt1 = 0; best%ngt2 = 0
+    best%sest = 0; best%stst = 0; best%ravb = 0; best%et = 0; best%at = 0
+    best%v0 = 0; best%cife = 0; best%cift = 0; best%geometry = 0
     best%rav = 1.e2_sp
   end subroutine start_scan
 
