@@ -1,7 +1,11 @@
 # Build the TensErLEED programs ref-calc (executable refcalc) and rfactor.
 #
 #   make [all|refcalc|rfactor|debug|clean] [PARAM=<file>] [FC=...]
-#        [FFLAGS=...] [LDLIBS=...] [BUILDDIR=...] [PROGRAMS=...]
+#        [FFLAGS=...] [BLAS=...] [LDLIBS=...] [BUILDDIR=...] [PROGRAMS=...]
+#
+# BLAS are the BLAS/LAPACK link flags (default: system BLAS and LAPACK;
+# e.g. BLAS=-lopenblas); LDLIBS, all libraries refcalc links (default:
+# BLAS). rfactor uses neither BLAS nor LAPACK and links no libraries.
 #
 # PARAM is the dimension file the legacy ref-calc sources still INCLUDE
 # (required for refcalc; rfactor sizes its arrays from its input and
@@ -14,7 +18,8 @@
 
 FC = gfortran
 FFLAGS = -O2
-LDLIBS = -llapack -lpthread -lblas
+BLAS = -llapack -lpthread -lblas
+LDLIBS = $(BLAS)
 BUILDDIR = build
 DEBUG_FFLAGS = -O0 -g -fcheck=all -ffpe-trap=invalid,zero,overflow -Wall
 STD_FFLAGS = -std=f2018
@@ -59,7 +64,7 @@ $(B)/rfactor.f90.o: src/rfactor.f90 $(B)/rfacsb.f90.o
 	$(FC) $(FFLAGS) $(STD_FFLAGS) -I$(B) -o $@ -c $<
 
 $(B)/rfactor: $(B)/rfacsb.f90.o $(B)/rfactor.f90.o
-	$(FC) $(FFLAGS) -o $@ $^ $(LDLIBS)
+	$(FC) $(FFLAGS) -o $@ $^
 
 clean:
 	rm -f $(B)/*.o $(B)/*.mod $(B)/PARAM $(B)/refcalc $(B)/rfactor
