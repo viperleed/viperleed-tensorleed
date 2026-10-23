@@ -54,14 +54,19 @@ def _zero_entry(block_line, last=False):
 
 REJECTED = [
     pytest.param(lambda: _zero_entry(2), "IBP", id="ibp-zero"),
+    pytest.param(lambda: _zero_entry(2, last=True), "IBP", id="ibp-zero-last"),
     pytest.param(lambda: _zero_entry(1), "NBEA", id="nbea-zero"),
     pytest.param(lambda: _zero_entry(1, last=True), "NBEA", id="nbea-zero-last"),
     pytest.param(lambda: _replace("LIMFIL=      1,", " LIMFIL=      2,"), "LIMFIL",
                  id="limfil-two"),
+    pytest.param(lambda: _replace("LIMFIL=      1,", " LIMFIL=      0,"), "LIMFIL",
+                 id="limfil-zero"),
     pytest.param(lambda: _replace("NSSK=    0,", " NSSK=    1,"), "NSSK",
                  id="nssk-nonzero"),
     pytest.param(lambda: _replace("V0RR=      0.0,", " V0RR=      1.0,"), "V0RR",
-                 id="v0rr-nonzero"),
+                 id="v0rr-positive"),
+    pytest.param(lambda: _replace("V0RR=      0.0,", " V0RR=     -1.0,"), "V0RR",
+                 id="v0rr-negative"),
     ]
 
 
