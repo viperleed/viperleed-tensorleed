@@ -637,23 +637,13 @@ contains
     netmax = 1
 
     do ibe = 1, nbe
-      if (ibp(ibe) == 0) then
-        ntmini(ibe) = ngp
-        ntmaxi(ibe) = 1
-        tstint(ibe) = 1._sp
-        do igp = 1, ngp
-          betint(ibe, igp) = 0._sp
-          batint(ibe, igp) = 0._sp
-        end do
-      else
-        ntmini(ibe) = ntminb(ibp(ibe))
-        ntmaxi(ibe) = ntmaxb(ibp(ibe))
-        tstint(ibe) = tst(ibp(ibe))
-        do igp = 1, ngp
-          betint(ibe, igp) = bet(ibp(ibe), igp)
-          batint(ibe, igp) = bat(ibp(ibe), igp)
-        end do
-      end if
+      ntmini(ibe) = ntminb(ibp(ibe))
+      ntmaxi(ibe) = ntmaxb(ibp(ibe))
+      tstint(ibe) = tst(ibp(ibe))
+      do igp = 1, ngp
+        betint(ibe, igp) = bet(ibp(ibe), igp)
+        batint(ibe, igp) = bat(ibp(ibe), igp)
+      end do
     end do
 
     do ibe = 1, nbe
@@ -822,12 +812,11 @@ contains
   !! a LaTeX document with one page per plot under the title and the
   !! average R factor brav.
   subroutine script(emin, emax, intmax, plsize, xtics, nbe, bename, rb, &
-                    nbed, title, brav, ibp)
+                    nbed, title, brav)
     integer, intent(in) :: nbe, nbed, xtics
     real(sp), intent(in) :: emin, emax, intmax, plsize(2), rb(nbed), brav
     character(len=4), intent(in) :: bename(5, nbed)
     character(len=80), intent(in) :: title
-    integer, intent(in) :: ibp(nbed)
 
     integer :: i, ibe
 
@@ -867,13 +856,11 @@ contains
 
     ! one plot per beam
     do ibe = 1, nbe
-      if (ibp(ibe) /= 0) then
-        write(12, 15) ibe
-        write(12, 16) (bename(i, ibe), i = 1, 5), rb(ibe), &
-          int(emin + (emax - emin)/2), int(1.2_sp*intmax)
-        write(12, 17) (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe, &
-          (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe
-      end if
+      write(12, 15) ibe
+      write(12, 16) (bename(i, ibe), i = 1, 5), rb(ibe), &
+        int(emin + (emax - emin)/2), int(1.2_sp*intmax)
+      write(12, 17) (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe, &
+        (2*ibe) - 1, (2*ibe) - 1, (2*ibe) - 1, 2*ibe
     end do
 
     ! document settings and title
@@ -883,10 +870,8 @@ contains
 
     ! one page per plot
     do ibe = 1, nbe
-      if (ibp(ibe) /= 0) then
-        write(13, 25)
-        write(13, 26) ibe
-      end if
+      write(13, 25)
+      write(13, 26) ibe
     end do
 
     write(13, 27)
@@ -1610,14 +1595,12 @@ contains
 
   !> Reads the control parameters from unit 8 for nbtd theory beams and
   !! ns geometries, echoes them to stdout together with the title of the
-  !! experiment, and returns the number of geometries to use (nss). The
-  !! number of experimental beams is the length of their averaging scheme
+  !! experiment. The number of experimental beams is the length of their averaging scheme
   !! nbea, which has a nonzero entry for every beam. Stops on unsupported
   !! input.
-  subroutine read_control(ctl, nbtd, ns, nss)
+  subroutine read_control(ctl, nbtd, ns)
     type(control_parameters), intent(out) :: ctl
     integer, intent(in) :: nbtd, ns
-    integer, intent(out) :: nss
 
     real(sp) :: emin, emax, eincr, vi, v0rr, v01, v02, vincr, plot
     integer :: limfil, ipr, ismoth, eot, gap
@@ -1757,11 +1740,6 @@ contains
       wr(4) = 1.0_sp
       wrsum = 1.0_sp
     end if
-
-    nss = 0
-    do is = 1, ns
-      if (nssk(is) == 0) nss = nss + 1
-    end do
 
     read(8, nl3)
 

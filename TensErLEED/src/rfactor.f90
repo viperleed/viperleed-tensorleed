@@ -82,8 +82,8 @@ program rfactor
 
   implicit none
 
-  ! tr: the theory as read; nss: number of geometries; neti: theory
-  ! energies selected; ngp: points of the energy working grid
+  ! tr: the theory as read (tr%ns geometries); neti: theory energies
+  ! selected; ngp: points of the energy working grid
   ! es, ats, atsav: theory energies and intensities of all geometries as
   !         selected and after averaging the beam groups
   ! values: code of each geometry
@@ -94,7 +94,7 @@ program rfactor
   type(theory_beams) :: th
   type(beam_results) :: res
   type(best_fit) :: best
-  integer :: nbed, nss, neti, ngp, is, suspect
+  integer :: nbed, neti, ngp, is, suspect
   real(sp) :: am
   real(sp), allocatable :: es(:), ats(:, :, :), atsav(:, :, :), values(:)
 
@@ -104,7 +104,7 @@ program rfactor
   rewind(8)
 
   call read_theory_records(tr)
-  call read_control(ctl, tr%nbtd, tr%ns, nss)
+  call read_control(ctl, tr%nbtd, tr%ns)
   call read_experiment(ex, ctl)
   nbed = size(ctl%nbea)
   call expav(ex%ae, ex%ee, nbed, ex%nee, ex%bename, ctl%nbea, ex%nbe, &
@@ -121,8 +121,8 @@ program rfactor
   call prepare_experiment(ex, ctl, ngp)
   close(8)
 
-  call write_theory_header(tr%title, tr%pq, ctl%kav, values(1:nss))
-  call average_theory(ctl, th, tr, nss, neti, ngp, ats, atsav, suspect, am)
+  call write_theory_header(tr%title, tr%pq, ctl%kav, values(1:tr%ns))
+  call average_theory(ctl, th, tr, tr%ns, neti, ngp, ats, atsav, suspect, am)
   if (suspect /= 0) then
     call write_suspect_intensity(suspect, am)
     stop
@@ -131,9 +131,9 @@ program rfactor
   deallocate(ats)
 
   call start_scan(res, best, nbed, tr%nbtd, ngp, ex%ngap)
-  do is = 1, nss
+  do is = 1, tr%ns
     call write_structure(is, values(is))
-    call prepare_theory(th, ctl, atsav, nss, tr%nbtd, neti, is, es)
+    call prepare_theory(th, ctl, atsav, tr%ns, tr%nbtd, neti, is, es)
     call scan_v0(ctl, ex, th, tr%nbtd, is, values(is), res, best)
   end do
 
@@ -145,8 +145,7 @@ program rfactor
                 best%ngt1, best%ngt2, size(best%ng1), best%sest, &
                 best%stst, best%v0, ctl%intmax, ctl%norm)
     call script(ctl%emin, ctl%emax, ctl%intmax, ctl%plsize, ctl%xtics, &
-                ex%nbe, ex%bename, best%ravb, nbed, tr%title, best%rav, &
-                ctl%ibp)
+                ex%nbe, ex%bename, best%ravb, nbed, tr%title, best%rav)
   end if
   call write_best_fit(best%geometry, values(best%geometry), best%v0, best%rav, &
                       ctl%nint, ctl%nfrac, best%cife, best%cift)
