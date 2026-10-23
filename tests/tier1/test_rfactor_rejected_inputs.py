@@ -38,21 +38,24 @@ def _replace(old, new):
     return "".join(lines)
 
 
-def _zero_first_entry(block_line):
-    """WEXPEL text with the first entry of the block_line-th integer line after NL1 set to 0.
+def _zero_entry(block_line, last=False):
+    """WEXPEL text with one entry of the block_line-th integer line after NL1 set to 0.
 
     The integer lines after NL1 are KAV (0), NBEA (1), IBP (2), MITTEL (3).
+    The entry is the first one, or the last non-blank one if last is True.
     """
     lines = _wexpel_lines()
     first = next(i for i, line in enumerate(lines) if line.strip() == "&END") + 1
     line = lines[first + block_line]
-    lines[first + block_line] = "   0" + line[4:]
+    start = 4 * ((len(line.rstrip()) - 1) // 4) if last else 0
+    lines[first + block_line] = line[:start] + "   0" + line[start + 4:]
     return "".join(lines)
 
 
 REJECTED = [
-    pytest.param(lambda: _zero_first_entry(2), "IBP", id="ibp-zero"),
-    pytest.param(lambda: _zero_first_entry(1), "NBEA", id="nbea-zero"),
+    pytest.param(lambda: _zero_entry(2), "IBP", id="ibp-zero"),
+    pytest.param(lambda: _zero_entry(1), "NBEA", id="nbea-zero"),
+    pytest.param(lambda: _zero_entry(1, last=True), "NBEA", id="nbea-zero-last"),
     pytest.param(lambda: _replace("LIMFIL=      1,", " LIMFIL=      2,"), "LIMFIL",
                  id="limfil-two"),
     pytest.param(lambda: _replace("NSSK=    0,", " NSSK=    1,"), "NSSK",

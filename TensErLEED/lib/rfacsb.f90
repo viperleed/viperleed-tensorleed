@@ -1628,6 +1628,7 @@ contains
     real(sp) :: intmax, plsize(2)
     character(len=80) :: title
     integer :: nbed, nbea(25), i, j, is
+    character(len=4) :: field(25)
 
     namelist /nl1/ emin, emax, eincr, limfil, ipr, vi, v0rr, v01, v02, &
                    vincr, ismoth, eot, plot, gap
@@ -1688,16 +1689,22 @@ contains
 
     read(8, 4) (ctl%kav(j), j = 1, nbtd)
 
-    ! nbea: 25 entries per record; it ends with the first record whose
-    ! last entry is zero (an empty record after a multiple of 25 beams)
+    ! nbea: 25 entries per record, up to the last non-blank field; it
+    ! ends with the first record whose last field is blank or zero (an
+    ! empty record after a multiple of 25 beams). An explicit zero is
+    ! kept as an entry, so that it is rejected below.
     allocate(ctl%nbea(0))
     do
-      read(8, '(25I4)') nbea
+      read(8, '(25A4)') field
+      j = findloc(field /= '', .true., dim=1, back=.true.)
+      do i = 1, j
+        read(field(i), '(I4)') nbea(i)
+      end do
       nbed = size(ctl%nbea)
-      j = findloc(nbea /= 0, .true., dim=1, back=.true.)
       call grow(ctl%nbea, nbed + j)
       ctl%nbea(nbed + 1:) = nbea(1:j)
       if (j < 25) exit
+      if (nbea(25) == 0) exit
     end do
     nbed = size(ctl%nbea)
     allocate(ctl%ibp(nbed), wb(nbed))
