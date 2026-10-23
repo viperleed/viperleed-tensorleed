@@ -64,7 +64,16 @@ stays the same and only the input form differs:
   each of experimental beams 1, 2 and 4, with all four weights of
   weights_all; MNGAP = 3. Each beam has at most one gap: the gap integrals
   of several gaps in one beam are overwritten in legacy (README, known
-  baseline issues).
+  baseline issues). autogap_edge_r2_v0std: the experimental points of beam
+  4 from 205 to 212 eV are removed (EDGE_HOLE), with R2 only; rfactor
+  detects the hole as a gap, which lies outside the energy interval common
+  to theory and experiment for some inner-potential shifts. no_overlap: all experimental
+  points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
+  overlaps the theory (up to 216 eV); legacy ends normally and prints
+  asterisks for the R factors, so only ROUTSHORT and the plot columns are
+  compared. Both runs are not run in the debug build
+  (README, 'Rules'): their inputs drive undefined behaviour that the legacy
+  code shares, named in case.toml.
 - ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
   experimental and theory beams instead of 4, each a copy of one of the 4
   beams with its intensities scaled by a smooth factor that differs between
@@ -112,6 +121,13 @@ DEEPER_IR_X = 1.2004
 # ag100_rfactor_params/gaps3_all: explicit gaps, (experimental beam, first and
 # last energy in eV), one in each of three beams
 GAPS3 = ((1, 70.0, 75.0), (2, 120.0, 126.0), (4, 190.0, 195.0))
+# ag100_rfactor_params/autogap_edge_r2_v0std: experimental points removed,
+# (experimental beam, first and last energy in eV)
+EDGE_HOLE = (4, 205.0, 212.0)
+# ag100_rfactor_params/no_overlap: experimental points below this energy (eV)
+# are removed from every beam, and EMAX is set to NO_OVERLAP_EMAX
+NO_OVERLAP_EXP_MIN = 220.0
+NO_OVERLAP_EMAX = 300.0
 # ag100_rfactor_beams: number of experimental and theory beams per run
 N_BEAMS = (25, 30)
 
@@ -322,6 +338,23 @@ def drop_exp_beam(wexpel, beam):
     return "\n".join(lines)
 
 
+def drop_exp_points(wexpel, beam, emin, emax):
+    """Remove the points with energies in [emin, emax] from experimental beam
+    `beam` (1-based) of an rfactor WEXPEL. The remaining (energy, intensity)
+    fields (E14.5) are kept digit for digit, 12 per line, and the number of
+    points (I4) on the NEE/FAC line is updated."""
+    lines = wexpel.split("\n")
+    labels = [i for i, l in enumerate(lines) if re.fullmatch(r"\*\(.*\)\*\s*", l)]
+    start = labels[beam - 1] + 1
+    end = labels[beam] if beam < len(labels) else lines.index("", start)
+    fields = [l[k:k + 14] for l in lines[start + 1:end] for k in range(0, len(l), 14)]
+    kept = [f for k in range(0, len(fields), 2) if not emin <= float(fields[k]) <= emax
+            for f in fields[k:k + 2]]
+    lines[start:end] = ([f"{len(kept) // 2:4d}{lines[start][4:]}"]
+                        + ["".join(kept[k:k + 12]) for k in range(0, len(kept), 12)])
+    return "\n".join(lines)
+
+
 def set_param(param, name, value):
     """Set one PARAMETER value (NAME = value) in a PARAM file."""
     new, n = re.subn(rf"\b{name} = \d+", f"{name} = {value}", param)
@@ -374,14 +407,30 @@ def ag100_rfactor_params():
     inputs["inputs/PARAM_gaps3"] = set_param(inputs[pendry["param"]], "MNGAP", len(GAPS3))
     add("gaps3_all", add_gaps(set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,"), GAPS3),
         param="inputs/PARAM_gaps3")
+    add("autogap_edge_r2_v0std",
+        drop_exp_points(set_namelist_value(wexpel, "WR", "1.,0.,0.,"), *EDGE_HOLE),
+        no_debug=["The gap integral of the theory reads the intensity at grid index 0",
+                  "(out of bounds), as legacy rfactor.f does with AT(IBT,0); the term",
+                  "spans one point, so the value read does not change the result."])
+    no_overlap = set_namelist_value(wexpel, "EMAX", f"{NO_OVERLAP_EMAX:.2f}")
+    for beam in range(1, 5):
+        no_overlap = drop_exp_points(no_overlap, beam, 0.0, NO_OVERLAP_EXP_MIN - 0.01)
+    # ROUT and stdout print the undefined average R factor as an overflow
+    # field, which the comparison rejects
+    add("no_overlap", no_overlap, outputs=["ROUTSHORT", "exp.column", "theo.column"],
+        no_debug=["No beam overlaps the theory: the averages over the beams divide",
+                  "0 by 0, as in legacy rfactor.f (the legacy debug build stops with",
+                  "SIGFPE there)."])
     return {"program": "rfactor", "name": case,
             "description": "Ag(100) rfactor input parameters, one run each: a theory beam "
                            "without experimental counterpart (KAV = 0), all four R-factor "
                            "weights, smoothing with a gap, only fractional beams "
-                           "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams; CPC 2001 Table 7 "
+                           "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams, a "
+                           "detected gap at the upper end of the data, no overlap with the "
+                           "theory; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
-                       "ipr-2", "gaps-several-beams"],
+                       "ipr-2", "gaps-several-beams", "gap-outside-common-interval", "no-overlap"],
             "runs": runs, "inputs": inputs}
 
 

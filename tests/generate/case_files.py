@@ -21,7 +21,10 @@ def write_case(case_dir, header, program, description, covers, runs, inputs):
     """Write case_dir/case.toml and the input files, replacing case_dir/inputs.
 
     runs: dicts with name, stdin, param, outputs and optionally files
-    ({key: path}); inputs: {path: text}. Paths are relative to case_dir.
+    ({key: path}) and no_debug (comment lines naming the undefined
+    behaviour shared with the legacy code, written above debug = false: the
+    run is not run in the debug build); inputs: {path: text}. Paths are
+    relative to case_dir.
     """
     if (case_dir / "inputs").exists():
         shutil.rmtree(case_dir / "inputs")
@@ -36,7 +39,10 @@ def write_case(case_dir, header, program, description, covers, runs, inputs):
         if run.get("files"):
             toml.append("files = { " + ", ".join(f'{key} = "{path}"'
                                                 for key, path in run["files"].items()) + " }")
-        toml += ["outputs = [" + ", ".join(f'"{o}"' for o in run["outputs"]) + "]", ""]
+        toml.append("outputs = [" + ", ".join(f'"{o}"' for o in run["outputs"]) + "]")
+        if run.get("no_debug"):
+            toml += [f"# {line}" for line in run["no_debug"]] + ["debug = false"]
+        toml.append("")
     (case_dir / "case.toml").write_text("\n".join(toml))
 
 

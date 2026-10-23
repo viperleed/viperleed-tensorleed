@@ -2,7 +2,8 @@
 
 Known baseline failures are listed in tests/known_debug_failures.toml: those
 runs must fail with exactly the known error, and must run clean with all
-checks except bounds. Outputs are compared with relaxed tolerances
+checks except bounds. Runs with debug = false in their case.toml are not run
+(undefined behaviour shared with the legacy code; README, 'Rules'). Outputs are compared with relaxed tolerances
 (rtol >= [debug].min_rtol in tests/tolerances.toml) as a sanity
 check only.
 """
@@ -30,7 +31,8 @@ KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
 
 def _params():
     for case, run in iter_runs():
-        yield pytest.param(case, run, id=f"{case.name}/{run.name}")
+        if run.debug:
+            yield pytest.param(case, run, id=f"{case.name}/{run.name}")
 
 
 @pytest.mark.tier1

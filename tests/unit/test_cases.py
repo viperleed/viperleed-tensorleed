@@ -50,6 +50,19 @@ def test_load_and_resolve(case_root):
     assert [p.name for p in expected_outputs(case, case.runs[0])] == ["T_1", "T_2", "fd.out"]
 
 
+def test_debug_opt_out_run_not_collected_for_debug(case_root, mocker):
+    """A run with debug = false is loaded as such and is not a parameter of the debug test."""
+    from tier1 import test_debug_build
+    toml = case_root / "refcalc/c1/case.toml"
+    toml.write_text(toml.read_text() + CASE_TOML.split("\n", 4)[4].replace('"r1"', '"r2"')
+                    + "debug = false\n")
+    loaded = load_cases_from(case_root, "refcalc")
+    assert [(r.name, r.debug) for r in loaded[0].runs] == [("r1", True), ("r2", False)]
+    mocker.patch.object(cases, "load_cases",
+                        side_effect=lambda kind: loaded if kind == "refcalc" else [])
+    assert [p.id for p in test_debug_build._params()] == ["c1/r1"]
+
+
 @pytest.mark.parametrize("make_dir", [False, True], ids=["missing", "empty"])
 def test_missing_or_empty_kind_dir_raises(tmp_path, make_dir):
     """A missing or empty case directory is an error, not zero tests."""

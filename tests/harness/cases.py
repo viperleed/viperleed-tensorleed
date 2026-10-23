@@ -10,6 +10,7 @@ case.toml:
     param = "inputs/PARAM"    # PARAM file, used only in legacy build mode
     files = { WEXPEL = "inputs/..." }  # optional; copied into the run dir
     outputs = ["fd.out", "T_*"]        # globs, resolved in expected/<name>/
+    debug = false             # optional; skips the run in the debug build (README, 'Rules')
 All paths are relative to the case directory. The output name "stdout" stands
 for the program's standard output, which run_built stores under that name.
 """
@@ -51,6 +52,7 @@ class Run:
     param: Path | None
     files: dict = field(default_factory=dict)  # name in run dir -> source Path
     outputs: list = field(default_factory=list)
+    debug: bool = True  # False: undefined behaviour shared with legacy, not run in the debug build
 
 
 @dataclass
@@ -78,6 +80,7 @@ def _load_case(case_dir):
             param=case_dir / r["param"] if r.get("param") else None,
             files={k: case_dir / v for k, v in r.get("files", {}).items()},
             outputs=list(r["outputs"]),
+            debug=r.get("debug", True),
         ))
     return Case(case_dir.name, case_dir, data["program"], runs)
 
