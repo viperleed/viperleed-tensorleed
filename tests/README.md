@@ -143,7 +143,7 @@ Run the generators as modules from `tests/` (`cd tests`):
 
 ```bash
 python -m generate.make_refcalc_cases [--only CASE] [--check-only]                          # FINs, PARAMs
-python -m generate.make_rfactor_cases [--only CASE] [--verify-only]                         # WEXPEL, spectra
+python -m generate.make_rfactor_cases [--only CASE] [--benchmark] [--verify-only]           # WEXPEL, spectra
 conda run -n tl-tests  python -m generate.make_expected --tl-root=<baseline>                # expected/
 conda run -n tl-tests  python -m generate.calibrate_tolerances --tl-root=<baseline> [--write]
 python -m generate.make_tier2_expected [--only NAME] [--calibrate]
@@ -268,7 +268,7 @@ Thresholds (`[perf]` in `tolerances.toml`; memory should essentially not increas
 - **Peak RSS** per run: increase ≤ max(2 %, 1 MB).
 - **CPU time** per case: sum of the per-run median sample times of the case ≤ 1.10 × baseline.
 
-Per-run CPU comparisons are too noisy: these runs take milliseconds, and A/A deviations reach 12 % per run even with 0.3 s samples. A sum per program dilutes slowdowns of one code path: a +30 % slowdown of the composite-layer runs only gives a ref-calc sum of 1.084 and passes it; per case it fails (`ir100_2x1_o` 1.24). The benchmark (`-m benchmark`) tests CPU per run for two large runs. A table is printed in the terminal summary.
+Per-run CPU comparisons are too noisy: these runs take milliseconds, and A/A deviations reach 12 % per run even with 0.3 s samples. A sum per program dilutes slowdowns of one code path: a +30 % slowdown of the composite-layer runs only gives a ref-calc sum of 1.084 and passes it; per case it fails (`ir100_2x1_o` 1.24). The benchmark (`-m benchmark`) tests CPU per run for two large ref-calc runs and one large rfactor run. A table is printed in the terminal summary.
 
 Peak RSS is measured through `harness/rusage_launcher.c` (built with `gcc` on first use, cached per source and `gcc --version` text): on Linux `ru_maxrss` survives `execve`, so a program started directly from Python reports at least Python's own peak RSS (~35 MB here; ref-calc needs 8–13 MB, rfactor ~4 MB).
 

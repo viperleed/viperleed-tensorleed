@@ -13,6 +13,10 @@ Cases and runs:
   ag100_rfactor_paths:  theo_past_exp, permuted_weighted, r2_gap, zj_gap
   ag100_rfactor_short:  pendry, rs (short experimental beams, DER for NE < 24)
 
+With --benchmark, the benchmark case bench_ag100_rfactor (tests/cases/benchmark)
+is written instead: many beams and geometries made from the committed
+ag100_rfactor inputs (no viperleed needed), see make_many_beams.
+
 The title lines of all frozen WEXPEL files and theory spectra are replaced
 by 'tl-test <case>'. Every run is executed with the baseline rfactor
 (legacy build: release, debug, debug without bounds checks) via the test
@@ -22,7 +26,7 @@ checks (see DEBUG_NO_BOUNDS; known gap bugs: tests/README.md, 'Known baseline is
 
 Usage (in an environment with viperleed installed):
     python -m generate.make_rfactor_cases \
-        [--workroot DIR] [--only CASE ...]
+        [--workroot DIR] [--only CASE ...] [--benchmark] [--verify-only]
 """
 
 __authors__ = (
@@ -33,6 +37,7 @@ __created__ = '2026-10-13'
 __license__ = 'GPLv3+'
 
 import argparse
+import math
 import re
 import shutil
 import sys
@@ -51,6 +56,7 @@ from harness.runner import run_program
 
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases" / "rfactor"
+BENCHMARK_DIR = TESTS_DIR / "cases" / "benchmark"
 OUTPUTS = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 # Debug build without bounds checks: the baseline's gap path fails the bounds
 # checks for any gap input because of dummy-argument declarations
@@ -76,6 +82,8 @@ PERMUTED_SYM = [1, 1, 2, 10]
 # formula with its one-sided end points). Each window lies where the
 # branches differ most for the baseline data.
 SHORT_BEAMS = [(1, 120.0, 2), (2, 85.5, 23), (3, 150.0, 22), (4, 170.0, 15)]
+# bench_ag100_rfactor: experimental beams, theory beams, geometries
+BENCHMARK_SIZE = (100, 120, 50)
 
 
 # ------------------------------------------------------------ WEXPEL edits ---
@@ -185,6 +193,64 @@ def set_spectrum_sym(text, syms):
     return "\n".join(lines)
 
 
+def beam_modulation(beam, energy):
+    """Factor that makes the copies of the four Ag(100) beams differ from each other."""
+    return 1.0 + 0.25 * math.sin(0.037 * energy * (beam + 1) + beam)
+
+
+def format_e14(values):
+    """values as consecutive E14.5 fields (theory spectrum layout)."""
+    return ff.FortranRecordWriter(f"{len(values)}E14.5").write(values) if values else ""
+
+
+def make_many_beams(wexpel, spectrum, param, nexp, ntheo, ngeo):
+    """(wexpel, spectrum, param) with nexp experimental and ntheo theory beams and
+    ngeo geometries, made from the four beams and one geometry of the inputs.
+
+    Beam k is a copy of beam k % 4 times beam_modulation; geometry g scales the
+    theory beams by 1 + 0.01 g cos(0.1 E + k). The first nexp theory beams are
+    matched to the experimental beams (KAV, NBEA, IBP), with MITTEL alternating
+    between 1 and 2; the others are not used.
+    """
+    head, fmt, beams, tail = split_exp_data(wexpel)
+    exp_beams = []
+    for k in range(nexp):
+        _, rest, points = beams[k % len(beams)]
+        exp_beams.append((f"*({k:3d}  0)*", rest,
+                          [(e, a * beam_modulation(k, e)) for e, a in points]))
+    wexpel = set_beam_arrays(join_exp_data(head, fmt, exp_beams, tail),
+                             [k + 1 if k < nexp else 0 for k in range(ntheo)],
+                             list(range(1, nexp + 1)), list(range(1, nexp + 1)),
+                             [1 + k % 2 if k < nexp else 0 for k in range(ntheo)])
+
+    lines = spectrum.split("\n")
+    nbeams = int(lines[1])
+    if nbeams > 4:
+        raise GeneratorError(f"{nbeams} theory beams: expected at most 4 (one line per energy)")
+    out = [lines[0], f"{ntheo:5d}"]
+    out += [f"{k + 1:5d}{1.0 + k:10.5f}{0.0:10.5f}{1:3d}" for k in range(ntheo)]
+    for line in lines[2 + nbeams:]:
+        if not line.strip():
+            continue
+        energy = float(line[:7])
+        base = [float(line[14 + 14 * i:28 + 14 * i]) for i in range(nbeams)]
+        for g in range(ngeo):
+            values = [base[k % nbeams] * beam_modulation(k, energy)
+                      * (1 + 0.01 * g * math.cos(0.1 * energy + k)) for k in range(ntheo)]
+            out.append(f"{energy:7.2f}{0.0001 * (g + 1):7.4f}" + format_e14(values[:4]))
+            rest = values[4:]
+            out += [format_e14(rest[i:i + 5]) for i in range(0, len(rest), 5)]
+            if len(rest) % 5 == 0:
+                out.append("")
+    nenergies = sum(1 for line in lines[2 + nbeams:] if line.strip())
+    for key, value in (("MNBED", nexp), ("MNBTD", ntheo), ("MNET", nenergies + 3),
+                       ("MNS", ngeo)):
+        param, n = re.subn(rf"\b{key} = \d+", f"{key} = {value}", param)
+        if n != 1:
+            raise GeneratorError(f"expected one '{key} =' in PARAM, found {n}")
+    return wexpel, "\n".join(out) + "\n", param
+
+
 # ------------------------------------------------------------------ cases ---
 
 def _wr(text, value):
@@ -207,7 +273,7 @@ RUN_EDITS = {
 }
 
 
-def _write_case(name, description, covers, runs):
+def _write_case(name, description, covers, runs, cases_dir=CASES_DIR):
     """runs: [(run_name, wexpel_text, param_text, spectrum_text)]."""
     title = f"tl-test {name}"
     inputs, toml_runs, written = {}, [], {}
@@ -226,7 +292,7 @@ def _write_case(name, description, covers, runs):
             "stdin": f'inputs/{written[("spectrum", spectrum)]}',
             "param": f'inputs/{written[("PARAM", param)]}',
             "files": {"WEXPEL": f"inputs/WEXPEL_{run}"}, "outputs": OUTPUTS})
-    case_dir = CASES_DIR / name
+    case_dir = cases_dir / name
     write_case(case_dir, "# Generated by tests/generate/make_rfactor_cases.py", "rfactor",
                description, covers, toml_runs, inputs)
     return case_dir
@@ -308,6 +374,20 @@ def build_cases(workroot, tl, only):
     return cases
 
 
+def build_benchmark_case():
+    """Write the benchmark case bench_ag100_rfactor and return its directory."""
+    inputs = CASES_DIR / "ag100_rfactor" / "inputs"
+    nexp, ntheo, ngeo = BENCHMARK_SIZE
+    wexpel, spectrum, param = make_many_beams((inputs / "WEXPEL_pendry").read_text(),
+                                              (inputs / "spectrum").read_text(),
+                                              (inputs / "PARAM").read_text(), *BENCHMARK_SIZE)
+    return _write_case(
+        "bench_ag100_rfactor",
+        f"Ag(100)-derived rfactor with {nexp} experimental and {ntheo} theory beams, "
+        f"{ngeo} geometries, benchmark",
+        ["benchmark"], [(f"nb{nexp}_t{ntheo}_ns{ngeo}", wexpel, param, spectrum)], BENCHMARK_DIR)
+
+
 # ----------------------------------------------------------- verification ---
 
 def verify(case_dir, tl):
@@ -362,12 +442,17 @@ def main(argv=None):
     parser.add_argument("--only", nargs="+",
                         choices=["ag100_rfactor", "ag100_rfactor_errors", "ag100_rfactor_gaps",
                                  "ag100_rfactor_paths", "ag100_rfactor_short"])
+    parser.add_argument("--benchmark", action="store_true",
+                        help="the benchmark case (tests/cases/benchmark) instead")
     parser.add_argument("--verify-only", action="store_true",
                         help="only build/run the baseline on the committed cases")
     args = parser.parse_args(argv)
     args.workroot = args.workroot or location("generate_workroot")
     tl = ensure_generator_tl()
-    if args.verify_only:
+    if args.benchmark:
+        case_dirs = [BENCHMARK_DIR / "bench_ag100_rfactor" if args.verify_only
+                     else build_benchmark_case()]
+    elif args.verify_only:
         case_dirs = [CASES_DIR / c for c in (args.only or sorted(
             p.name for p in CASES_DIR.iterdir() if p.is_dir()))]
     else:
