@@ -1,6 +1,6 @@
 """Baseline-tree and coverage guards of the generators (tests/generate),
-the hand-made cases' identity with their source cases, and the generated
-benchmark inputs.
+the hand-made cases' identity with their source cases, the generated
+benchmark inputs, and the Fortran formats the rfactor input generator writes.
 
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
@@ -268,3 +268,33 @@ def test_generated_benchmark_case_loads_with_its_inputs(tmp_path):
     (case,) = load_cases_from(tmp_path, "benchmark")
     inputs = [p for run in case.runs for p in (run.stdin, run.param, *run.files.values())]
     assert case.runs and all(p.is_file() for p in inputs)
+
+
+# Expected strings written by gfortran 15.2: WRITE (E14.5) for format_e,
+# WRITE '(400(25I4,/))' for format_int_line (the format that reads them back).
+@pytest.mark.parametrize("value, expected", [
+    (0.0, "   0.00000E+00"),
+    (9.99996, "   0.10000E+02"),       # rounding carries into the exponent
+    (99999.5, "   0.10000E+06"),       # carry from an exact binary tie
+    (1.03125, "   0.10312E+01"),       # exact binary tie rounds to even
+    (-1.234567, "  -0.12346E+01"),
+    (-9.999996e-3, "  -0.10000E-01"),   # negative with carry
+    (1.5e-7, "   0.15000E-06"),
+    (123456.7, "   0.12346E+06"),
+    ])
+def test_format_e_matches_fortran(value, expected):
+    """format_e(v, 14, 5) writes what gfortran writes with E14.5."""
+    assert rfactor_inputs.format_e(value, 14, 5) == expected
+
+
+@pytest.mark.parametrize("values, expected", [
+    ([1, -12, 345], "   1 -12 345\n"),
+    (list(range(1, 26)), "".join(f"{i:4d}" for i in range(1, 26)) + "\n\n"),
+    ([37*i - 400 for i in range(1, 27)],
+     "-363-326-289-252-215-178-141-104 -67 -30   7  44  81 118 155 192 229 266 303"
+     " 340 377 414 451 488 525\n 562\n"),
+    ])
+def test_format_int_line_matches_fortran(values, expected):
+    """format_int_line writes 25I4 records as gfortran does, with the blank
+    record after a multiple of 25 values."""
+    assert rfactor_inputs.format_int_line(values) == expected
