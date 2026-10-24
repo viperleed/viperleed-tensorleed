@@ -10,7 +10,10 @@ case.toml:
     param = "inputs/PARAM"    # PARAM file, used only in legacy build mode
     files = { WEXPEL = "inputs/..." }  # optional; copied into the run dir
     outputs = ["fd.out", "T_*"]        # globs, resolved in expected/<name>/
-All paths are relative to the case directory.
+    debug = false             # optional; skips the run in the debug build (README, 'Rules')
+    poison_heap = true        # optional; tier 1 runs it again with a poisoned heap (README, 'Rules')
+All paths are relative to the case directory. The output name "stdout" stands
+for the program's standard output, which run_built stores under that name.
 """
 
 __authors__ = (
@@ -39,6 +42,7 @@ KINDS = ("refcalc", "rfactor")  # case kinds run in tier 1
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases"
 TOLERANCES_FILE = TESTS_DIR / "tolerances.toml"
+STDOUT_OUTPUT = "stdout"  # output name of the captured standard output
 
 
 @dataclass
@@ -49,6 +53,8 @@ class Run:
     param: Path | None
     files: dict = field(default_factory=dict)  # name in run dir -> source Path
     outputs: list = field(default_factory=list)
+    debug: bool = True  # False: undefined behaviour shared with legacy, not run in the debug build
+    poison_heap: bool = False  # True: tier 1 also runs it with POISONED_HEAP_ENV
 
 
 @dataclass
@@ -76,6 +82,8 @@ def _load_case(case_dir):
             param=case_dir / r["param"] if r.get("param") else None,
             files={k: case_dir / v for k, v in r.get("files", {}).items()},
             outputs=list(r["outputs"]),
+            debug=r.get("debug", True),
+            poison_heap=r.get("poison_heap", False),
         ))
     return Case(case_dir.name, case_dir, data["program"], runs)
 
@@ -216,24 +224,27 @@ def file_set_failure(actual_dir, outputs, expected_names):
             f"extra: {sorted(produced - expected)}")
 
 
-def execute_run(case, run, tl_root, flags, workdir):
+def execute_run(case, run, tl_root, flags, workdir, env=None):
     """Build case.program from tl_root, run it in workdir, return RunResult.
 
-    Copies run.files into workdir (under their keys), feeds run.stdin,
+    env: extra environment variables for the program. Copies run.files into workdir (under their keys), feeds run.stdin,
+    stores the standard output as workdir/stdout if run.outputs lists it,
     writes the RunResult (without stdout/stderr) to workdir/.runinfo.json,
     and raises ProgramFailed if the program did not terminate cleanly.
     """
     exe = build_program(tl_root, case.program, run.param, flags)
-    return run_built(case, run, exe, workdir)
+    return run_built(case, run, exe, workdir, env)
 
 
-def run_built(case, run, exe, workdir):
+def run_built(case, run, exe, workdir, env=None):
     """Run an already built executable; see execute_run."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     for name, src in run.files.items():
         shutil.copy(src, workdir / name)
-    res = run_program(exe, workdir, run.stdin, timeout=RUN_TIMEOUT_S)
+    res = run_program(exe, workdir, run.stdin, timeout=RUN_TIMEOUT_S, env=env)
+    if STDOUT_OUTPUT in run.outputs:
+        shutil.copy(workdir / ".stdout", workdir / STDOUT_OUTPUT)
     info = {k: v for k, v in asdict(res).items() if k not in ("stdout", "stderr")}
     info.update(case=case.name, run=run.name, exe=str(exe))
     (workdir / ".runinfo.json").write_text(json.dumps(info, indent=1))

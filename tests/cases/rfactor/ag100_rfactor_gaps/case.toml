@@ -8,11 +8,11 @@ name = "explicit_gap"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_explicit_gap" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "auto_gap"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_auto_gap" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]

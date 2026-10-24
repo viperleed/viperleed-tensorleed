@@ -3,7 +3,8 @@
 Programs are started through a small C launcher (rusage_launcher.c, built on
 first use into tests/.build-cache) that reports the program's rusage: on
 Linux ru_maxrss survives execve, so a program forked directly from Python
-would report at least Python's own peak RSS.
+would report at least Python's own peak RSS. heap_probe checks, with a small
+Fortran program built the same way, that POISONED_HEAP_ENV takes effect.
 """
 
 __authors__ = (
@@ -22,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _LAUNCHER_SRC = Path(__file__).with_name("rusage_launcher.c")
+_HEAP_PROBE_SRC = Path(__file__).with_name("heap_probe.f90")
 _CACHE = Path(__file__).parents[1] / ".build-cache"
 
 _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
@@ -29,6 +31,11 @@ _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
 _NONZERO_STOP = re.compile(r"^\s*STOP\s+0*[1-9]\d*\s*$", re.M)
 _THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                "MKL_NUM_THREADS": "1"}
+# glibc fills newly allocated memory with 0x7f bytes and takes every
+# allocation from the heap instead of fresh, zeroed pages, so that a read
+# of memory the program never wrote shows in its outputs
+POISONED_HEAP_ENV = {"GLIBC_TUNABLES": "glibc.malloc.perturb=128:"
+                                       "glibc.malloc.mmap_threshold=33554432"}
 
 
 class ProgramFailed(RuntimeError):
@@ -58,32 +65,43 @@ class RunResult:
         return self
 
 
-def _launcher():
-    """Build the launcher once per source and C compiler version; return its path."""
-    gcc = subprocess.run(["gcc", "--version"], capture_output=True, text=True,
-                         check=True).stdout
-    key = hashlib.sha256(_LAUNCHER_SRC.read_bytes() + gcc.encode()).hexdigest()[:16]
-    exe = _CACHE / f"rusage_launcher-{key}"
+def _cached_build(src, compiler, *flags):
+    """Build src once per source and compiler version into the cache; return its path."""
+    version = subprocess.run([compiler, "--version"], capture_output=True, text=True,
+                             check=True).stdout
+    key = hashlib.sha256(src.read_bytes() + version.encode()).hexdigest()[:16]
+    exe = _CACHE / f"{src.stem}-{key}"
     if not exe.is_file():
         _CACHE.mkdir(parents=True, exist_ok=True)
         tmp = exe.with_suffix(f".tmp{os.getpid()}")
-        subprocess.run(["gcc", "-O2", "-o", str(tmp), str(_LAUNCHER_SRC)], check=True)
+        subprocess.run([compiler, *flags, "-o", str(tmp), str(src)], check=True)
         tmp.rename(exe)
     return exe
 
 
-def run_program(exe, cwd, stdin_path, timeout):
+def heap_probe(workdir, env):
+    """Return a never-written byte of a small and of a large Fortran allocation.
+
+    The probe runs through run_program with env; with POISONED_HEAP_ENV
+    applied, both are 127 (0x7f).
+    """
+    exe = _cached_build(_HEAP_PROBE_SRC, "gfortran", "-O0")
+    small, large = run_program(exe, workdir, None, timeout=30, env=env).check().stdout.split()
+    return int(small), int(large)
+
+
+def run_program(exe, cwd, stdin_path, timeout, env=None):
     """Run exe in cwd with stdin from stdin_path (or none).
 
-    stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
+    env: extra environment variables for the program. stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
     peak RSS (KiB) are taken from the child's rusage (os.wait4).
     """
-    env = dict(os.environ, **_THREAD_ENV)
+    env = dict(os.environ, **_THREAD_ENV, **(env or {}))
     cwd = Path(cwd).resolve()  # the launcher runs inside cwd
     out_path, err_path = cwd / ".stdout", cwd / ".stderr"
     usage_path = cwd / ".rusage"
     usage_path.unlink(missing_ok=True)
-    launcher = _launcher()
+    launcher = _cached_build(_LAUNCHER_SRC, "gcc", "-O2")
     stdin = open(stdin_path, "rb") if stdin_path else subprocess.DEVNULL
     try:
         with open(out_path, "wb") as out, open(err_path, "wb") as err:

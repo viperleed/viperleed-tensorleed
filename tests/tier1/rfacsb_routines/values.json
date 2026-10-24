@@ -1,0 +1,364 @@
+{
+ "source": "legacy lib/rfacsb.f at 22e3998, GNU Fortran (Ubuntu 15.2.0-16ubuntu1) 15.2.0, flags -O2 and -O0 (identical)",
+ "cases": [
+  {
+   "id": "der_n1",
+   "covers": "DER, one point: derivative zero",
+   "stdin": [
+    "DER",
+    "1",
+    "3f000000",
+    "406ccccd"
+   ],
+   "expected": [
+    "00000000"
+   ]
+  },
+  {
+   "id": "der_n2",
+   "covers": "DER, two points: two-point difference at both",
+   "stdin": [
+    "DER",
+    "2",
+    "3f000000",
+    "3fa66666",
+    "4039999a"
+   ],
+   "expected": [
+    "404cccce",
+    "404cccce"
+   ]
+  },
+  {
+   "id": "der_n3",
+   "covers": "DER, three points: central difference and 3-point ends",
+   "stdin": [
+    "DER",
+    "3",
+    "3f000000",
+    "3f800000",
+    "40200000",
+    "3fd9999a"
+   ],
+   "expected": [
+    "40a9999a",
+    "3f333334",
+    "c0799998"
+   ]
+  },
+  {
+   "id": "der_short",
+   "covers": "DER, 8 points (3 <= NE <= 22): central differences, 3-point ends",
+   "stdin": [
+    "DER",
+    "8",
+    "3f000000",
+    "3fc85e2e",
+    "3ffe8293",
+    "4008ff0f",
+    "400459f5",
+    "3ffc146e",
+    "40069348",
+    "402a7f99",
+    "406c7aa9"
+   ],
+   "expected": [
+    "3f8ef1a6",
+    "3f133fe0",
+    "3da31570",
+    "be2f4d80",
+    "3d0e54c0",
+    "3f31d588",
+    "3fcbcec2",
+    "402204e0"
+   ]
+  },
+  {
+   "id": "der_end_order",
+   "covers": "DER, 5 points: the last three values make any reordering of the 3-point end formula for Y1(NE) round differently",
+   "stdin": [
+    "DER",
+    "5",
+    "3f000000",
+    "3f99999a",
+    "3f666666",
+    "3f11a9fc",
+    "40189375",
+    "3fec28f6"
+   ],
+   "expected": [
+    "bf11aa00",
+    "bf218938",
+    "3fbdf3b7",
+    "3fa353f8",
+    "c05ba5e5"
+   ]
+  },
+  {
+   "id": "der_long",
+   "covers": "DER, 25 points (NE >= 23): 7-point central, 4-point ends",
+   "stdin": [
+    "DER",
+    "25",
+    "3f000000",
+    "3fc85e2e",
+    "3ffe8293",
+    "4008ff0f",
+    "400459f5",
+    "3ffc146e",
+    "40069348",
+    "402a7f99",
+    "406c7aa9",
+    "40a207cb",
+    "40d0d1a1",
+    "40fae5a9",
+    "410e238d",
+    "411b48d2",
+    "41281bec",
+    "4138bd6a",
+    "4150443b",
+    "416f49b0",
+    "4189d0b0",
+    "419caf6c",
+    "41ae5703",
+    "41bdd012",
+    "41cb8a3b",
+    "41d9279d",
+    "41e8b836",
+    "41fbc189"
+   ],
+   "expected": [
+    "3f92de60",
+    "3f2964f5",
+    "3d58af55",
+    "be824b91",
+    "bd44bbbf",
+    "3f26bd64",
+    "3fcdeb02",
+    "401df339",
+    "403ad0ac",
+    "4035ff9b",
+    "4017c912",
+    "3fe8cfc0",
+    "3fc509d7",
+    "3fe11dc5",
+    "401df082",
+    "405b571a",
+    "4088f38a",
+    "4096fe0b",
+    "40943325",
+    "4084e59d",
+    "406694f7",
+    "40555825",
+    "4061a5f0",
+    "4089d190",
+    "40aa3c43"
+   ]
+  },
+  {
+   "id": "smooth_n1",
+   "covers": "SMOOTH, one point: unchanged",
+   "stdin": [
+    "SMOOTH",
+    "1",
+    "1",
+    "41200000",
+    "40133333"
+   ],
+   "expected": [
+    "40133333"
+   ]
+  },
+  {
+   "id": "smooth_n2",
+   "covers": "SMOOTH, two points: unchanged",
+   "stdin": [
+    "SMOOTH",
+    "1",
+    "2",
+    "41200000",
+    "41280000",
+    "40133333",
+    "3f8ccccd"
+   ],
+   "expected": [
+    "40133333",
+    "3f8ccccd"
+   ]
+  },
+  {
+   "id": "smooth_n3",
+   "covers": "SMOOTH, three points on equal intervals",
+   "stdin": [
+    "SMOOTH",
+    "1",
+    "3",
+    "41200000",
+    "41280000",
+    "41300000",
+    "3f800000",
+    "40200000",
+    "3fd9999a"
+   ],
+   "expected": [
+    "3f800000",
+    "3ff66666",
+    "3fd9999a"
+   ]
+  },
+  {
+   "id": "smooth_short",
+   "covers": "SMOOTH twice, 8 points on equal intervals",
+   "stdin": [
+    "SMOOTH",
+    "2",
+    "8",
+    "41200000",
+    "41280000",
+    "41300000",
+    "41380000",
+    "41400000",
+    "41480000",
+    "41500000",
+    "41580000",
+    "3fc85e2e",
+    "3ffe8293",
+    "4008ff0f",
+    "400459f5",
+    "3ffc146e",
+    "40069348",
+    "402a7f99",
+    "406c7aa9"
+   ],
+   "expected": [
+    "3fc85e2e",
+    "3fefb6e6",
+    "40026a0a",
+    "4003c157",
+    "4005370e",
+    "4013a6f9",
+    "40377b55",
+    "406c7aa9"
+   ]
+  },
+  {
+   "id": "smooth_nonuniform",
+   "covers": "SMOOTH, 6 points on unequal intervals",
+   "stdin": [
+    "SMOOTH",
+    "1",
+    "6",
+    "41200000",
+    "41280000",
+    "41333333",
+    "413b3333",
+    "41480000",
+    "41500000",
+    "3fdba943",
+    "400416b2",
+    "4008af61",
+    "4001e2d8",
+    "3ffca7b1",
+    "400e218d"
+   ],
+   "expected": [
+    "3fdba943",
+    "3ffd1bce",
+    "4005be94",
+    "40034b34",
+    "4003dfdf",
+    "400e218d"
+   ]
+  },
+  {
+   "id": "ysmooth_n1",
+   "covers": "YSMOOTH, one point: no second derivative",
+   "stdin": [
+    "YSMOOTH",
+    "1",
+    "40900000",
+    "3f000000",
+    "40133333",
+    "3ecccccd"
+   ],
+   "expected": [
+    "3f57baf2"
+   ]
+  },
+  {
+   "id": "ysmooth_n2",
+   "covers": "YSMOOTH, two points: no second derivative",
+   "stdin": [
+    "YSMOOTH",
+    "2",
+    "40900000",
+    "3f000000",
+    "40133333",
+    "3f8ccccd",
+    "3ecccccd",
+    "bf333333"
+   ],
+   "expected": [
+    "3f57baf2",
+    "bf7c2f4e"
+   ]
+  },
+  {
+   "id": "ysmooth_n3",
+   "covers": "YSMOOTH, three points: one-sided second derivative at both ends",
+   "stdin": [
+    "YSMOOTH",
+    "3",
+    "40900000",
+    "3f000000",
+    "3f800000",
+    "3e4ccccd",
+    "3fc00000",
+    "bfcccccd",
+    "3f000000",
+    "40266666"
+   ],
+   "expected": [
+    "bee6cd4f",
+    "3e2ef7ca",
+    "3f1f1e43"
+   ]
+  },
+  {
+   "id": "ysmooth_short",
+   "covers": "YSMOOTH, 8 points: zero and tiny intensities, both curvatures",
+   "stdin": [
+    "YSMOOTH",
+    "8",
+    "40900000",
+    "3f000000",
+    "00000000",
+    "2b8cbccc",
+    "3f19999a",
+    "40000000",
+    "4019999a",
+    "3ff33333",
+    "3f99999a",
+    "3fa66666",
+    "00000000",
+    "3f99999a",
+    "40000000",
+    "3fe66666",
+    "bdcccccd",
+    "bf99999a",
+    "bf19999a",
+    "3e4ccccd"
+   ],
+   "expected": [
+    "00000000",
+    "3f5f686a",
+    "3f623903",
+    "3f7e1234",
+    "beb3c674",
+    "bf7c20c8",
+    "beb8215a",
+    "3dfb06f8"
+   ]
+  }
+ ]
+}

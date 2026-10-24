@@ -1,5 +1,6 @@
-"""Baseline-tree and coverage guards of the generators (tests/generate), and
-the hand-made cases' identity with their source cases.
+"""Baseline-tree and coverage guards of the generators (tests/generate),
+the hand-made cases' identity with their source cases, the generated
+benchmark inputs, and the Fortran formats the rfactor input generator writes.
 
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
@@ -20,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from generate import baseline_tree, make_expected, make_hand_cases
+from generate import baseline_tree, make_expected, make_hand_cases, rfactor_inputs
 from generate.baseline_tree import GeneratorError, check_baseline_tree
-from harness.cases import CASES_DIR
+from harness.cases import CASES_DIR, load_cases_from
 from unit.gitrepo import git
 
 
@@ -232,3 +233,68 @@ def test_changed_expected_line_breaks_identity(tmp_path):
     fd.write_text("\n".join(lines))
     assert _differ_beyond_title(tmp_path / case, tmp_path / source, runs, files) == [
         f"{runs[0]}/fd.out"]
+
+
+# ------------------------------------------------ generated benchmark inputs ---
+
+def _files(case_dir):
+    """{relative path: bytes} of every file in case_dir."""
+    return {p.relative_to(case_dir): p.read_bytes() for p in case_dir.rglob("*") if p.is_file()}
+
+
+def test_benchmark_case_toml_is_the_generated_one(tmp_path):
+    """The committed case.toml of the generated benchmark case is the one its generator writes."""
+    case_dir = rfactor_inputs.build_benchmark_case(tmp_path)
+    committed = rfactor_inputs.BENCHMARK_DIR / case_dir.name / "case.toml"
+    assert (case_dir / "case.toml").read_bytes() == committed.read_bytes()
+
+
+def test_benchmark_inputs_are_not_committed():
+    """The generated benchmark case has only its case.toml in the cases directory."""
+    case_dir = rfactor_inputs.BENCHMARK_DIR / "bench_ag100_rfactor"
+    assert sorted(p.name for p in case_dir.iterdir()) == ["case.toml"]
+
+
+def test_benchmark_inputs_are_deterministic(tmp_path):
+    """Two generations of the benchmark case are byte-identical."""
+    first = rfactor_inputs.build_benchmark_case(tmp_path / "a")
+    second = rfactor_inputs.build_benchmark_case(tmp_path / "b")
+    assert _files(first) == _files(second)
+
+
+def test_generated_benchmark_case_loads_with_its_inputs(tmp_path):
+    """The generated case loads like a committed one, and every input of its runs exists."""
+    rfactor_inputs.build_benchmark_case(tmp_path / "benchmark")
+    (case,) = load_cases_from(tmp_path, "benchmark")
+    inputs = [p for run in case.runs for p in (run.stdin, run.param, *run.files.values())]
+    assert case.runs and all(p.is_file() for p in inputs)
+
+
+# Expected strings written by gfortran 15.2: WRITE (E14.5) for format_e,
+# WRITE '(400(25I4,/))' for format_int_line (the format that reads them back).
+@pytest.mark.parametrize("value, expected", [
+    (0.0, "   0.00000E+00"),
+    (9.99996, "   0.10000E+02"),       # rounding carries into the exponent
+    (99999.5, "   0.10000E+06"),       # carry from an exact binary tie
+    (1.03125, "   0.10312E+01"),       # exact binary tie rounds to even
+    (-1.234567, "  -0.12346E+01"),
+    (-9.999996e-3, "  -0.10000E-01"),   # negative with carry
+    (1.5e-7, "   0.15000E-06"),
+    (123456.7, "   0.12346E+06"),
+    ])
+def test_format_e_matches_fortran(value, expected):
+    """format_e(v, 14, 5) writes what gfortran writes with E14.5."""
+    assert rfactor_inputs.format_e(value, 14, 5) == expected
+
+
+@pytest.mark.parametrize("values, expected", [
+    ([1, -12, 345], "   1 -12 345\n"),
+    (list(range(1, 26)), "".join(f"{i:4d}" for i in range(1, 26)) + "\n\n"),
+    ([37*i - 400 for i in range(1, 27)],
+     "-363-326-289-252-215-178-141-104 -67 -30   7  44  81 118 155 192 229 266 303"
+     " 340 377 414 451 488 525\n 562\n"),
+    ])
+def test_format_int_line_matches_fortran(values, expected):
+    """format_int_line writes 25I4 records as gfortran does, with the blank
+    record after a multiple of 25 values."""
+    assert rfactor_inputs.format_int_line(values) == expected

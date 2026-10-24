@@ -51,6 +51,8 @@ sections = { hdr = 0.0, kvec = 0.0, tmat = 1.2e-6, xist = 1.4e-4, alm = 3.0e-4 }
 
 [numeric."ROUT"]
 # one unit in the last digit of R; insensitive 17.0 %
+# Noise exception: ag100_rfactor_short differs by up to ~32 units with FMA or
+# reassociation (README, 'Tolerances'); kept at one unit, not loosened.
 rtol = 0.0e+00
 atol_frac = 0.0e+00
 atol = 1.5e-04
@@ -68,6 +70,16 @@ rtol = 0.0e+00
 atol_frac = 0.0e+00
 ulps = 3
 exact_columns = ["odd"]
+
+[numeric."stdout"]
+# rfactor standard output (per-beam R factors per V0, normalisation, CIFE/CIFT):
+# one unit in the last printed digit of each value passes, two fail (as ROUT).
+# Noise: -O0/-O1/-O3, reference BLAS, OpenBLAS kernels bit-identical; FMA and
+# reassociation 1 ulp, except ag100_rfactor_short (up to 32 ulps, as in its ROUT):
+# a documented noise-variant exception, kept at one unit, not loosened.
+rtol = 0.0
+atol_frac = 0.0
+ulps = 1.5
 
 [tier2]
 # R factors in R_OUT / Errors_*.csv are printed with 4 decimals; displacements,

@@ -35,6 +35,13 @@ def _vals(text, **kw):
                  [("text", "*"), ("text", "("), ("int", 1), ("int", 0), ("text", ")"),
                   ("text", "*"), ("int", 1), ("float", 0.0001)],
                  id="single_star_in_beam_label_is_text"),
+    # rfactor stdout comment lines: *BEAM NO.  1 ..., * <title>
+    pytest.param("*BEAM NO.  1", [("text", "*"), ("text", "BEAM"), ("text", "NO"),
+                                  ("text", "."), ("int", 1)],
+                 id="star_before_letter_in_column_1_is_text"),
+    pytest.param("* tl-test", [("text", "*"), ("text", "tl"), ("text", "-"),
+                               ("text", "test")],
+                 id="star_before_blank_in_column_1_is_text"),
     # T_* files: 0.142878E+02 followed directly by 0.610153E-06
     pytest.param("0.142878E+020.610153E-06", [("float", 14.2878), ("float", 0.610153e-06)],
                  id="exponent_has_two_digits_when_next_number_starts_with_digit"),
@@ -64,11 +71,22 @@ def test_tokens(text, expected):
     # a 1-wide field that overflowed, e.g. I4 or F4.1 written as '   *'
     pytest.param("  12   *  0.5000", id="lone_star_in_numeric_column"),
     pytest.param("0.1E+01*", id="lone_star_next_to_number"),
+    pytest.param("*1  0.5000", id="lone_star_in_column_1_before_digit"),
+    pytest.param("** BEAM", id="two_stars_in_column_1"),
+    pytest.param(" *BEAM", id="star_before_letter_not_in_column_1"),
 ])
 def test_overflow_raises(text):
     """Overflow fields (asterisks) raise FortranOverflowError."""
     with pytest.raises(FortranOverflowError):
         tokenize(text)
+
+
+def test_overflow_mode_returns_overflow_tokens():
+    """With overflow=True, an overflow field is a token with its text and end column."""
+    toks = tokenize(" 1 *******  0.5000 *( 1  0)*", overflow=True)
+    assert [(t.kind, t.value) for t in toks if t.kind != "text"] == [
+        ("int", 1), ("overflow", "*******"), ("float", 0.5), ("int", 1), ("int", 0)]
+    assert next(t for t in toks if t.kind == "overflow").end == 10
 
 
 def test_ignored_lines_are_skipped_and_line_numbers_kept():

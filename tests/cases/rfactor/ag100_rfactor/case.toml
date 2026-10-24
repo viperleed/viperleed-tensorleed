@@ -8,53 +8,53 @@ name = "pendry"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_pendry" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "r2"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_r2" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "zj"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_zj" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "rs"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_rs" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "mixed"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_mixed" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "smooth"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_smooth" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "averaging"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_averaging" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
 
 [[runs]]
 name = "v0_wide"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_v0_wide" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]

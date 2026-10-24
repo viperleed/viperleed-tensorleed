@@ -13,6 +13,12 @@ Cases and runs:
   ag100_rfactor_paths:  theo_past_exp, permuted_weighted, r2_gap, zj_gap
   ag100_rfactor_short:  pendry, rs (short experimental beams, DER for NE < 24)
 
+With --benchmark, the benchmark case bench_ag100_rfactor is generated instead,
+into a temporary directory (many beams and geometries made from the committed
+ag100_rfactor inputs, no viperleed needed; see rfactor_inputs.make_many_beams),
+and its case.toml is written to tests/cases/benchmark/bench_ag100_rfactor. Its
+inputs are not committed: the benchmark tests generate them at test time.
+
 The title lines of all frozen WEXPEL files and theory spectra are replaced
 by 'tl-test <case>'. Every run is executed with the baseline rfactor
 (legacy build: release, debug, debug without bounds checks) via the test
@@ -22,7 +28,7 @@ checks (see DEBUG_NO_BOUNDS; known gap bugs: tests/README.md, 'Known baseline is
 
 Usage (in an environment with viperleed installed):
     python -m generate.make_rfactor_cases \
-        [--workroot DIR] [--only CASE ...]
+        [--workroot DIR] [--only CASE ...] [--benchmark] [--verify-only]
 """
 
 __authors__ = (
@@ -39,19 +45,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-import fortranformat as ff
-
-from .case_files import (set_first_line_title, set_namelist_value,
-                         set_wexpel_title, write_case)
+from .case_files import set_namelist_value
+from .rfactor_inputs import (BENCHMARK_DIR, RFACTOR_DIR as CASES_DIR, build_benchmark_case,
+                             join_exp_data, set_beam_arrays, split_exp_data,
+                             write_rfactor_case)
 from .make_refcalc_cases import (GeneratorError,
                                  ensure_generator_tl, run_viperleed, set_run)
 from harness.build import DEBUG, RELEASE, BuildFlags, build_program
 from harness.paths import location
 from harness.runner import run_program
 
-TESTS_DIR = Path(__file__).parents[1]
-CASES_DIR = TESTS_DIR / "cases" / "rfactor"
-OUTPUTS = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
 # Debug build without bounds checks: the baseline's gap path fails the bounds
 # checks for any gap input because of dummy-argument declarations
 # (GAPIN: BM(NGAP) with NGAP = 0 on entry; GRID: A(NGP) with NGP undefined),
@@ -79,59 +82,6 @@ SHORT_BEAMS = [(1, 120.0, 2), (2, 85.5, 23), (3, 150.0, 22), (4, 170.0, 15)]
 
 
 # ------------------------------------------------------------ WEXPEL edits ---
-
-def format_int_line(values):
-    """25I4 lines as written by viperleed's writeWEXPEL."""
-    out = ff.FortranRecordWriter("25I4").write(values) + "\n"
-    if len(values) % 25 == 0:
-        out += "\n"
-    return out
-
-
-def set_beam_arrays(text, kav, nbea, ibp, mittel):
-    """Replace the KAV/NBEA/IBP/MITTEL lines between &NL1 ... &END and &NL2."""
-    lines = text.split("\n")
-    i_end = next(i for i, l in enumerate(lines) if l.strip() == "&END")
-    i_nl2 = next(i for i, l in enumerate(lines) if l.strip() == "&NL2")
-    block = "".join(format_int_line(v) for v in (kav, nbea, ibp, mittel))
-    return "\n".join(lines[:i_end + 1] + block.rstrip("\n").split("\n") + lines[i_nl2:])
-
-
-def split_exp_data(text):
-    """WEXPEL -> (head up to and incl. format line, [beams], tail).
-
-    Each beam is (name_line, fac_line_rest, [(E, I), ...]).
-    """
-    lines = text.split("\n")
-    i_fmt = next(i for i, l in enumerate(lines) if re.fullmatch(r"\s*\(.*E.*\)\s*", l))
-    head = lines[:i_fmt + 1]
-    fmt = lines[i_fmt].strip()
-    reader = ff.FortranRecordReader(fmt)
-    beams, i = [], i_fmt + 1
-    while i < len(lines) and lines[i].strip():
-        name = lines[i]
-        n, rest = int(lines[i + 1][:4]), lines[i + 1][4:]
-        i += 2
-        values = []
-        while len(values) < 2 * n:
-            values += [v for v in reader.read(lines[i]) if v is not None]
-            i += 1
-        values = values[:2 * n]
-        beams.append((name, rest, list(zip(values[0::2], values[1::2]))))
-    return head, fmt, beams, lines[i:]
-
-
-def join_exp_data(head, fmt, beams, tail):
-    """Inverse of split_exp_data: assemble the experimental-data part from its pieces."""
-    writer = ff.FortranRecordWriter(fmt)
-    out = list(head)
-    for name, rest, points in beams:
-        out.append(name)
-        out.append(f"{len(points):4d}{rest}")
-        flat = [x for p in points for x in p]
-        out += writer.write(flat).split("\n")
-    return "\n".join(out + tail)
-
 
 def remove_exp_points(text, beam, emin, emax):
     """Remove the points of experimental beam (1-based) with energy in [emin, emax]."""
@@ -207,31 +157,6 @@ RUN_EDITS = {
 }
 
 
-def _write_case(name, description, covers, runs):
-    """runs: [(run_name, wexpel_text, param_text, spectrum_text)]."""
-    title = f"tl-test {name}"
-    inputs, toml_runs, written = {}, [], {}
-    for run, wexpel, param, spectrum in runs:
-        inputs[f"inputs/WEXPEL_{run}"] = set_wexpel_title(wexpel, title)
-        spectrum = set_first_line_title(spectrum, title)
-        # share identical PARAM / spectrum files between runs
-        for kind, content in (("PARAM", param), ("spectrum", spectrum)):
-            key = (kind, content)
-            if key not in written:
-                fname = kind if not any(k[0] == kind for k in written) else f"{kind}_{run}"
-                inputs[f"inputs/{fname}"] = content
-                written[key] = fname
-        toml_runs.append({
-            "name": run,
-            "stdin": f'inputs/{written[("spectrum", spectrum)]}',
-            "param": f'inputs/{written[("PARAM", param)]}',
-            "files": {"WEXPEL": f"inputs/WEXPEL_{run}"}, "outputs": OUTPUTS})
-    case_dir = CASES_DIR / name
-    write_case(case_dir, "# Generated by tests/generate/make_rfactor_cases.py", "rfactor",
-               description, covers, toml_runs, inputs)
-    return case_dir
-
-
 def run_error_calc(workroot, tl):
     """ag100 error calculation (RUN = 1 5) -> its work dir."""
     src = workroot / "ag100" / "calc"
@@ -260,20 +185,20 @@ def build_cases(workroot, tl, only):
     cases = []
     if not only or "ag100_rfactor" in only:
         runs = [(r, edit(wexpel), param, spectrum) for r, edit in RUN_EDITS.items()]
-        cases.append(_write_case(
+        cases.append(write_rfactor_case(
             "ag100_rfactor", "Ag(100) rfactor: R-factor types, smoothing, averaging, V0 range",
             ["pendry", "r2", "zj", "rs", "mixed-weights", "smoothing",
              "beam-averaging", "fractional-beams", "v0-range"], runs))
     if not only or "ag100_rfactor_errors" in only:
         err = run_error_calc(workroot, tl)
-        cases.append(_write_case(
+        cases.append(write_rfactor_case(
             "ag100_rfactor_errors", "Ag(100) rfactor on a multi-geometry superpos spectrum",
             ["mns"], [("mns", (err / "rfactor-WEXPEL").read_text(),
                        (err / "rfactor-PARAM").read_text(),
                        (err / "superpos-spec.out").read_text())]))
     if not only or "ag100_rfactor_paths" in only:
         # code paths not reached by the other cases
-        cases.append(_write_case(
+        cases.append(write_rfactor_case(
             "ag100_rfactor_paths",
             "Ag(100) rfactor: theory beyond the experiment, permuted beams with weights, "
             "R2 and ZJ with a gap",
@@ -294,13 +219,13 @@ def build_cases(workroot, tl, only):
         short = wexpel
         for cut in SHORT_BEAMS:
             short = keep_exp_points(short, *cut)
-        cases.append(_write_case(
+        cases.append(write_rfactor_case(
             "ag100_rfactor_short",
             "Ag(100) rfactor on short experimental beams (2, 23, 22 and 15 points)",
             ["der-ne2", "der-ne23", "der-short"],
             [(r, RUN_EDITS[r](short), param, spectrum) for r in ("pendry", "rs")]))
     if not only or "ag100_rfactor_gaps" in only:
-        cases.append(_write_case(
+        cases.append(write_rfactor_case(
             "ag100_rfactor_gaps", "Ag(100) rfactor with gaps in the experimental data",
             ["gap-explicit", "gap-auto-detected"],
             [("explicit_gap", add_explicit_gap(wexpel, *EXPLICIT_GAP), param, spectrum),
@@ -362,26 +287,36 @@ def main(argv=None):
     parser.add_argument("--only", nargs="+",
                         choices=["ag100_rfactor", "ag100_rfactor_errors", "ag100_rfactor_gaps",
                                  "ag100_rfactor_paths", "ag100_rfactor_short"])
+    parser.add_argument("--benchmark", action="store_true",
+                        help="the benchmark case instead (inputs generated into a temporary"
+                             " directory; with --verify-only, case.toml is not written)")
     parser.add_argument("--verify-only", action="store_true",
                         help="only build/run the baseline on the committed cases")
     args = parser.parse_args(argv)
     args.workroot = args.workroot or location("generate_workroot")
     tl = ensure_generator_tl()
-    if args.verify_only:
-        case_dirs = [CASES_DIR / c for c in (args.only or sorted(
-            p.name for p in CASES_DIR.iterdir() if p.is_dir()))]
-    else:
-        case_dirs = build_cases(args.workroot, tl, args.only)
-    failed = False
-    for case_dir in case_dirs:
-        report = verify(case_dir, tl)
-        for run, status in report:
-            print(f"{case_dir.name}/{run}: " + "; ".join(f"{k} {v}" for k, v in status.items()))
-            failed |= status["release"] != "OK"
-            if "gap" in run:
-                failed |= status["debug-nobounds"] != "OK"
-        if case_dir.name == "ag100_rfactor":
-            failed |= not check_pendry_against_viperleed(args.workroot, report)
+    with tempfile.TemporaryDirectory() as tmp:
+        if args.benchmark:
+            case_dirs = [build_benchmark_case(Path(tmp))]
+            if not args.verify_only:
+                shutil.copy(case_dirs[0] / "case.toml",
+                            BENCHMARK_DIR / case_dirs[0].name / "case.toml")
+        elif args.verify_only:
+            case_dirs = [CASES_DIR / c for c in (args.only or sorted(
+                p.name for p in CASES_DIR.iterdir() if p.is_dir()))]
+        else:
+            case_dirs = build_cases(args.workroot, tl, args.only)
+        failed = False
+        for case_dir in case_dirs:
+            report = verify(case_dir, tl)
+            for run, status in report:
+                print(f"{case_dir.name}/{run}: "
+                      + "; ".join(f"{k} {v}" for k, v in status.items()))
+                failed |= status["release"] != "OK"
+                if "gap" in run:
+                    failed |= status["debug-nobounds"] != "OK"
+            if case_dir.name == "ag100_rfactor":
+                failed |= not check_pendry_against_viperleed(args.workroot, report)
     return 1 if failed else 0
 
 

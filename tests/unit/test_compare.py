@@ -89,6 +89,18 @@ def test_overflow_in_actual_fails():
     assert not r.ok and "overflow" in r.first_failures[0]
 
 
+@pytest.mark.parametrize("actual,expected,ok", [
+    pytest.param(" R =*******  0.5000", " R =*******  0.5000", True, id="identical_overflow_passes"),
+    pytest.param(" R =*******  0.5000", " R = 0.1234  0.5000", False, id="overflow_vs_number_fails"),
+    pytest.param(" R = 0.1234  0.5000", " R =*******  0.5000", False, id="number_vs_overflow_fails"),
+    pytest.param(" R = ******  0.5000", " R =*******  0.5000", False, id="different_star_widths_fail"),
+    pytest.param(" R =******   0.5000", " R = ******  0.5000", False, id="different_end_column_fails"),
+])
+def test_overflow_field_matches_only_identical_field(actual, expected, ok):
+    """An overflow field matches only an identical overflow field in the same column."""
+    assert compare_texts(actual, expected, TOL).ok is ok
+
+
 def test_absolute_atol_one_unit_in_last_digit():
     """An absolute tolerance of 1.5 units of the last digit accepts one unit, not two.
 

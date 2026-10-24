@@ -50,6 +50,47 @@ def test_load_and_resolve(case_root):
     assert [p.name for p in expected_outputs(case, case.runs[0])] == ["T_1", "T_2", "fd.out"]
 
 
+def test_debug_opt_out_run_not_collected_for_debug(case_root, mocker):
+    """A run with debug = false is loaded as such and is not a parameter of the debug test."""
+    from tier1 import test_debug_build
+    toml = case_root / "refcalc/c1/case.toml"
+    toml.write_text(toml.read_text() + CASE_TOML.split("\n", 4)[4].replace('"r1"', '"r2"')
+                    + "debug = false\n")
+    loaded = load_cases_from(case_root, "refcalc")
+    assert [(r.name, r.debug) for r in loaded[0].runs] == [("r1", True), ("r2", False)]
+    mocker.patch.object(cases, "load_cases",
+                        side_effect=lambda kind: loaded if kind == "refcalc" else [])
+    assert [p.id for p in test_debug_build._params()] == ["c1/r1"]
+
+
+def test_poison_heap_run_gets_poisoned_test_with_tunables(case_root, mocker, stub_script,
+                                                         stub_build, tmp_path):
+    """A run with poison_heap = true is the only parameter of the poisoned-heap test,
+    which runs the program with the glibc tunables of the environment it is given
+    (POISONED_HEAP_ENV, from its fixture)."""
+    from harness.runner import POISONED_HEAP_ENV
+    from tier1 import test_poisoned_heap
+    toml = case_root / "refcalc/c1/case.toml"
+    toml.write_text(toml.read_text() + CASE_TOML.split("\n", 4)[4].replace('"r1"', '"r2"')
+                    + "poison_heap = true\n")
+    loaded = load_cases_from(case_root, "refcalc")
+    assert [(r.name, r.poison_heap) for r in loaded[0].runs] == [("r1", False), ("r2", True)]
+    mocker.patch.object(cases, "load_cases",
+                        side_effect=lambda kind: loaded if kind == "refcalc" else [])
+    (param,) = test_poisoned_heap._params()
+    assert param.id == "c1/r2"
+    stub_build(stub_script(tmp_path / "stub.py", """
+        import os, pathlib
+        pathlib.Path('tunables').write_text(os.environ.get('GLIBC_TUNABLES', ''))
+    """))
+    mocker.patch.object(cases, "check_complete")
+    mocker.patch.object(test_poisoned_heap, "expected_outputs", return_value=[])
+    mocker.patch.object(test_poisoned_heap, "compare_outputs", return_value={})
+    test_poisoned_heap.test_outputs_match_baseline_with_poisoned_heap(
+        *param.values, tmp_path, None, POISONED_HEAP_ENV, tmp_path / "wd")
+    assert (tmp_path / "wd" / "tunables").read_text() == POISONED_HEAP_ENV["GLIBC_TUNABLES"]
+
+
 @pytest.mark.parametrize("make_dir", [False, True], ids=["missing", "empty"])
 def test_missing_or_empty_kind_dir_raises(tmp_path, make_dir):
     """A missing or empty case directory is an error, not zero tests."""
@@ -91,6 +132,20 @@ def test_execute_run_copies_files_and_runs(tmp_path, stub_script, stub_build):
     assert (tmp_path / "wd" / "fd.out").read_text() == "AB" and res.returncode == 0
     info = json.loads((tmp_path / "wd" / ".runinfo.json").read_text())
     assert info["returncode"] == 0 and "max_rss_kb" in info
+
+
+@pytest.mark.parametrize("listed", [True, False], ids=["listed", "not_listed"])
+def test_execute_run_stores_stdout_if_listed(tmp_path, stub_script, stub_build, listed):
+    """The standard output becomes the file 'stdout' exactly when run.outputs lists it."""
+    stub_build(stub_script(tmp_path / "stub.py", "print('*BEAM NO.  1')"))
+    (tmp_path / "in").write_text("")
+    case = cases.Case("c", tmp_path, "stub", [])
+    run = cases.Run("r", tmp_path / "in", None, {}, ["stdout"] if listed else [])
+    cases.execute_run(case, run, tmp_path, None, tmp_path / "wd")
+    stored = tmp_path / "wd" / "stdout"
+    assert stored.is_file() == listed
+    if listed:
+        assert stored.read_text() == "*BEAM NO.  1\n"
 
 
 def test_execute_run_failing_program_raises(tmp_path, stub_script, stub_build):

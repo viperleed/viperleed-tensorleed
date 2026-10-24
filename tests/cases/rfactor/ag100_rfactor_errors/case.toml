@@ -8,4 +8,4 @@ name = "mns"
 stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_mns" }
-outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column"]
+outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
