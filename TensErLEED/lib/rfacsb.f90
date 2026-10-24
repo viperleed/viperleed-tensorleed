@@ -1612,9 +1612,9 @@ contains
 
   !> Reads the control parameters from unit 8 for nbtd theory beams and
   !! ns geometries, echoes them to stdout together with the title of the
-  !! experiment. The number of experimental beams is the length of their averaging scheme
-  !! nbea, which has a nonzero entry for every beam. Stops on unsupported
-  !! input.
+  !! experiment. The number of experimental beams is the length of their
+  !! averaging scheme nbea, which has a nonzero entry for every beam. Stops
+  !! on unsupported input.
   subroutine read_control(ctl, nbtd, ns)
     type(control_parameters), intent(out) :: ctl
     integer, intent(in) :: nbtd, ns
@@ -2848,7 +2848,7 @@ contains
     allocate(best%ng1(ngap), best%ng2(ngap), best%ngt1(ngap), &
              best%ngt2(ngap))
     ! If no beam overlaps, the best fit is never set and the column
-    ! output and the best-fit line read these as the legacy static zeros
+    ! output and the best-fit line read these as the legacy static zeros.
     best%nemin = 0; best%nemax = 0; best%ntmin = 0; best%ntmax = 0
     best%ng1 = 0; best%ng2 = 0; best%ngt1 = 0; best%ngt2 = 0
     best%sest = 0; best%stst = 0; best%ravb = 0
