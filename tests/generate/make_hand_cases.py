@@ -68,20 +68,23 @@ stays the same and only the input form differs:
   4 from 205 to 212 eV are removed (EDGE_HOLE), with R2 only; rfactor
   detects the hole as a gap, which lies outside the energy interval common
   to theory and experiment for some inner-potential shifts.
-  gap_below_theory_r2: an explicit gap LOW_GAP just above the first data
-  point of beam 1, V0 from -4 to +4 eV, R2 only; for the larger shifts the
-  gap lies partly before the start of the theory. gap_edge_hi_allw: an
-  explicit gap HIGH_GAP near the upper end of beam 1, V0 from -6 to +10 eV,
-  all four weights of weights_all; for the larger shifts the gap lies
-  partly beyond the end of the theory. no_overlap: all experimental
+  gap_edge_lo_r2: an explicit gap LOW_GAP just above the first data point
+  of beam 1, V0 from -5 to +5 eV, R2 only; for the larger shifts the gap
+  lies partly before the start of the theory. gap_edge_lo_allw: an explicit
+  gap LOW_GAP_ALLW in beam 1, V0 from -10 to +10 eV, all four weights of
+  weights_all; as gap_edge_lo_r2, also for the Zanazzi-Jona and R_S
+  integrals. Both make the gap integrals read theory elements below index
+  1, which count as zero; the debug build stops if such a read reaches
+  memory. gap_edge_hi_allw: an explicit gap HIGH_GAP near the upper end of
+  beam 1, V0 from -6 to +10 eV, all four weights of weights_all; for the
+  larger shifts the gap lies partly beyond the end of the theory. no_overlap: all experimental
   points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
   overlaps the theory (up to 216 eV); legacy ends normally and prints
   asterisks for the average R factors in ROUT and stdout.
-  gap_below_theory_r2 and no_overlap are not run in the debug build
-  (README, 'Rules'): their inputs drive undefined behaviour that the legacy
-  code shares, named in case.toml. autogap_edge_r2_v0std,
-  gap_below_theory_r2 and gap_edge_hi_allw are also run with a poisoned
-  heap (README, 'Rules').
+  no_overlap is not run in the debug build (README, 'Rules'): its input
+  drives undefined behaviour that the legacy code shares, named in
+  case.toml. autogap_edge_r2_v0std, gap_edge_lo_r2, gap_edge_lo_allw and
+  gap_edge_hi_allw are also run with a poisoned heap (README, 'Rules').
 - ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
   experimental and theory beams instead of 4, each a copy of one of the 4
   beams with its intensities scaled by a smooth factor that differs between
@@ -132,11 +135,15 @@ GAPS3 = ((1, 70.0, 75.0), (2, 120.0, 126.0), (4, 190.0, 195.0))
 # ag100_rfactor_params/autogap_edge_r2_v0std: experimental points removed,
 # (experimental beam, first and last energy in eV)
 EDGE_HOLE = (4, 205.0, 212.0)
-# ag100_rfactor_params/gap_below_theory_r2: explicit gap (experimental beam,
-# first and last energy in eV) just above the first data point of beam 1
-# (48 eV; the theory starts at 45 eV), and the inner-potential range (eV)
-LOW_GAP = (1, 48.5, 52.5)
-LOW_GAP_V0 = (-4.0, 4.0)
+# ag100_rfactor_params/gap_edge_lo_r2: explicit gap (experimental beam, first
+# and last energy in eV) just above the first data point of beam 1 (48 eV;
+# the theory starts at 45 eV), and the inner-potential range (eV)
+LOW_GAP = (1, 49.0, 53.0)
+LOW_GAP_V0 = (-5.0, 5.0)
+# ag100_rfactor_params/gap_edge_lo_allw: as LOW_GAP, LOW_GAP_V0, with a
+# larger range of inner-potential shifts
+LOW_GAP_ALLW = (1, 51.0, 56.0)
+LOW_GAP_ALLW_V0 = (-10.0, 10.0)
 # ag100_rfactor_params/gap_edge_hi_allw: explicit gap (experimental beam,
 # first and last energy in eV) near the upper end of beam 1 (the theory ends
 # at 216 eV), and the inner-potential range (eV)
@@ -431,14 +438,11 @@ def ag100_rfactor_params():
     low_gap = set_namelist_value(wexpel, "WR", "1.,0.,0.,")
     for key, v0 in zip(("V01", "V02"), LOW_GAP_V0):
         low_gap = set_namelist_value(low_gap, key, f"{v0:.2f}")
-    add("gap_below_theory_r2", add_gaps(low_gap, [LOW_GAP]),
-        no_debug=["The gap integrals of experiment and theory read theory intensities",
-                  "at grid indices below 1 (out of bounds) for the larger inner-potential",
-                  "shifts, as legacy rfactor.f does with AT(IBT,NG1+NEET), where the",
-                  "legacy build reads zeros; these reads count as zero. The one data",
-                  "point before the gap is also interpolated as a two-point curve, as",
-                  "legacy XNTRP2 does (reads YS(2), out of bounds)."],
-        poison_heap=True)
+    add("gap_edge_lo_r2", add_gaps(low_gap, [LOW_GAP]), poison_heap=True)
+    low_gap = set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,")
+    for key, v0 in zip(("V01", "V02"), LOW_GAP_ALLW_V0):
+        low_gap = set_namelist_value(low_gap, key, f"{v0:.2f}")
+    add("gap_edge_lo_allw", add_gaps(low_gap, [LOW_GAP_ALLW]), poison_heap=True)
     high_gap = set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,")
     for key, v0 in zip(("V01", "V02"), HIGH_GAP_V0):
         high_gap = set_namelist_value(high_gap, key, f"{v0:.2f}")
@@ -455,8 +459,8 @@ def ag100_rfactor_params():
                            "without experimental counterpart (KAV = 0), all four R-factor "
                            "weights, smoothing with a gap, only fractional beams "
                            "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams, a "
-                           "detected gap at the upper end of the data, a gap below the start "
-                           "of the theory, a gap near the end of the theory with all weights, no "
+                           "detected gap at the upper end of the data, gaps below the start "
+                           "of the theory with R2 and with all weights, a gap near the end of the theory with all weights, no "
                            "overlap with the theory; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
