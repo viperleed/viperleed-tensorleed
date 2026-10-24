@@ -70,13 +70,18 @@ stays the same and only the input form differs:
   to theory and experiment for some inner-potential shifts.
   gap_below_theory_r2: an explicit gap LOW_GAP just above the first data
   point of beam 1, V0 from -4 to +4 eV, R2 only; for the larger shifts the
-  gap lies partly before the start of the theory. no_overlap: all experimental
+  gap lies partly before the start of the theory. gap_edge_hi_allw: an
+  explicit gap HIGH_GAP near the upper end of beam 1, V0 from -6 to +10 eV,
+  all four weights of weights_all; for the larger shifts the gap lies
+  partly beyond the end of the theory. no_overlap: all experimental
   points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
   overlaps the theory (up to 216 eV); legacy ends normally and prints
-  asterisks for the average R factors in ROUT and stdout. These three runs are not
-  run in the debug build
+  asterisks for the average R factors in ROUT and stdout. autogap_edge_r2_v0std,
+  gap_below_theory_r2 and no_overlap are not run in the debug build
   (README, 'Rules'): their inputs drive undefined behaviour that the legacy
-  code shares, named in case.toml.
+  code shares, named in case.toml. autogap_edge_r2_v0std,
+  gap_below_theory_r2 and gap_edge_hi_allw are also run with a poisoned
+  heap (README, 'Rules').
 - ag100_rfactor_beams: the ag100_rfactor pendry run with N_BEAMS
   experimental and theory beams instead of 4, each a copy of one of the 4
   beams with its intensities scaled by a smooth factor that differs between
@@ -132,6 +137,11 @@ EDGE_HOLE = (4, 205.0, 212.0)
 # (48 eV; the theory starts at 45 eV), and the inner-potential range (eV)
 LOW_GAP = (1, 48.5, 52.5)
 LOW_GAP_V0 = (-4.0, 4.0)
+# ag100_rfactor_params/gap_edge_hi_allw: explicit gap (experimental beam,
+# first and last energy in eV) near the upper end of beam 1 (the theory ends
+# at 216 eV), and the inner-potential range (eV)
+HIGH_GAP = (1, 208.0, 214.0)
+HIGH_GAP_V0 = (-6.0, 10.0)
 # ag100_rfactor_params/no_overlap: experimental points below this energy (eV)
 # are removed from every beam, and EMAX is set to NO_OVERLAP_EMAX
 NO_OVERLAP_EXP_MIN = 220.0
@@ -419,7 +429,8 @@ def ag100_rfactor_params():
         drop_exp_points(set_namelist_value(wexpel, "WR", "1.,0.,0.,"), *EDGE_HOLE),
         no_debug=["The gap integral of the theory reads the intensity at grid index 0",
                   "(out of bounds), as legacy rfactor.f does with AT(IBT,0); the term",
-                  "spans one point, so the value read does not change the result."])
+                  "spans one point, so the value read does not change the result."],
+        poison_heap=True)
     low_gap = set_namelist_value(wexpel, "WR", "1.,0.,0.,")
     for key, v0 in zip(("V01", "V02"), LOW_GAP_V0):
         low_gap = set_namelist_value(low_gap, key, f"{v0:.2f}")
@@ -429,7 +440,12 @@ def ag100_rfactor_params():
                   "shifts, as legacy rfactor.f does with AT(IBT,NG1+NEET), where the",
                   "legacy build reads zeros; these reads count as zero. The one data",
                   "point before the gap is also interpolated as a two-point curve, as",
-                  "legacy XNTRP2 does (reads YS(2), out of bounds)."])
+                  "legacy XNTRP2 does (reads YS(2), out of bounds)."],
+        poison_heap=True)
+    high_gap = set_namelist_value(wexpel, "WR", "0.1,0.2,0.3,0.4,")
+    for key, v0 in zip(("V01", "V02"), HIGH_GAP_V0):
+        high_gap = set_namelist_value(high_gap, key, f"{v0:.2f}")
+    add("gap_edge_hi_allw", add_gaps(high_gap, [HIGH_GAP]), poison_heap=True)
     no_overlap = set_namelist_value(wexpel, "EMAX", f"{NO_OVERLAP_EMAX:.2f}")
     for beam in range(1, 5):
         no_overlap = drop_exp_points(no_overlap, beam, 0.0, NO_OVERLAP_EXP_MIN - 0.01)
@@ -443,11 +459,12 @@ def ag100_rfactor_params():
                            "weights, smoothing with a gap, only fractional beams "
                            "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams, a "
                            "detected gap at the upper end of the data, a gap below the start "
-                           "of the theory, no overlap with the theory; CPC 2001 Table 7 "
+                           "of the theory, a gap near the end of the theory with all weights, no "
+                           "overlap with the theory; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
                        "ipr-2", "gaps-several-beams", "gap-outside-common-interval",
-                       "gap-below-theory", "no-overlap"],
+                       "gap-below-theory", "gap-near-theory-end", "no-overlap"],
             "runs": runs, "inputs": inputs}
 
 

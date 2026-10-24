@@ -29,6 +29,11 @@ _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
 _NONZERO_STOP = re.compile(r"^\s*STOP\s+0*[1-9]\d*\s*$", re.M)
 _THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                "MKL_NUM_THREADS": "1"}
+# glibc fills newly allocated memory with 0x7f bytes and takes every
+# allocation from the heap instead of fresh, zeroed pages, so that a read
+# of memory the program never wrote shows in its outputs
+POISONED_HEAP_ENV = {"GLIBC_TUNABLES": "glibc.malloc.perturb=128:"
+                                       "glibc.malloc.mmap_threshold=33554432"}
 
 
 class ProgramFailed(RuntimeError):
@@ -72,13 +77,13 @@ def _launcher():
     return exe
 
 
-def run_program(exe, cwd, stdin_path, timeout):
+def run_program(exe, cwd, stdin_path, timeout, env=None):
     """Run exe in cwd with stdin from stdin_path (or none).
 
-    stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
+    env: extra environment variables for the program. stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
     peak RSS (KiB) are taken from the child's rusage (os.wait4).
     """
-    env = dict(os.environ, **_THREAD_ENV)
+    env = dict(os.environ, **_THREAD_ENV, **(env or {}))
     cwd = Path(cwd).resolve()  # the launcher runs inside cwd
     out_path, err_path = cwd / ".stdout", cwd / ".stderr"
     usage_path = cwd / ".rusage"

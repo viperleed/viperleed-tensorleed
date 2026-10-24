@@ -63,6 +63,33 @@ def test_debug_opt_out_run_not_collected_for_debug(case_root, mocker):
     assert [p.id for p in test_debug_build._params()] == ["c1/r1"]
 
 
+def test_poison_heap_run_gets_poisoned_test_with_tunables(case_root, mocker, stub_script,
+                                                         stub_build, tmp_path):
+    """A run with poison_heap = true is the only parameter of the poisoned-heap test,
+    which runs the program with the glibc tunables of POISONED_HEAP_ENV."""
+    from harness.runner import POISONED_HEAP_ENV
+    from tier1 import test_poisoned_heap
+    toml = case_root / "refcalc/c1/case.toml"
+    toml.write_text(toml.read_text() + CASE_TOML.split("\n", 4)[4].replace('"r1"', '"r2"')
+                    + "poison_heap = true\n")
+    loaded = load_cases_from(case_root, "refcalc")
+    assert [(r.name, r.poison_heap) for r in loaded[0].runs] == [("r1", False), ("r2", True)]
+    mocker.patch.object(cases, "load_cases",
+                        side_effect=lambda kind: loaded if kind == "refcalc" else [])
+    (param,) = test_poisoned_heap._params()
+    assert param.id == "c1/r2"
+    stub_build(stub_script(tmp_path / "stub.py", """
+        import os, pathlib
+        pathlib.Path('tunables').write_text(os.environ.get('GLIBC_TUNABLES', ''))
+    """))
+    mocker.patch.object(cases, "check_complete")
+    mocker.patch.object(test_poisoned_heap, "expected_outputs", return_value=[])
+    mocker.patch.object(test_poisoned_heap, "compare_outputs", return_value={})
+    test_poisoned_heap.test_outputs_match_baseline_with_poisoned_heap(
+        *param.values, tmp_path, None, tmp_path / "wd")
+    assert (tmp_path / "wd" / "tunables").read_text() == POISONED_HEAP_ENV["GLIBC_TUNABLES"]
+
+
 @pytest.mark.parametrize("make_dir", [False, True], ids=["missing", "empty"])
 def test_missing_or_empty_kind_dir_raises(tmp_path, make_dir):
     """A missing or empty case directory is an error, not zero tests."""

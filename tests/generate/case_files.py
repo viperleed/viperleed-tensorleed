@@ -23,7 +23,8 @@ def write_case(case_dir, header, program, description, covers, runs, inputs):
     runs: dicts with name, stdin, param, outputs and optionally files
     ({key: path}) and no_debug (comment lines naming the undefined
     behaviour shared with the legacy code, written above debug = false: the
-    run is not run in the debug build); inputs: {path: text}. Paths are
+    run is not run in the debug build) and poison_heap (True: poison_heap =
+    true, the run is repeated with a poisoned heap); inputs: {path: text}. Paths are
     relative to case_dir.
     """
     if (case_dir / "inputs").exists():
@@ -42,6 +43,8 @@ def write_case(case_dir, header, program, description, covers, runs, inputs):
         toml.append("outputs = [" + ", ".join(f'"{o}"' for o in run["outputs"]) + "]")
         if run.get("no_debug"):
             toml += [f"# {line}" for line in run["no_debug"]] + ["debug = false"]
+        if run.get("poison_heap"):
+            toml.append("poison_heap = true")
         toml.append("")
     (case_dir / "case.toml").write_text("\n".join(toml))
 
