@@ -66,7 +66,8 @@ def test_debug_opt_out_run_not_collected_for_debug(case_root, mocker):
 def test_poison_heap_run_gets_poisoned_test_with_tunables(case_root, mocker, stub_script,
                                                          stub_build, tmp_path):
     """A run with poison_heap = true is the only parameter of the poisoned-heap test,
-    which runs the program with the glibc tunables of POISONED_HEAP_ENV."""
+    which runs the program with the glibc tunables of the environment it is given
+    (POISONED_HEAP_ENV, from its fixture)."""
     from harness.runner import POISONED_HEAP_ENV
     from tier1 import test_poisoned_heap
     toml = case_root / "refcalc/c1/case.toml"
@@ -86,7 +87,7 @@ def test_poison_heap_run_gets_poisoned_test_with_tunables(case_root, mocker, stu
     mocker.patch.object(test_poisoned_heap, "expected_outputs", return_value=[])
     mocker.patch.object(test_poisoned_heap, "compare_outputs", return_value={})
     test_poisoned_heap.test_outputs_match_baseline_with_poisoned_heap(
-        *param.values, tmp_path, None, tmp_path / "wd")
+        *param.values, tmp_path, None, POISONED_HEAP_ENV, tmp_path / "wd")
     assert (tmp_path / "wd" / "tunables").read_text() == POISONED_HEAP_ENV["GLIBC_TUNABLES"]
 
 

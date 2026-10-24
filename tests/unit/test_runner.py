@@ -120,7 +120,14 @@ def test_launcher_rebuilt_for_other_c_compiler_version(tmp_path, mocker):
         return subprocess.CompletedProcess(cmd, 0)
     mocker.patch.object(runner.subprocess, "run", side_effect=fake_run)
     mocker.patch.object(runner, "_CACHE", tmp_path)
-    exe1 = runner._launcher()
-    assert runner._launcher() == exe1
+    exe1 = runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2")
+    assert runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2") == exe1
     version = "gcc 15.2\nline 2 changed\n"
-    assert runner._launcher() != exe1
+    assert runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2") != exe1
+
+
+def test_heap_probe_reads_zero_from_a_fresh_large_block(tmp_path):
+    """Without the poisoned-heap environment, the probe's large block reads 0.
+
+    So a 127 from it under POISONED_HEAP_ENV shows the environment applied."""
+    assert runner.heap_probe(tmp_path, None)[1] == 0
