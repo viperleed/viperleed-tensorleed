@@ -67,10 +67,13 @@ stays the same and only the input form differs:
   baseline issues). autogap_edge_r2_v0std: the experimental points of beam
   4 from 205 to 212 eV are removed (EDGE_HOLE), with R2 only; rfactor
   detects the hole as a gap, which lies outside the energy interval common
-  to theory and experiment for some inner-potential shifts. no_overlap: all experimental
+  to theory and experiment for some inner-potential shifts.
+  gap_below_theory_r2: an explicit gap LOW_GAP just above the first data
+  point of beam 1, V0 from -4 to +4 eV, R2 only; for the larger shifts the
+  gap lies partly before the start of the theory. no_overlap: all experimental
   points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
   overlaps the theory (up to 216 eV); legacy ends normally and prints
-  asterisks for the average R factors in ROUT and stdout. Both runs are not
+  asterisks for the average R factors in ROUT and stdout. These three runs are not
   run in the debug build
   (README, 'Rules'): their inputs drive undefined behaviour that the legacy
   code shares, named in case.toml.
@@ -124,6 +127,11 @@ GAPS3 = ((1, 70.0, 75.0), (2, 120.0, 126.0), (4, 190.0, 195.0))
 # ag100_rfactor_params/autogap_edge_r2_v0std: experimental points removed,
 # (experimental beam, first and last energy in eV)
 EDGE_HOLE = (4, 205.0, 212.0)
+# ag100_rfactor_params/gap_below_theory_r2: explicit gap (experimental beam,
+# first and last energy in eV) just above the first data point of beam 1
+# (48 eV; the theory starts at 45 eV), and the inner-potential range (eV)
+LOW_GAP = (1, 48.5, 52.5)
+LOW_GAP_V0 = (-4.0, 4.0)
 # ag100_rfactor_params/no_overlap: experimental points below this energy (eV)
 # are removed from every beam, and EMAX is set to NO_OVERLAP_EMAX
 NO_OVERLAP_EXP_MIN = 220.0
@@ -412,6 +420,16 @@ def ag100_rfactor_params():
         no_debug=["The gap integral of the theory reads the intensity at grid index 0",
                   "(out of bounds), as legacy rfactor.f does with AT(IBT,0); the term",
                   "spans one point, so the value read does not change the result."])
+    low_gap = set_namelist_value(wexpel, "WR", "1.,0.,0.,")
+    for key, v0 in zip(("V01", "V02"), LOW_GAP_V0):
+        low_gap = set_namelist_value(low_gap, key, f"{v0:.2f}")
+    add("gap_below_theory_r2", add_gaps(low_gap, [LOW_GAP]),
+        no_debug=["The gap integrals of experiment and theory read theory intensities",
+                  "at grid indices below 1 (out of bounds) for the larger inner-potential",
+                  "shifts, as legacy rfactor.f does with AT(IBT,NG1+NEET), where the",
+                  "legacy build reads zeros; these reads count as zero. The one data",
+                  "point before the gap is also interpolated as a two-point curve, as",
+                  "legacy XNTRP2 does (reads YS(2), out of bounds)."])
     no_overlap = set_namelist_value(wexpel, "EMAX", f"{NO_OVERLAP_EMAX:.2f}")
     for beam in range(1, 5):
         no_overlap = drop_exp_points(no_overlap, beam, 0.0, NO_OVERLAP_EXP_MIN - 0.01)
@@ -424,11 +442,12 @@ def ag100_rfactor_params():
                            "without experimental counterpart (KAV = 0), all four R-factor "
                            "weights, smoothing with a gap, only fractional beams "
                            "(MITTEL = 2), IPR = 2 with smoothing, gaps in three beams, a "
-                           "detected gap at the upper end of the data, no overlap with the "
-                           "theory; CPC 2001 Table 7 "
+                           "detected gap at the upper end of the data, a gap below the start "
+                           "of the theory, no overlap with the theory; CPC 2001 Table 7 "
                            "covers KAV, ISMOTH, MITTEL and IPR, not KAV = 0, WR or gaps",
             "covers": ["kav-zero", "weights-all", "smoothing-gap", "fractional-only",
-                       "ipr-2", "gaps-several-beams", "gap-outside-common-interval", "no-overlap"],
+                       "ipr-2", "gaps-several-beams", "gap-outside-common-interval",
+                       "gap-below-theory", "no-overlap"],
             "runs": runs, "inputs": inputs}
 
 

@@ -64,6 +64,7 @@ rfactor = [
     "ag100_rfactor_params/ipr2",
     "ag100_rfactor_params/gaps3_all",
     "ag100_rfactor_params/autogap_edge_r2_v0std",
+    "ag100_rfactor_params/gap_below_theory_r2",
     "ag100_rfactor_params/no_overlap",
     "ag100_rfactor_beams/nb25",
     "ag100_rfactor_beams/nb30",

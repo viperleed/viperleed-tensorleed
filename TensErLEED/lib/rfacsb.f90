@@ -1352,6 +1352,8 @@ contains
   !!           integrand, interpolated onto a 10 times denser grid first.
   !! For nf = 1..3 the integrand is left in y(1:ie2-ie1+1); for nf = 4,
   !! y(1:ie2-ie1+1) holds the energies relative to the first point.
+  !! Elements at energy indices below 1 read as zero, as the legacy static
+  !! arrays did.
   subroutine varsum(a1, a2, b1, b2, nbd1, nbd2, ngp, ib1, ib2, ie1, ie2, nv, &
                     eincr, eps, c, nf, s, y)
     integer, intent(in) :: nbd1, nbd2, ngp, ib1, ib2, ie1, ie2, nv, nf
@@ -1373,11 +1375,11 @@ contains
         ies = ie + nv
         select case (nf)
         case (2)
-          y(n) = a1(ib1, ie)**2
+          y(n) = element(a1, ib1, ie)**2
         case (3)
-          y(n) = (a1(ib1, ie) - c*a2(ib2, ies))**2
+          y(n) = (element(a1, ib1, ie) - c*element(a2, ib2, ies))**2
         case default
-          y(n) = a1(ib1, ie)
+          y(n) = element(a1, ib1, ie)
         end select
       end do
       call trapezoid(y(1:n), n, eincr, s)
@@ -1388,10 +1390,10 @@ contains
       n = n + 1
       ies = ie + nv
       y(n) = real(n - 1, sp)*eincr
-      y1(n) = a1(ib1, ie)
-      y2(n) = a2(ib2, ies)
-      y3(n) = b1(ib1, ie)
-      y4(n) = b2(ib2, ies)
+      y1(n) = element(a1, ib1, ie)
+      y2(n) = element(a2, ib2, ies)
+      y3(n) = element(b1, ib1, ie)
+      y4(n) = element(b2, ib2, ies)
     end do
     de = 0.1_sp*eincr
     nn = 10*(n - 1) + 1
@@ -1412,6 +1414,19 @@ contains
       yy(ie) = abs(ab1 - c*ab2)*abs(aa1 - c*aa2)/(abs(aa1) + eps)
     end do
     call trapezoid(yy(1:nn), nn, de, s)
+
+  contains
+
+    pure real(sp) function element(a, ib, ie)
+      real(sp), intent(in) :: a(:, :)
+      integer, intent(in) :: ib, ie
+
+      if (ie >= 1) then
+        element = a(ib, ie)
+      else
+        element = 0._sp
+      end if
+    end function element
   end subroutine varsum
 
   !> Pendry Y function y = L/(1 + vi**2 L**2) of the curves a(ib, 1:ne(ib))
