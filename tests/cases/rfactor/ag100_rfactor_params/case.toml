@@ -51,10 +51,6 @@ stdin = "inputs/spectrum"
 param = "inputs/PARAM"
 files = { WEXPEL = "inputs/WEXPEL_autogap_edge_r2_v0std" }
 outputs = ["ROUT", "ROUTSHORT", "exp.column", "theo.column", "stdout"]
-# The gap integral of the theory reads the intensity at grid index 0
-# (out of bounds), as legacy rfactor.f does with AT(IBT,0); the term
-# spans one point, so the value read does not change the result.
-debug = false
 poison_heap = true
 
 [[runs]]

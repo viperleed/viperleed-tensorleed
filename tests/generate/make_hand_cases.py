@@ -76,7 +76,7 @@ stays the same and only the input form differs:
   partly beyond the end of the theory. no_overlap: all experimental
   points below NO_OVERLAP_EXP_MIN are removed and EMAX is raised, so no beam
   overlaps the theory (up to 216 eV); legacy ends normally and prints
-  asterisks for the average R factors in ROUT and stdout. autogap_edge_r2_v0std,
+  asterisks for the average R factors in ROUT and stdout.
   gap_below_theory_r2 and no_overlap are not run in the debug build
   (README, 'Rules'): their inputs drive undefined behaviour that the legacy
   code shares, named in case.toml. autogap_edge_r2_v0std,
@@ -427,9 +427,6 @@ def ag100_rfactor_params():
         param="inputs/PARAM_gaps3")
     add("autogap_edge_r2_v0std",
         drop_exp_points(set_namelist_value(wexpel, "WR", "1.,0.,0.,"), *EDGE_HOLE),
-        no_debug=["The gap integral of the theory reads the intensity at grid index 0",
-                  "(out of bounds), as legacy rfactor.f does with AT(IBT,0); the term",
-                  "spans one point, so the value read does not change the result."],
         poison_heap=True)
     low_gap = set_namelist_value(wexpel, "WR", "1.,0.,0.,")
     for key, v0 in zip(("V01", "V02"), LOW_GAP_V0):
