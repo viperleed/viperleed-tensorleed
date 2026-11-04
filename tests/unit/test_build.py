@@ -276,6 +276,15 @@ def test_debug_build_ignores_release_object_in_tree(toy_intree):
     assert proc.returncode != 0 and "Fortran runtime error" in proc.stderr
 
 
+def test_debug_flags_check_everything_without_fast_math():
+    """DEBUG enables all runtime checks and no optimisation that changes IEEE semantics.
+
+    The trap probe exercises only bounds and the FP traps; this pins the rest."""
+    words = DEBUG.compile.split()
+    assert "-fcheck=all" in words
+    assert not {"-ffast-math", "-Ofast"} & set(words)
+
+
 def test_makefile_recipe_without_fflags_fails(toy_intree):
     """A compile line that make runs without FFLAGS makes the build fail.
 
