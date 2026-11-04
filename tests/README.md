@@ -140,6 +140,8 @@ poison_heap = true                       # optional; tier 1 runs it again with a
 
 The output name `stdout` stands for the program's standard output, which the harness stores under that name in the run directory (`harness/cases.py`, `run_built`); every rfactor run lists it.
 
+Every directory in `expected/` must be named after a run, and every file in it must match one of that run's output globs (`tests/unit/test_cases.py`); a stray directory or file would never be compared.
+
 Every expected output file is compared line by line and token by token (same number of lines, same tokens per line, each number in the same format — F, E, ES or D, number of decimals, exponent width, column where the field ends; viperleed reads these files by fixed format) with the tolerance of the first matching pattern in `tolerances.toml`; the set of produced output files must equal the expected set.
 
 ## Regenerating cases and expected outputs

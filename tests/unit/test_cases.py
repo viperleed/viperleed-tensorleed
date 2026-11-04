@@ -13,8 +13,8 @@ import tomllib
 import pytest
 
 from harness import cases
-from harness.cases import (CASES_DIR, CaseError, expected_outputs, load_cases,
-                           load_cases_from, tolerance_for)
+from harness.cases import (CASES_DIR, KINDS, CaseError, expected_outputs, load_cases,
+                           load_cases_from, tolerance_for, uncovered_expected)
 from harness.runner import ProgramFailed
 
 CASE_TOML = """
@@ -107,6 +107,33 @@ def test_empty_glob_is_error(case_root):
     (case,) = load_cases_from(case_root, "refcalc")
     with pytest.raises(FileNotFoundError):
         expected_outputs(case, case.runs[0])
+
+
+def test_expected_files_of_well_formed_case_are_covered(case_root):
+    """A case whose expected/ holds only run directories with matching files has nothing uncovered."""
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == []
+
+
+def test_expected_dir_without_run_is_uncovered(case_root):
+    """A directory in expected/ that is not named after a run is reported."""
+    (case_root / "refcalc/c1/expected/bogus").mkdir()
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == ["bogus"]
+
+
+def test_expected_file_matching_no_output_glob_is_uncovered(case_root):
+    """A file in a run's expected directory that matches none of its output globs is reported."""
+    (case_root / "refcalc/c1/expected/r1/amp.out").write_text("1.0")
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == ["r1/amp.out"]
+
+
+def test_committed_expected_files_are_covered():
+    """Every file under expected/ of every tier-1 case belongs to a run and matches one of its globs."""
+    uncovered = {case.name: uncovered_expected(case)
+                 for kind in KINDS for case in load_cases(kind)}
+    assert {name: paths for name, paths in uncovered.items() if paths} == {}
 
 
 def test_tolerance_lookup():
