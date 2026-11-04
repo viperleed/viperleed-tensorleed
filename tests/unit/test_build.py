@@ -276,6 +276,17 @@ def test_debug_build_ignores_release_object_in_tree(toy_intree):
     assert proc.returncode != 0 and "Fortran runtime error" in proc.stderr
 
 
+def test_makefile_recipe_without_fflags_fails(toy_intree):
+    """A compile line that make runs without FFLAGS makes the build fail.
+
+    Otherwise the debug build of that object would have no checks."""
+    makefile = toy_intree / "TensErLEED" / "Makefile"
+    makefile.write_text(makefile.read_text().replace(
+        "$(FC) $(FFLAGS) -c", "$(FC) -O2 -c"))
+    with pytest.raises(BuildError, match="without FFLAGS"):
+        build_program(toy_intree, "refcalc", None, DEBUG)
+
+
 def test_build_that_modifies_the_tree_fails(make_tree, add_recipe, monkeypatch):
     """A recipe writing into the original tree makes the build fail.
 

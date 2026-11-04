@@ -5,7 +5,9 @@ See tests/README.md, section 'Build contract':
   directory and run make -B -C <copy> <program> BUILDDIR=<dir> FC=gfortran
   FFLAGS=... LDLIBS=... [PARAM=<file>] there, with PARAM passed while one
   of the program's sources (as the Makefile lists them in
-  <PROGRAM>_SOURCES) still INCLUDEs 'PARAM' (during the refactor).
+  <PROGRAM>_SOURCES) still INCLUDEs 'PARAM' (during the refactor). The
+  build fails if a compiler line make runs lacks FFLAGS
+  (unflagged_compiler_lines).
 - Legacy mode (no TensErLEED/Makefile): compile the program's sources with
   the case's PARAM the same way viperleed does.
 Executables are cached in tests/.build-cache/<program>-<hash>/, where the
@@ -136,6 +138,24 @@ def _run(cmd, cwd, log):
     log.write(f"$ {cmd}\n{proc.stdout}{proc.stderr}\n")
     if proc.returncode != 0:
         raise BuildError(f"build failed: {cmd}\n{proc.stderr[-3000:]}")
+    return proc.stdout
+
+
+def unflagged_compiler_lines(make_output, flags, compiler="gfortran"):
+    """The compiler lines (compile or link) in make_output that lack flags.compile.
+
+    A line is a compiler line if its first word is compiler; it carries the
+    flags if the words of flags.compile appear in it in order, together.
+    """
+    want = flags.compile.split()
+    bad = []
+    for line in make_output.splitlines():
+        words = line.split()
+        if not words or words[0] != compiler:
+            continue
+        if not any(words[i:i + len(want)] == want for i in range(len(words))):
+            bad.append(line)
+    return bad
 
 
 def build_in(tmp, tl_root, program, param, flags, use_make, use_param, keep_tree=False):
@@ -167,9 +187,15 @@ def build_in(tmp, tl_root, program, param, flags, use_make, use_param, keep_tree
             copy = tmp / "tree" / "TensErLEED"
             shutil.copytree(tl_root / "TensErLEED", copy, symlinks=True)
             param_arg = f" PARAM={Path(param).resolve()}" if use_param else ""
-            _run(f"{MAKE} -C {copy} {program} BUILDDIR={tmp} "
-                 f"FC=gfortran FFLAGS='{flags.compile}' LDLIBS='{flags.link}'{param_arg}",
-                 tmp, log)
+            out = _run(f"{MAKE} -C {copy} {program} BUILDDIR={tmp} "
+                       f"FC=gfortran FFLAGS='{flags.compile}' LDLIBS='{flags.link}'"
+                       f"{param_arg}", tmp, log)
+            # a recipe that drops $(FFLAGS) would build without the checks of
+            # DEBUG while the debug tier passes
+            bad = unflagged_compiler_lines(out, flags)
+            if bad:
+                raise BuildError(f"make ran the compiler without FFLAGS='{flags.compile}':\n"
+                                 + "\n".join(bad))
             if not keep_tree:
                 shutil.rmtree(tmp / "tree")
 

@@ -7,7 +7,9 @@ checks except bounds. Runs with debug = false in their case.toml are not run
 (rtol >= [debug].min_rtol in tests/tolerances.toml) as a sanity
 check only. Before the first debug run, a small Fortran probe built with the
 same flags must stop at an out-of-bounds index and at each trapped
-floating-point exception (invalid, zero, overflow).
+floating-point exception (invalid, zero, overflow), and in Makefile mode
+every compile and link line of the tree's Makefile build of ref-calc and
+rfactor must carry the debug flags.
 """
 
 __authors__ = (
@@ -19,11 +21,12 @@ __license__ = 'GPLv3+'
 
 import dataclasses
 import signal
+import subprocess
 import tomllib
 
 import pytest
 
-from harness.build import DEBUG, DEBUG_NO_BOUNDS
+from harness.build import DEBUG, DEBUG_NO_BOUNDS, unflagged_compiler_lines, uses_makefile
 from harness.cases import (TESTS_DIR, compare_outputs, execute_run, expected_outputs,
                            format_failures, iter_runs, load_tolerances)
 from harness.runner import ProgramFailed, trap_probe
@@ -50,12 +53,49 @@ def _untrapped(workdir, fault):
             f"stderr tail {res.stderr[-300:]!r}")
 
 
+def _makefile_without_debug_flags(tl_root, builddir):
+    """The compiler lines of make -n for ref-calc and rfactor that lack DEBUG's flags.
+
+    Also reports a program for which make runs no compiler at all.
+    """
+    param = next(run.param for case, run in iter_runs() if case.program == "refcalc")
+    bad = []
+    for program in ("refcalc", "rfactor"):
+        proc = subprocess.run(
+            ["make", "-n", "-B", "-C", str(tl_root / "TensErLEED"), program,
+             f"BUILDDIR={builddir}", "FC=gfortran", f"FFLAGS={DEBUG.compile}",
+             f"LDLIBS={DEBUG.link}", f"PARAM={param}"],
+            capture_output=True, text=True, check=True)
+        if not any(line.startswith("gfortran ") for line in proc.stdout.splitlines()):
+            bad.append(f"{program}: make runs no gfortran line")
+        bad += unflagged_compiler_lines(proc.stdout, DEBUG)
+    return bad
+
+
 @pytest.fixture(scope="module")
-def debug_traps(tmp_path_factory):
-    """Check that the DEBUG flags stop the trap probe at every fault, before any debug run."""
+def debug_traps(tl_root, tmp_path_factory):
+    """Check, before any debug run, that the DEBUG flags stop the trap probe at
+    every fault and that the Makefile build applies them."""
     workdir = tmp_path_factory.mktemp("trap_probe")
     failures = [f for f in (_untrapped(workdir, fault) for fault in _TRAPS) if f]
     assert not failures, "debug flags do not trap:\n" + "\n".join(failures)
+    if uses_makefile(tl_root):
+        bad = _makefile_without_debug_flags(tl_root, workdir / "build")
+        assert not bad, "the Makefile build drops the debug flags:\n" + "\n".join(bad)
+
+
+@pytest.mark.tier1
+@pytest.mark.debug
+def test_makefile_applies_debug_flags(tl_root, tmp_path):
+    """Every compile and link line of the Makefile build of ref-calc and rfactor
+    carries the DEBUG flags (make -n, nothing is built).
+
+    Failing means a recipe drops $(FFLAGS), and the debug builds of that
+    program would run without bounds checks or FP traps."""
+    if not uses_makefile(tl_root):
+        pytest.skip("legacy tree: the harness compiles with the flags itself")
+    bad = _makefile_without_debug_flags(tl_root, tmp_path / "build")
+    assert not bad, "\n".join(bad)
 
 
 def _params():
