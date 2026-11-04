@@ -132,13 +132,15 @@ def test_relaxed_rtol_from_config(min_rtol, ok, mocker, tmp_path):
     assert (not _compare_relaxed(None, None, tmp_path)) == ok
 
 
+@pytest.mark.tier1
 @pytest.mark.debug
 @pytest.mark.parametrize("fault", list(_TRAPS))
 def test_debug_flags_stop_trap_probe(fault, tmp_path):
     """The trap probe built with the DEBUG flags stops at the fault (bounds, invalid, zero, overflow).
 
     Failing means DEBUG lost a bounds check or a floating-point trap, and the
-    debug runs below (which error) would pass without that check."""
+    debug runs below, and the tier-1 tests built with DEBUG, would pass
+    without that check."""
     assert _untrapped(tmp_path, fault) is None
 
 
