@@ -118,7 +118,8 @@ def derive_sizes(fin_text, explicit):
     READGEO; explicit ({name: value} of the EXPLICIT sizes) supplies the
     record counts the FIN does not give (beam sets, output beams, phase-shift
     energies). Bounds are at their minimum. ValueError if the FIN does not
-    have the layout expected.
+    have the layout expected, or for LMAX < 2, where no size is correct
+    (ref-calc writes past CAA at LMAX = 1).
     """
     sizes = dict(explicit)
     rec = _Records(fin_text)
@@ -136,6 +137,10 @@ def derive_sizes(fin_text, explicit):
     rec.skip(math.ceil(explicit["MNPUN"] / 15))  # NPU, format 15I5
     rec.skip(3)  # THETA/FI, EPS, LITER
     lmax = _int(rec.next(), 3)
+    if lmax < 2:
+        # legacy bug (README, known issues): CAAA writes CAA(2) past NCA(1) = 1
+        raise ValueError(f"FIN: LMAX = {lmax}; ref-calc needs LMAX >= 2: at LMAX = 1 "
+                         "it writes past CAA for any MNLMO, so no PARAM size is correct")
     sizes["MLMAX"] = lmax
     sizes["MNLMO"] = MNLMO_BY_LMAX[lmax - 1]
     sizes["MNLM"] = MNLM_BY_LMAX[lmax - 1]
