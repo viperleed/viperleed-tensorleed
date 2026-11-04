@@ -34,11 +34,10 @@ _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
 _NONZERO_STOP = re.compile(r"^\s*STOP\s+0*[1-9]\d*\s*$", re.M)
 _THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
                "MKL_NUM_THREADS": "1"}
-# glibc fills newly allocated memory with 0x7f bytes and takes every
-# allocation from the heap instead of fresh, zeroed pages, so that a read
-# of memory the program never wrote shows in its outputs
-POISONED_HEAP_ENV = {"GLIBC_TUNABLES": "glibc.malloc.perturb=128:"
-                                       "glibc.malloc.mmap_threshold=33554432"}
+# glibc fills newly allocated memory with 0x7f bytes, also large blocks it
+# takes from fresh, zeroed pages (mmap), so that a read of memory the
+# program never wrote shows in its outputs
+POISONED_HEAP_ENV = {"GLIBC_TUNABLES": "glibc.malloc.perturb=128"}
 
 
 class ProgramFailed(RuntimeError):
