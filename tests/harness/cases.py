@@ -148,6 +148,28 @@ def expected_outputs(case, run):
     return sorted(found, key=lambda p: p.name)
 
 
+def uncovered_expected(case):
+    """Paths under case's expected/ that no run accounts for, relative to it, sorted.
+
+    Every entry of expected/ must be the directory of a run, and every entry
+    of that directory a file matching one of the run's output globs; anything
+    else would never be compared.
+    """
+    exp_root = case.path / "expected"
+    if not exp_root.is_dir():
+        return []
+    runs = {run.name: run for run in case.runs}
+    stray = []
+    for entry in exp_root.iterdir():
+        run = runs.get(entry.name) if entry.is_dir() else None
+        if run is None:
+            stray.append(entry)
+            continue
+        stray.extend(f for f in entry.iterdir()
+                     if not (f.is_file() and pattern_for(f.name, run.outputs)))
+    return sorted(str(p.relative_to(exp_root)) for p in stray)
+
+
 @lru_cache(maxsize=None)
 def load_tolerances(path=TOLERANCES_FILE):
     """The parsed tolerances file (cached per path)."""

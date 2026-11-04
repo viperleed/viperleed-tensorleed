@@ -1,0 +1,48 @@
+C  Oversized PARAM for the ref-calc run ag100/E045_L06: as the case's
+C  inputs/PARAM_L06, but MNSUB is 2 instead of 1. All layer types are
+C  Bravais layers, so with MNSUB above 1 section 4 switches from the
+C  dummy sizes 1 to the composite-layer formulas, with MNCOMP 0
+C  (zero-size composite-layer arrays). viperleed writes MNSUB larger
+C  than the input needs (bulk layers); ref-calc must write the same
+C  outputs as with the case's PARAM.
+
+C  Dimension statements for Tensor LEED reference calculation, 
+C  version v1.2
+
+C  1. lattice symmetry
+
+      PARAMETER (MIDEG=4,MNL1=1,MNL2=1)
+      PARAMETER (MNL = MNL1*MNL2)
+
+C  2. General calculational quantities
+
+      PARAMETER (MKNBS = 1)
+      PARAMETER (MKNT =  49)
+      PARAMETER (MNPUN = 4, MNT0 = 4)
+      PARAMETER (MNPSI = 72, MNEL = 2)
+      PARAMETER (MLMAX = 6)
+      PARAMETER (MNLMO = 3836, MNLM = 4032)
+
+C  3. Parameters for (3D) geometry within (2D) unit mesh
+
+      PARAMETER (MNSITE  = 2)
+      PARAMETER (MNLTYPE = 6)
+      PARAMETER (MNBRAV  = 6)
+      PARAMETER (MNSUB   = 2)
+      PARAMETER (MNSTACK = 5)
+
+C  4. some derived quantities that must be treated explicitly (dummy dimensions for
+C     special cases necessary
+
+      PARAMETER (MLMAX1=MLMAX+1)
+      PARAMETER (MLMMAX = MLMAX1*MLMAX1)
+
+      PARAMETER (MNBRAV2 = MNBRAV)
+
+      PARAMETER (MNCOMP= MNLTYPE-MNBRAV)
+      PARAMETER (MLMT  = MNSUB*MLMMAX)
+      PARAMETER (MNSUB2= MNSUB * (MNSUB-1)/2)
+      PARAMETER (MLMG  = MNSUB2*MLMMAX*2)
+      PARAMETER (MLMN  = MNSUB * MLMMAX)
+      PARAMETER (MLM2N = 2*MLMN)
+      PARAMETER (MLMNI = MNSUB*MLMMAX)

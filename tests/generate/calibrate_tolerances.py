@@ -23,8 +23,8 @@ Rule per output-file pattern (see tests/README.md, 'Tolerances'):
   the last digit of an R factor passes, two fail; V0 shifts, energies and
   overlaps (2 decimals) must match exactly.
 - stdout (rfactor standard output, the same R factors and normalisation
-  constants in several formats): ulps = 1.5, i.e. one unit in the last
-  printed digit of each value passes, two fail.
+  constants in several formats): the ulps of its tolerances.toml entry are
+  kept (one unit in the last printed digit of each value passes, two fail).
 
 For each pattern the script also reports the insensitivity of the result:
 the share of non-zero expected floats whose tolerance allows a change of 1 %
@@ -129,7 +129,8 @@ def propose_one(pattern, all_pairs):
         unit = LAST_DIGIT_PATTERNS[pattern]
         return [(Tolerance(0.0, 0.0, atol=1.5 * unit), "one unit in the last digit of R")]
     if pattern in ONE_UNIT_PATTERNS:
-        return [(Tolerance(0.0, 0.0, ulps=1.5), "one unit in the last printed digit")]
+        ulps = load_tolerances()["numeric"][pattern]["ulps"]
+        return [(Tolerance(0.0, 0.0, ulps=ulps), "one unit in the last printed digit")]
     max_ulps = max((p[0] / p[2] for p in all_pairs if p[2] > 0), default=0.0)
     cands = [_scaled_candidate(all_pairs, "file"), _scaled_candidate(all_pairs, "line")]
     if max_ulps <= MAX_PRINT_ULPS:

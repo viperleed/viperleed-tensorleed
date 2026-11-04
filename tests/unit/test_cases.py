@@ -13,8 +13,8 @@ import tomllib
 import pytest
 
 from harness import cases
-from harness.cases import (CASES_DIR, CaseError, expected_outputs, load_cases,
-                           load_cases_from, tolerance_for)
+from harness.cases import (CASES_DIR, KINDS, CaseError, expected_outputs, load_cases,
+                           load_cases_from, tolerance_for, uncovered_expected)
 from harness.runner import ProgramFailed
 
 CASE_TOML = """
@@ -109,6 +109,34 @@ def test_empty_glob_is_error(case_root):
         expected_outputs(case, case.runs[0])
 
 
+def test_expected_files_of_well_formed_case_are_covered(case_root):
+    """A case whose expected/ holds only run directories with matching files has nothing uncovered."""
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == []
+
+
+def test_expected_dir_without_run_is_uncovered(case_root):
+    """A directory in expected/ that is not named after a run is reported."""
+    (case_root / "refcalc/c1/expected/bogus").mkdir()
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == ["bogus"]
+
+
+def test_expected_file_matching_no_output_glob_is_uncovered(case_root):
+    """A file in a run's expected directory that matches none of its output globs is reported."""
+    (case_root / "refcalc/c1/expected/r1/amp.out").write_text("1.0")
+    (case,) = load_cases_from(case_root, "refcalc")
+    assert uncovered_expected(case) == ["r1/amp.out"]
+
+
+def test_committed_expected_files_are_covered():
+    """Every file under expected/ of every tier-1 case belongs to a run and matches one of its globs."""
+    uncovered = {case.name: uncovered_expected(case)
+                 for kind in KINDS for case in load_cases(kind)}
+    assert uncovered, "no cases loaded"
+    assert {name: paths for name, paths in uncovered.items() if paths} == {}
+
+
 def test_tolerance_lookup():
     """tolerance_for finds a known name and raises KeyError for an unknown one."""
     tol, ignore, skip = tolerance_for("T_3")
@@ -134,18 +162,25 @@ def test_execute_run_copies_files_and_runs(tmp_path, stub_script, stub_build):
     assert info["returncode"] == 0 and "max_rss_kb" in info
 
 
-@pytest.mark.parametrize("listed", [True, False], ids=["listed", "not_listed"])
-def test_execute_run_stores_stdout_if_listed(tmp_path, stub_script, stub_build, listed):
-    """The standard output becomes the file 'stdout' exactly when run.outputs lists it."""
+def _run_printing_beam_line(tmp_path, stub_script, stub_build, outputs):
     stub_build(stub_script(tmp_path / "stub.py", "print('*BEAM NO.  1')"))
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
-    run = cases.Run("r", tmp_path / "in", None, {}, ["stdout"] if listed else [])
-    cases.execute_run(case, run, tmp_path, None, tmp_path / "wd")
-    stored = tmp_path / "wd" / "stdout"
-    assert stored.is_file() == listed
-    if listed:
-        assert stored.read_text() == "*BEAM NO.  1\n"
+    cases.execute_run(case, cases.Run("r", tmp_path / "in", None, {}, outputs),
+                      tmp_path, None, tmp_path / "wd")
+    return tmp_path / "wd" / "stdout"
+
+
+def test_execute_run_stores_stdout_if_listed(tmp_path, stub_script, stub_build):
+    """The standard output becomes the file 'stdout' when run.outputs lists it."""
+    stored = _run_printing_beam_line(tmp_path, stub_script, stub_build, ["stdout"])
+    assert stored.read_text() == "*BEAM NO.  1\n"
+
+
+def test_execute_run_does_not_store_unlisted_stdout(tmp_path, stub_script, stub_build):
+    """Without 'stdout' in run.outputs, no file 'stdout' is written."""
+    stored = _run_printing_beam_line(tmp_path, stub_script, stub_build, [])
+    assert not stored.exists()
 
 
 def test_execute_run_failing_program_raises(tmp_path, stub_script, stub_build):

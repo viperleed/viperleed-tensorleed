@@ -1,9 +1,12 @@
-"""Line coverage (gcov) of the tier-1 runs on a TL tree (legacy build mode).
+"""Line coverage (gcov) of the tier-1 runs on a TL tree.
 
-Builds ref-calc / rfactor with -O0 --coverage once per run (with the run's
-PARAM), executes every tier-1 run, and sums the gcov line counts over all
-runs. Reports per routine how many executable lines ran, and lists the
-never-executed lines of chosen ranges (--lines FILE:A-B).
+Builds ref-calc / rfactor with -O0 --coverage once per run, as the tier-1
+harness does (through TensErLEED/Makefile if the tree has one, else the
+legacy compile; with the run's PARAM while the sources need it), executes
+every tier-1 run, and sums the gcov line counts over all runs. Reports
+per routine how many executable lines ran, and lists the never-executed
+lines of chosen ranges (--lines FILE:A-B). A gcov failure, or a source with
+routines but no gcov output, stops the report.
 
 The list of known gaps in tests/README.md ("Known coverage gaps") comes from this script.
 
@@ -28,44 +31,53 @@ import subprocess
 import sys
 from pathlib import Path
 
+from harness.build import (BuildFlags, build_in, needs_param, program_sources,
+                           uses_makefile)
 from harness.cases import iter_runs
 from harness.runner import run_program
 
-SOURCES = {"refcalc": [("src", "ref-calc.f"), ("lib", "lib.tleed.f")],
-           "rfactor": [("lib", "rfacsb.f"), ("src", "rfactor.f")]}
-EXTRA = {"refcalc": [("src", "GLOBAL")], "rfactor": []}
+COVERAGE = BuildFlags("coverage", "-O0 --coverage", "-llapack -lblas")
 _ROUTINE = re.compile(r"^\s{6}[^!]*\b(SUBROUTINE|FUNCTION|PROGRAM)\s+(\w+)", re.I)
 _GCOV_LINE = re.compile(r"\s*([^:]+):\s*(\d+):")
+# a program unit with executable code; a module without one (constants
+# only, such as kinds.f90) has no gcov output
+_CODE_UNIT = re.compile(r"^[^!\n]*\b(SUBROUTINE|FUNCTION|PROGRAM)\s+\w+", re.I | re.M)
 
 
 def run_with_coverage(tl_root, case, run, workdir):
     """Build case.program with --coverage in workdir, run it, return {file: {line: count}}."""
-    tl = Path(tl_root) / "TensErLEED"
+    workdir = workdir.resolve()
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
-    for d, f in SOURCES[case.program] + EXTRA[case.program]:
-        shutil.copy(tl / d / f, workdir / f)
-    shutil.copy(run.param, workdir / "PARAM")
-    objs = []
-    for _, f in SOURCES[case.program]:
-        obj = f.replace(".", "_") + ".o"
-        subprocess.run(["gfortran", "-O0", "--coverage", "-c", f, "-o", obj],
-                       cwd=workdir, check=True, capture_output=True)
-        objs.append(obj)
-    subprocess.run(["gfortran", "--coverage", "-o", "prog", *objs, "-llapack", "-lblas"],
-                   cwd=workdir, check=True, capture_output=True)
+    program = case.program
+    build_in(workdir, Path(tl_root).resolve(), program, run.param, COVERAGE,
+             uses_makefile(tl_root), needs_param(tl_root, program), keep_tree=True)
     for name, src in run.files.items():
         shutil.copy(src, workdir / name)
-    res = run_program(workdir / "prog", workdir, run.stdin, timeout=900)
+    res = run_program(workdir / program, workdir, run.stdin, timeout=900)
     if res.returncode != 0:
         print(f"  WARNING: {case.name}/{run.name} exit code {res.returncode}")
+    # gcov resolves the source paths from the directory the build compiled in
+    compiled_in = workdir / "tree" / "TensErLEED"
+    if not compiled_in.is_dir():
+        compiled_in = workdir
+    for gcno in workdir.rglob("*.gcno"):
+        proc = subprocess.run(["gcov", "-o", str(gcno.parent), str(gcno)],
+                              cwd=compiled_in, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"gcov failed on {gcno} (exit code {proc.returncode}):\n"
+                               f"{proc.stderr[-2000:]}")
     counts = {}
-    for _, f in SOURCES[case.program]:
-        obj = f.replace(".", "_") + ".o"
-        subprocess.run(["gcov", "-o", obj, f], cwd=workdir, capture_output=True)
+    for src in program_sources(tl_root, program):
+        f = src.name
+        gcov = compiled_in / f"{f}.gcov"
+        if not gcov.is_file():
+            if _CODE_UNIT.search(src.read_text(errors="replace")):
+                raise RuntimeError(f"gcov wrote no {gcov.name} for {src}, which has code")
+            continue  # no executable lines: a module of constants
         cnt = counts.setdefault(f, {})
-        for line in (workdir / f"{f}.gcov").read_text(errors="replace").splitlines():
+        for line in gcov.read_text(errors="replace").splitlines():
             m = _GCOV_LINE.match(line)
             if not m or m.group(1).strip() == "-" or int(m.group(2)) == 0:
                 continue
@@ -88,9 +100,9 @@ def aggregate(tl_root, work, cases):
 
 
 def source_path(tl_root, fname):
-    """Path of the Fortran source file fname in the tree tl_root."""
-    sub = next(d for prog in SOURCES.values() for d, f in prog if f == fname)
-    return Path(tl_root) / "TensErLEED" / sub / fname
+    """Path of the Fortran source file fname of either program in the tree tl_root."""
+    return next(p for prog in ("refcalc", "rfactor")
+                for p in program_sources(tl_root, prog) if p.name == fname)
 
 
 def routines(lines):

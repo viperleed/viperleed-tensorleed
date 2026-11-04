@@ -1,7 +1,7 @@
 """Tier 1: runs with poison_heap = true, repeated with a poisoned heap.
 
-glibc fills new memory with a non-zero pattern and serves every allocation
-from the heap (harness.runner.POISONED_HEAP_ENV). A read of an array element
+glibc fills new memory, small and large allocations alike, with a non-zero
+pattern (harness.runner.POISONED_HEAP_ENV). A read of an array element
 the program never wrote then changes the outputs, whereas in a normal run
 it mostly reads fresh, zeroed pages (README, 'Rules'). The poisoned runs take
 their environment from a fixture that first checks, with a small Fortran

@@ -108,22 +108,38 @@ def test_relative_cwd_and_paths(tmp_path, stub_script, monkeypatch):
     assert "xyz" in r.stdout
 
 
-def test_launcher_rebuilt_for_other_c_compiler_version(tmp_path, mocker):
-    """The launcher is rebuilt exactly when the C compiler version text changes."""
-    version = "gcc 15.2\nline 2\n"
+@pytest.fixture
+def fake_compiler(tmp_path, mocker):
+    """Cache _cached_build's executables in tmp_path, with a fake compiler whose
+    version text is the returned dict's "version" (compiling only touches -o)."""
+    state = {"version": "gcc 15.2\nline 2\n"}
 
     def fake_run(cmd, **kw):
         """Fake subprocess.run: report the compiler version or create the compile output."""
         if cmd[1:] == ["--version"]:
-            return subprocess.CompletedProcess(cmd, 0, stdout=version)
+            return subprocess.CompletedProcess(cmd, 0, stdout=state["version"])
         Path(cmd[cmd.index("-o") + 1]).touch()
         return subprocess.CompletedProcess(cmd, 0)
     mocker.patch.object(runner.subprocess, "run", side_effect=fake_run)
     mocker.patch.object(runner, "_CACHE", tmp_path)
+    return state
+
+
+def test_launcher_rebuilt_for_other_c_compiler_version(fake_compiler):
+    """The launcher is rebuilt exactly when the C compiler version text changes."""
     exe1 = runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2")
     assert runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2") == exe1
-    version = "gcc 15.2\nline 2 changed\n"
+    fake_compiler["version"] = "gcc 15.2\nline 2 changed\n"
     assert runner._cached_build(runner._LAUNCHER_SRC, "gcc", "-O2") != exe1
+
+
+def test_probe_rebuilt_for_other_flags(fake_compiler):
+    """A probe built with other flags is a separate cache entry.
+
+    Otherwise the trap probe built with earlier DEBUG flags would be reused
+    and the sentinel would check flags the debug builds no longer use."""
+    exe1 = runner._cached_build(runner._TRAP_PROBE_SRC, "gfortran", "-O0", "-fcheck=all")
+    assert runner._cached_build(runner._TRAP_PROBE_SRC, "gfortran", "-O0") != exe1
 
 
 def test_heap_probe_reads_zero_from_a_fresh_large_block(tmp_path):

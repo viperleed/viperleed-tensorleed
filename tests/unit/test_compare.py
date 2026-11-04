@@ -37,7 +37,7 @@ EXACT = Tolerance(rtol=0.0, atol_frac=0.0)  # format cases: values unchanged
     pytest.param(" 0.0000E+00 -0.0000E+00\n", " 0.0000E+00  -.0000E+00\n", EXACT, True,
                  id="zero_value_is_plain_e_format"),
 ])
-def test_compare_texts_ok(actual, expected, tol, ok):
+def test_compare_texts_accepts_or_rejects(actual, expected, tol, ok):
     """compare_texts accepts or rejects each pair of texts as listed."""
     assert compare_texts(actual, expected, tol).ok is ok
 
@@ -227,18 +227,15 @@ def test_format_and_line_structure_changes_fail(actual, expected, what):
     assert what in r.first_failures[0] and "line" in r.first_failures[0]
 
 
-def test_line_count_failure_names_first_differing_line():
-    """A line split in two is reported at the first line that differs."""
-    r = compare_texts("x\n  1.0  2.0\n  3.0\n", "x\n  1.0  2.0  3.0\n", EXACT)
-    msg = r.first_failures[0]
-    assert msg.startswith("line 2:") and "line count" in msg
-
-
-def test_line_count_failure_names_first_extra_line():
-    """Extra lines at the end are reported at the first extra line."""
-    r = compare_texts("x\n  1.0\n  2.0\n", "x\n  1.0\n", EXACT)
-    msg = r.first_failures[0]
-    assert msg.startswith("line 3:") and "line count" in msg
+@pytest.mark.parametrize("actual,expected,line", [
+    pytest.param("x\n  1.0  2.0\n  3.0\n", "x\n  1.0  2.0  3.0\n", 2, id="split_line"),
+    pytest.param("x\n  1.0\n  2.0\n", "x\n  1.0\n", 3, id="extra_line_at_end"),
+])
+def test_line_count_failure_names_first_differing_line(actual, expected, line):
+    """A line-count failure is reported at the first line that differs: the
+    first half of a split line, or the first extra line at the end."""
+    msg = compare_texts(actual, expected, EXACT).first_failures[0]
+    assert msg.startswith(f"line {line}:") and "line count" in msg
 
 
 def test_format_failure_names_line_and_difference():
