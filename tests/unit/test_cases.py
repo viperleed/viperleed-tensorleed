@@ -133,6 +133,7 @@ def test_committed_expected_files_are_covered():
     """Every file under expected/ of every tier-1 case belongs to a run and matches one of its globs."""
     uncovered = {case.name: uncovered_expected(case)
                  for kind in KINDS for case in load_cases(kind)}
+    assert uncovered, "no cases loaded"
     assert {name: paths for name, paths in uncovered.items() if paths} == {}
 
 

@@ -26,13 +26,14 @@ PARAMS = case_run_params("refcalc")
 # Oversized PARAM variants, oversized_param/<case>/<run>/PARAM: the run's
 # PARAM with bound sizes above what the input needs (header of each file).
 OVERSIZED = Path(__file__).with_name("oversized_param")
-OVERSIZED_PARAMS = [
-    pytest.param(case, run, OVERSIZED / case.name / run.name / "PARAM",
-                 id=f"{case.name}/{run.name}",
-                 marks=pytest.mark.xdist_group(f"{case.name}/{run.name}"))
-    for case, run in iter_runs(("refcalc",))
-    if (OVERSIZED / case.name / run.name / "PARAM").is_file()
-    ]
+
+def _variant(case, run):
+    """The path of the oversized PARAM variant of a run (may not exist)."""
+    return OVERSIZED / case.name / run.name / "PARAM"
+
+
+OVERSIZED_PARAMS = [pytest.param(*p.values, _variant(*p.values), id=p.id, marks=p.marks)
+                    for p in PARAMS if _variant(*p.values).is_file()]
 
 
 @pytest.mark.tier1
@@ -121,6 +122,17 @@ def _assert_same_outputs(workdir, reference_dir, patterns):
     assert not differ, f"outputs differ from the case PARAM build: {differ}"
 
 
+def _build_run_compare(case, run, param, tl_root, build_flags, reference_dir, tmp_path):
+    """Build refcalc with param, run it, and assert outputs byte-identical to reference_dir.
+
+    Returns the executable."""
+    exe = build_program(tl_root, case.program, param, build_flags)
+    workdir = tmp_path / "run"
+    run_built(case, run, exe, workdir)
+    _assert_same_outputs(workdir, reference_dir, run.outputs)
+    return exe
+
+
 @pytest.mark.tier1
 @pytest.mark.parametrize("case,run", PARAMS)
 def test_refcalc_minimal_param_gives_identical_outputs(case, run, run_case, tl_root,
@@ -129,7 +141,8 @@ def test_refcalc_minimal_param_gives_identical_outputs(case, run, run_case, tl_r
 
     The reference is the same tree built with the case's PARAM (run_case),
     so only the sizes differ. If the minimal PARAM is byte-identical to the
-    case's, both builds are the same cache entry and nothing is run.
+    case's, both builds would be the same cache entry: the test is skipped
+    (the oversized variants below carry the comparison).
     Failing means an output depends on an array size beyond what the input
     needs."""
     if not needs_param(tl_root, case.program):
@@ -137,13 +150,11 @@ def test_refcalc_minimal_param_gives_identical_outputs(case, run, run_case, tl_r
     param, derived = run_sizes(run)
     minimal = param_text(derived)
     if minimal == Path(run.param).read_text():
-        return
+        pytest.skip("the minimal PARAM is the case PARAM: same build, nothing to compare")
     minimal_param = tmp_path / Path(run.param).name
     minimal_param.write_text(minimal)
-    exe = build_program(tl_root, case.program, minimal_param, build_flags)
-    workdir = tmp_path / "run"
-    run_built(case, run, exe, workdir)
-    _assert_same_outputs(workdir, run_case(case, run), run.outputs)
+    _build_run_compare(case, run, minimal_param, tl_root, build_flags,
+                       run_case(case, run), tmp_path)
 
 
 @pytest.mark.tier1
@@ -191,9 +202,6 @@ def test_oversized_param_gives_identical_outputs(case, run, variant, run_case, t
     # the cache key differ
     param = tmp_path / Path(run.param).name
     shutil.copy(variant, param)
-    exe = build_program(tl_root, case.program, param, build_flags)
+    exe = _build_run_compare(case, run, param, tl_root, build_flags, reference_dir, tmp_path)
     case_exe = build_program(tl_root, case.program, run.param, build_flags)
     assert exe.parent != case_exe.parent, "the variant was not built on its own"
-    workdir = tmp_path / "run"
-    run_built(case, run, exe, workdir)
-    _assert_same_outputs(workdir, reference_dir, run.outputs)
