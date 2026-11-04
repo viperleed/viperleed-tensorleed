@@ -3,8 +3,9 @@
 See tests/README.md, section 'Build contract':
 - Makefile mode (TensErLEED/Makefile exists): copy TensErLEED/ to a fresh
   directory and run make -B -C <copy> <program> BUILDDIR=<dir> FC=gfortran
-  FFLAGS=... LDLIBS=... [PARAM=<file>] there, with PARAM passed while the
-  program's main sources still INCLUDE 'PARAM' (during the refactor).
+  FFLAGS=... LDLIBS=... [PARAM=<file>] there, with PARAM passed while one
+  of the program's sources (as the Makefile lists them in
+  <PROGRAM>_SOURCES) still INCLUDEs 'PARAM' (during the refactor).
 - Legacy mode (no TensErLEED/Makefile): compile the program's sources with
   the case's PARAM the same way viperleed does.
 Executables are cached in tests/.build-cache/<program>-<hash>/, where the
@@ -74,14 +75,26 @@ def uses_makefile(tl_root):
     return (Path(tl_root) / "TensErLEED" / "Makefile").is_file()
 
 
-def needs_param(tl_root, program):
-    """True if a main source of program (ref-calc.f, lib.tleed.f, resp.
-    rfactor.f, rfacsb.f) INCLUDEs 'PARAM'."""
+def program_sources(tl_root, program):
+    """The Fortran sources of program: in Makefile mode as the Makefile lists
+    them (make print-<PROGRAM>_SOURCES), in legacy mode the fixed list."""
     tl = Path(tl_root) / "TensErLEED"
-    comp, _ = _LEGACY[program]
-    return any((tl / d / f).is_file()
-               and _PARAM_INCLUDE.search((tl / d / f).read_text(errors="replace"))
-               for d, f in comp)
+    if not uses_makefile(tl_root):
+        comp, _ = _LEGACY[program]
+        return [tl / d / f for d, f in comp]
+    proc = subprocess.run(["make", "-s", "--no-print-directory", "-C", str(tl),
+                           f"print-{program.upper()}_SOURCES"],
+                          capture_output=True, text=True)
+    if proc.returncode != 0 or not proc.stdout.split():
+        raise BuildError(f"{tl / 'Makefile'} does not list the sources of {program} "
+                         f"(make print-{program.upper()}_SOURCES):\n{proc.stderr}")
+    return [tl / f for f in proc.stdout.split()]
+
+
+def needs_param(tl_root, program):
+    """True if a source of program (program_sources) INCLUDEs 'PARAM'."""
+    return any(p.is_file() and _PARAM_INCLUDE.search(p.read_text(errors="replace"))
+               for p in program_sources(tl_root, program))
 
 
 def source_files(tl_root, program):
@@ -125,8 +138,11 @@ def _run(cmd, cwd, log):
         raise BuildError(f"build failed: {cmd}\n{proc.stderr[-3000:]}")
 
 
-def _build_in(tmp, tl_root, program, param, flags, use_make, use_param):
-    """Build program into tmp (legacy compile or out-of-tree make)."""
+def build_in(tmp, tl_root, program, param, flags, use_make, use_param, keep_tree=False):
+    """Build program into tmp (legacy compile or out-of-tree make).
+
+    In Makefile mode the tree is copied to tmp/tree/TensErLEED and removed
+    after the build unless keep_tree."""
     with open(tmp / "build.log", "w") as log:
         if not use_make:
             if not use_param:
@@ -154,7 +170,8 @@ def _build_in(tmp, tl_root, program, param, flags, use_make, use_param):
             _run(f"{MAKE} -C {copy} {program} BUILDDIR={tmp} "
                  f"FC=gfortran FFLAGS='{flags.compile}' LDLIBS='{flags.link}'{param_arg}",
                  tmp, log)
-            shutil.rmtree(tmp / "tree")
+            if not keep_tree:
+                shutil.rmtree(tmp / "tree")
 
 
 def _remove_stale_tmp_dirs():
@@ -217,7 +234,7 @@ def _build_entry(tl_root, program, param, flags, use_make, use_param, key, tree_
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     try:
-        _build_in(tmp, tl_root, program, param, flags, use_make, use_param)
+        build_in(tmp, tl_root, program, param, flags, use_make, use_param)
         if tree_key() != key:
             raise BuildError(f"the source tree {tl_root / 'TensErLEED'} (or PARAM) "
                              "changed during the build")

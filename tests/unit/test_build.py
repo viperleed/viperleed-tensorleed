@@ -11,8 +11,9 @@ The contract (tests/README.md, "Build contract") covered here:
   the toolchain (full compiler version, BLAS/LAPACK). Anything that changes
   the executable changes the key.
 - Makefile precedence: a TensErLEED/Makefile is used whenever it exists, and
-  PARAM is passed to it while a main source still INCLUDEs 'PARAM'; without
-  a Makefile the legacy compile needs a PARAM file.
+  PARAM is passed to it while a source it lists for the program
+  (print-<PROGRAM>_SOURCES) still INCLUDEs 'PARAM'; without a Makefile the
+  legacy compile needs a PARAM file.
 - What a build must not touch: the source tree (a build that changes it
   fails), the cache (a failed build leaves only its log, stale temporary
   directories of dead processes are removed), and concurrent builds of one
@@ -38,7 +39,7 @@ import pytest
 
 from harness import build
 from harness.build import (BuildError, DEBUG, RELEASE, build_program,
-                           needs_param, source_files)
+                           needs_param, program_sources, source_files)
 
 RFACTOR_PARAM = ("      PARAMETER (MNBED = 7, MNBTD = 7)\n"
                  "      PARAMETER (MNET = 86, MNGP = 1422)\n"
@@ -48,7 +49,10 @@ RFACTOR_PARAM = ("      PARAMETER (MNBED = 7, MNBTD = 7)\n"
 # A Makefile that builds a shell script into BUILDDIR, copying PARAM there
 # if it is passed.
 TOY_MAKEFILE = """\
-$(BUILDDIR)/rfactor: lib/rfacsb.f src/rfactor.f
+RFACTOR_SOURCES = lib/toylib.f src/toyprog.f
+print-%:
+\t@echo '$($*)'
+$(BUILDDIR)/rfactor: $(RFACTOR_SOURCES)
 \tprintf '#!/bin/sh\\necho built FFLAGS=$(FFLAGS)\\n' > $@
 \tchmod +x $@
 \tif [ -n "$(PARAM)" ]; then cp $(PARAM) $(BUILDDIR)/PARAM.used; fi
@@ -59,6 +63,9 @@ rfactor: $(BUILDDIR)/rfactor
 # Built in the tree, a debug build after a release build only relinks the
 # release object and does not trap.
 TOY_INTREE_MAKEFILE = """\
+REFCALC_SOURCES = src/prog.f90
+print-%:
+\t@echo '$($*)'
 refcalc: src/prog.o
 \t$(FC) $(FFLAGS) -o $(BUILDDIR)/refcalc src/prog.o $(LDLIBS)
 src/prog.o: src/prog.f90
@@ -116,8 +123,8 @@ def make_tree(tmp_path):
     t = tmp_path / "mk"
     (t / "TensErLEED" / "lib").mkdir(parents=True)
     (t / "TensErLEED" / "src").mkdir()
-    (t / "TensErLEED" / "lib" / "rfacsb.f").write_text("! module stand-in\n")
-    (t / "TensErLEED" / "src" / "rfactor.f").write_text("! no PARAM include\n")
+    (t / "TensErLEED" / "lib" / "toylib.f").write_text("! module stand-in\n")
+    (t / "TensErLEED" / "src" / "toyprog.f").write_text("! no PARAM include\n")
     (t / "TensErLEED" / "Makefile").write_text(TOY_MAKEFILE)
     return t
 
@@ -152,6 +159,26 @@ def _tree_state(root):
 def test_baseline_needs_param(baseline_tl_root):
     """The baseline sources INCLUDE 'PARAM', so both programs need a PARAM file."""
     assert needs_param(baseline_tl_root, "refcalc") and needs_param(baseline_tl_root, "rfactor")
+
+
+def test_needs_param_follows_the_makefile(tl_root):
+    """In the tree under test, refcalc needs PARAM and rfactor does not, as the
+    sources its Makefile lists for each program show."""
+    assert needs_param(tl_root, "refcalc") and not needs_param(tl_root, "rfactor")
+
+
+def test_makefile_without_source_list_raises(make_tree):
+    """A Makefile that does not list a program's sources is a BuildError."""
+    with pytest.raises(BuildError, match="REFCALC_SOURCES"):
+        program_sources(make_tree, "refcalc")
+
+
+def test_cache_key_covers_makefile_sources(tl_root):
+    """Every source the Makefile lists for a program is part of its cache key."""
+    for program in ("refcalc", "rfactor"):
+        sources = program_sources(tl_root, program)
+        assert sources and all(p.is_file() for p in sources)
+        assert set(sources) <= set(source_files(tl_root, program))
 
 
 def test_source_files_refcalc(baseline_tl_root):
@@ -215,7 +242,7 @@ def test_makefile_wins_and_gets_param_while_sources_include_it(make_tree, param)
     This is the transition state (modules and Makefile, PARAM not yet gone):
     make must receive the run's PARAM file.
     """
-    (make_tree / "TensErLEED" / "src" / "rfactor.f").write_text("      INCLUDE 'PARAM'\n")
+    (make_tree / "TensErLEED" / "src" / "toyprog.f").write_text("      INCLUDE 'PARAM'\n")
     exe = build_program(make_tree, "rfactor", param, RELEASE)
     assert (exe.parent / "PARAM.used").read_text() == param.read_text()
 
