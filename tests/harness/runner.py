@@ -4,7 +4,9 @@ Programs are started through a small C launcher (rusage_launcher.c, built on
 first use into tests/.build-cache) that reports the program's rusage: on
 Linux ru_maxrss survives execve, so a program forked directly from Python
 would report at least Python's own peak RSS. heap_probe checks, with a small
-Fortran program built the same way, that POISONED_HEAP_ENV takes effect.
+Fortran program built the same way, that POISONED_HEAP_ENV takes effect;
+trap_probe runs a Fortran program, built with given flags, that commits one
+runtime fault (out-of-bounds index, invalid, division by zero, overflow).
 """
 
 __authors__ = (
@@ -24,6 +26,7 @@ from pathlib import Path
 
 _LAUNCHER_SRC = Path(__file__).with_name("rusage_launcher.c")
 _HEAP_PROBE_SRC = Path(__file__).with_name("heap_probe.f90")
+_TRAP_PROBE_SRC = Path(__file__).with_name("trap_probe.f90")
 _CACHE = Path(__file__).parents[1] / ".build-cache"
 
 _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
@@ -66,10 +69,11 @@ class RunResult:
 
 
 def _cached_build(src, compiler, *flags):
-    """Build src once per source and compiler version into the cache; return its path."""
+    """Build src once per source, compiler version and flags into the cache; return its path."""
     version = subprocess.run([compiler, "--version"], capture_output=True, text=True,
                              check=True).stdout
-    key = hashlib.sha256(src.read_bytes() + version.encode()).hexdigest()[:16]
+    key = hashlib.sha256(src.read_bytes() + version.encode()
+                         + "\0".join(flags).encode()).hexdigest()[:16]
     exe = _CACHE / f"{src.stem}-{key}"
     if not exe.is_file():
         _CACHE.mkdir(parents=True, exist_ok=True)
@@ -90,8 +94,21 @@ def heap_probe(workdir, env):
     return int(small), int(large)
 
 
-def run_program(exe, cwd, stdin_path, timeout, env=None):
-    """Run exe in cwd with stdin from stdin_path (or none).
+def trap_probe(workdir, flags, fault):
+    """Run the trap probe built with flags (harness.build.BuildFlags) on one fault.
+
+    fault is 'bounds', 'invalid', 'zero' or 'overflow' (see trap_probe.f90).
+    Returns the RunResult unchecked: with the debug flags, the run must fail.
+    """
+    exe = _cached_build(_TRAP_PROBE_SRC, "gfortran", *flags.compile.split(),
+                        *flags.link.split())
+    workdir = Path(workdir) / fault
+    workdir.mkdir()
+    return run_program(exe, workdir, None, timeout=30, args=[fault])
+
+
+def run_program(exe, cwd, stdin_path, timeout, env=None, args=()):
+    """Run exe with command-line arguments args in cwd with stdin from stdin_path (or none).
 
     env: extra environment variables for the program. stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
     peak RSS (KiB) are taken from the child's rusage (os.wait4).
@@ -107,7 +124,7 @@ def run_program(exe, cwd, stdin_path, timeout, env=None):
         with open(out_path, "wb") as out, open(err_path, "wb") as err:
             t0 = time.perf_counter()
             proc = subprocess.Popen(
-                [str(launcher), str(usage_path), str(Path(exe).resolve())],
+                [str(launcher), str(usage_path), str(Path(exe).resolve()), *args],
                 cwd=cwd, stdin=stdin, stdout=out, stderr=err, env=env)
             try:
                 proc.wait(timeout=timeout)

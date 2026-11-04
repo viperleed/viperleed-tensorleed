@@ -51,7 +51,7 @@ tests/
   local.toml.example             machine-specific paths (copy to local.toml, git-ignored)
   known_debug_failures.toml      baseline runs that fail the debug build (xfail strict)
   harness/                       tokens.py (Fortran output tokenizer), compare.py, tensor.py (T_* layout),
-                                 runner.py (+ rusage_launcher.c), build.py, cases.py, paths.py, perf.py, tier2.py
+                                 runner.py (+ rusage_launcher.c, heap_probe.f90, trap_probe.f90), build.py, cases.py, paths.py, perf.py, tier2.py
   unit/                          tests of the harness (marked unit + tier1)
   tier1/                         test_refcalc.py, test_rfactor.py, test_array_temporaries.py,
                                  test_debug_build.py, test_performance.py, test_rfacsb_routines.py,
@@ -263,6 +263,8 @@ Covered by `ag100_rfactor_short` (not in the measurement above): every `DER` bra
 ## Debug build
 
 `pytest tests -m debug` builds with `-O0 -g -fcheck=all -ffpe-trap=invalid,zero,overflow -Wall -fbacktrace` and requires every run except those with `debug = false` (see [Rules](#rules-tolerances-reference-data-known-debug-failures)) to terminate cleanly (outputs compared with `rtol >= min_rtol` from `[debug]` in `tolerances.toml` (1e-3) as a sanity check).
+
+Before any debug run, a small Fortran probe (`harness/trap_probe.f90`) built with the same flags (`DEBUG` in `harness/build.py`) must stop at each of four faults: an out-of-bounds index (bounds-check runtime error) and an invalid operation, a division by zero and an overflow (each SIGFPE). Each fault has its own test (`test_debug_flags_stop_trap_probe`), and the debug runs take a module fixture that checks all four, so they error instead of running when a check or trap is missing from `DEBUG`: a debug build that lost one would otherwise pass every run.
 
 Known baseline failures are listed in `tests/known_debug_failures.toml`. For each one the test requires:
 1. the debug build to fail with exactly the known error (regex `match` on the message with the stderr tail). When the refactor fixes it, the test fails ("DID NOT RAISE") and the list has to be updated deliberately;
