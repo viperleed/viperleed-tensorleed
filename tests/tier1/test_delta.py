@@ -5,8 +5,9 @@ viperleed compiles from whatever file matches lib/lib.tleed*. The ref-calc
 refactor moves routines out of that file; the routines delta calls must stay
 there, unchanged. Checked here: delta compiles and links from the tree's
 sources, picked and compiled as viperleed does (with a fixed PARAM,
-delta/PARAM), and TSCATF, PSTEMP, BESSEL and CPPP in lib/lib.tleed.f are
-textually identical to those of the baseline commit.
+delta/PARAM), TSCATF, PSTEMP, BESSEL and CPPP in lib/lib.tleed.f are
+textually identical to those of the baseline commit, and so is src/GLOBAL
+(the constants HARTREE and BOHR, which viperleed copies for delta).
 """
 
 __authors__ = (
@@ -87,6 +88,13 @@ def _routine(text, name):
     return body
 
 
+def _baseline_text(path):
+    """The text of path (relative to the repository root) at the baseline commit."""
+    return subprocess.run(["git", "-C", str(Path(__file__).parent), "show",
+                           f"{BASELINE_COMMIT}:{path}"],
+                          check=True, capture_output=True, text=True).stdout
+
+
 @pytest.mark.tier1
 @pytest.mark.parametrize("name", SHARED_ROUTINES)
 def test_delta_routine_in_lib_tleed_frozen(tl_root, name):
@@ -95,8 +103,15 @@ def test_delta_routine_in_lib_tleed_frozen(tl_root, name):
     delta links these routines from lib.tleed.f; they stay as in the
     baseline commit until delta itself is refactored."""
     path = "TensErLEED/lib/lib.tleed.f"
-    baseline = subprocess.run(["git", "-C", str(Path(__file__).parent), "show",
-                               f"{BASELINE_COMMIT}:{path}"],
-                              check=True, capture_output=True, text=True).stdout
     current = (tl_root / path).read_text()
-    assert _routine(current, name) == _routine(baseline, name)
+    assert _routine(current, name) == _routine(_baseline_text(path), name)
+
+
+@pytest.mark.tier1
+def test_global_frozen(tl_root):
+    """src/GLOBAL is identical to the baseline's.
+
+    viperleed copies it for delta, whose numerics use HARTREE and BOHR; no
+    ref-calc output depends on them, so only this test guards them."""
+    path = "TensErLEED/src/GLOBAL"
+    assert (tl_root / path).read_text() == _baseline_text(path)
