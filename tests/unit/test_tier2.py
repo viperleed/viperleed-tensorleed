@@ -7,9 +7,14 @@ __copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
 __created__ = '2026-10-13'
 __license__ = 'GPLv3+'
 
+import os
 import re
+import subprocess
+import sys
 import tomllib
 import zipfile
+from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -243,3 +248,36 @@ def test_caller_cannot_set_checksum_parameter(tmp_path):
     with pytest.raises(ValueError, match="TL_IGNORE_CHECKSUM"):
         tier2.run_viperleed_calc(_system(tmp_path), tmp_path, ["true"], tmp_path / "work",
                                  parameters={"TL_IGNORE_CHECKSUM": "True"})
+
+
+def test_version_mismatch_fails_every_tier2_test_before_any_run(tmp_path, stub_script):
+    """With a viperleed of another version, every tier-2 test fails with the version
+    message and viperleed is never asked to run a calculation."""
+    tests_dir = Path(__file__).parents[1]
+    marker = tmp_path / "viperleed_ran"
+    fake = stub_script(tmp_path / "viperleed", f"""
+        import pathlib, sys
+        if sys.argv[1:] == ["calc", "--version"]:
+            print("{BANNER.format('0.0.1')}")
+        else:
+            pathlib.Path({str(marker)!r}).touch()
+        """)
+    report = tmp_path / "report.xml"
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(("PYTEST_", "TL_TEST_VIPERLEED_CMD"))}
+    subprocess.run([sys.executable, "-m", "pytest", "tier2/test_viperleed.py",
+                    "-m", "tier2", "-p", "no:cacheprovider", "-p", "no:xdist", "-q",
+                    f"--basetemp={tmp_path / 'bt'}", f"--junitxml={report}",
+                    f"--viperleed-cmd={fake}", f"--tl-root={tests_dir.parent}"],
+                   cwd=tests_dir, env=env, capture_output=True, text=True, timeout=120)
+    cases = list(ElementTree.parse(report).getroot().iter("testcase"))
+    assert len(cases) == len(tier2.load_systems(tests_dir / "tier2" / "systems")) > 0
+    pinned = load_tolerances()["tier2"]["viperleed_version"]
+    for case in cases:
+        outcome = case.find("failure")
+        if outcome is None:
+            outcome = case.find("error")
+        assert outcome is not None, case.get("name")
+        assert f"tier 2 needs viperleed {pinned}" in outcome.text
+        assert "runs 0.0.1" in outcome.text
+    assert not marker.exists()
