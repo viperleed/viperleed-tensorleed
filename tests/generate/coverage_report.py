@@ -3,8 +3,10 @@
 Builds ref-calc / rfactor with -O0 --coverage once per run, as the tier-1
 harness does (through TensErLEED/Makefile if the tree has one, else the
 legacy compile; with the run's PARAM while the sources need it), executes
-every tier-1 run, and sums the gcov line counts over all runs. Reports per routine how many executable lines ran, and lists the
-never-executed lines of chosen ranges (--lines FILE:A-B).
+every tier-1 run, and sums the gcov line counts over all runs. Reports
+per routine how many executable lines ran, and lists the never-executed
+lines of chosen ranges (--lines FILE:A-B). A gcov failure, or a source with
+routines but no gcov output, stops the report.
 
 The list of known gaps in tests/README.md ("Known coverage gaps") comes from this script.
 
@@ -37,6 +39,9 @@ from harness.runner import run_program
 COVERAGE = BuildFlags("coverage", "-O0 --coverage", "-llapack -lblas")
 _ROUTINE = re.compile(r"^\s{6}[^!]*\b(SUBROUTINE|FUNCTION|PROGRAM)\s+(\w+)", re.I)
 _GCOV_LINE = re.compile(r"\s*([^:]+):\s*(\d+):")
+# a program unit with executable code; a module without one (constants
+# only, such as kinds.f90) has no gcov output
+_CODE_UNIT = re.compile(r"^[^!\n]*\b(SUBROUTINE|FUNCTION|PROGRAM)\s+\w+", re.I | re.M)
 
 
 def run_with_coverage(tl_root, case, run, workdir):
@@ -58,14 +63,19 @@ def run_with_coverage(tl_root, case, run, workdir):
     if not compiled_in.is_dir():
         compiled_in = workdir
     for gcno in workdir.rglob("*.gcno"):
-        subprocess.run(["gcov", "-o", str(gcno.parent), str(gcno)],
-                       cwd=compiled_in, capture_output=True)
+        proc = subprocess.run(["gcov", "-o", str(gcno.parent), str(gcno)],
+                              cwd=compiled_in, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"gcov failed on {gcno} (exit code {proc.returncode}):\n"
+                               f"{proc.stderr[-2000:]}")
     counts = {}
     for src in program_sources(tl_root, program):
         f = src.name
         gcov = compiled_in / f"{f}.gcov"
-        if not gcov.is_file():  # no executable lines, e.g. a module of constants
-            continue
+        if not gcov.is_file():
+            if _CODE_UNIT.search(src.read_text(errors="replace")):
+                raise RuntimeError(f"gcov wrote no {gcov.name} for {src}, which has code")
+            continue  # no executable lines: a module of constants
         cnt = counts.setdefault(f, {})
         for line in gcov.read_text(errors="replace").splitlines():
             m = _GCOV_LINE.match(line)
