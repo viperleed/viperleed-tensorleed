@@ -22,6 +22,8 @@ from harness import tier2
 from harness.cases import CaseError, load_tolerances
 from unit.gitrepo import git
 
+R_ATOL, OTHER_ATOL = (load_tolerances()["tier2"][k] for k in ("r_atol", "other_atol"))
+
 ROUT = """tl-test
 AVERAGE                 0  0.0001    3.00   45.00  216.05    479.50  0.2054  <---
 
@@ -57,17 +59,17 @@ def test_toml_roundtrip_and_compare(tmp_path):
     res = tier2.parse_results(_workdir(tmp_path))
     back = tier2.from_toml(tomllib.loads(tier2.to_toml(res, "comment")))
     assert back == res
-    assert tier2.compare_results(res, back, 1.5e-4, 1e-6) == []
+    assert tier2.compare_results(res, back, R_ATOL, OTHER_ATOL) == []
 
 
 def test_compare_detects_changed_r_and_missing_curve(tmp_path):
     """A changed R value and a missing error curve are both reported."""
     exp = tier2.parse_results(_workdir(tmp_path / "e"))
     act = tier2.parse_results(_workdir(tmp_path / "a", csv=CSV.replace("0.2760", "0.2763")))
-    fails = tier2.compare_results(act, exp, 1.5e-4, 1e-6)
+    fails = tier2.compare_results(act, exp, R_ATOL, OTHER_ATOL)
     assert len(fails) == 1 and "R[2]" in fails[0]
     act["errors"] = {}
-    assert any("error curves differ" in f for f in tier2.compare_results(act, exp, 1.5e-4, 1e-6))
+    assert any("error curves differ" in f for f in tier2.compare_results(act, exp, R_ATOL, OTHER_ATOL))
 
 
 def test_missing_outputs_fail(tmp_path):
@@ -90,7 +92,7 @@ def test_compare_fails_on_nan(tmp_path, side):
     nan_csv = CSV.replace("0.2760", "nan")
     exp = tier2.parse_results(_workdir(tmp_path / "e", csv=nan_csv if side == "expected" else CSV))
     act = tier2.parse_results(_workdir(tmp_path / "a", csv=nan_csv if side == "actual" else CSV))
-    fails = tier2.compare_results(act, exp, 1.5e-4, 1e-6)
+    fails = tier2.compare_results(act, exp, R_ATOL, OTHER_ATOL)
     assert len(fails) == 1 and "R[2]" in fails[0]
 
 

@@ -161,18 +161,25 @@ def test_execute_run_copies_files_and_runs(tmp_path, stub_script, stub_build):
     assert info["returncode"] == 0 and "max_rss_kb" in info
 
 
-@pytest.mark.parametrize("listed", [True, False], ids=["listed", "not_listed"])
-def test_execute_run_stores_stdout_if_listed(tmp_path, stub_script, stub_build, listed):
-    """The standard output becomes the file 'stdout' exactly when run.outputs lists it."""
+def _run_printing_beam_line(tmp_path, stub_script, stub_build, outputs):
     stub_build(stub_script(tmp_path / "stub.py", "print('*BEAM NO.  1')"))
     (tmp_path / "in").write_text("")
     case = cases.Case("c", tmp_path, "stub", [])
-    run = cases.Run("r", tmp_path / "in", None, {}, ["stdout"] if listed else [])
-    cases.execute_run(case, run, tmp_path, None, tmp_path / "wd")
-    stored = tmp_path / "wd" / "stdout"
-    assert stored.is_file() == listed
-    if listed:
-        assert stored.read_text() == "*BEAM NO.  1\n"
+    cases.execute_run(case, cases.Run("r", tmp_path / "in", None, {}, outputs),
+                      tmp_path, None, tmp_path / "wd")
+    return tmp_path / "wd" / "stdout"
+
+
+def test_execute_run_stores_stdout_if_listed(tmp_path, stub_script, stub_build):
+    """The standard output becomes the file 'stdout' when run.outputs lists it."""
+    stored = _run_printing_beam_line(tmp_path, stub_script, stub_build, ["stdout"])
+    assert stored.read_text() == "*BEAM NO.  1\n"
+
+
+def test_execute_run_does_not_store_unlisted_stdout(tmp_path, stub_script, stub_build):
+    """Without 'stdout' in run.outputs, no file 'stdout' is written."""
+    stored = _run_printing_beam_line(tmp_path, stub_script, stub_build, [])
+    assert not stored.exists()
 
 
 def test_execute_run_failing_program_raises(tmp_path, stub_script, stub_build):
