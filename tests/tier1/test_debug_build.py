@@ -26,7 +26,7 @@ from harness.cases import (TESTS_DIR, compare_outputs, execute_run, expected_out
 from harness.runner import ProgramFailed
 
 KNOWN = {(f["case"], f["run"]): f for f in tomllib.loads(
-    (TESTS_DIR / "known_debug_failures.toml").read_text())["failure"]}
+    (TESTS_DIR / "known_debug_failures.toml").read_text()).get("failure", [])}
 
 
 def _params():

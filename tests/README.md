@@ -193,7 +193,7 @@ Baseline = TensErLEED v2.1.0 (`22e3998`, with the ADREF2T, YSMOOTH and DER fixes
 
 ### ref-calc
 
-- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Ten tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
+- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Ten tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. The actual array (`SPQF(2,MKNT)` in `ref-calc.f`) is large enough, so this is a declaration artefact; the runs are clean without bounds checks. Refactored tree: gone; `OUTXIST` declares `SPQF(2,*)`.
 
 ### rfactor
 
@@ -268,9 +268,9 @@ Known baseline failures are listed in `tests/known_debug_failures.toml`. For eac
 1. the debug build to fail with exactly the known error (regex `match` on the message with the stderr tail). When the refactor fixes it, the test fails ("DID NOT RAISE") and the list has to be updated deliberately;
 2. the same run to finish cleanly with all checks except bounds (`-fcheck=all,no-bounds -ffpe-trap=…`). So new FP traps or other check failures in these paths are still caught: an injected division by zero in `GAPIN` fails this check (a plain `xfail` would pass it).
 
-Refactored tree: rfactor has no known debug failures (`SUM`, `GAPIN` and `GRID` artefacts gone, see Known baseline issues), so `known_debug_failures.toml` lists only the 10 `OUTXIST` entries; the rfactor runs that the baseline debug build stopped on (ZJ, all `WR`, the gap runs) finish cleanly in it.
+Refactored tree: no known debug failures (`OUTXIST`, `SUM`, `GAPIN` and `GRID` artefacts gone, see Known baseline issues), so `known_debug_failures.toml` lists no entries; the ref-calc and rfactor runs that the baseline debug build stopped on (the `OUTXIST` runs, ZJ, all `WR`, the gap runs) finish cleanly in it.
 
-Status of the 64 tier-1 runs of the debug build (all 65 except the 1 with `debug = false`): refactored tree 54 clean, 10 known failures (`OUTXIST`). Baseline 42 clean, 1 real out-of-bounds read (`ag100_rfactor_params/autogap_edge_r2_v0std`, `AT(IBT,0)`, see Known baseline issues; the refactored tree no longer reads it), 21 known failures: 10 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1), 2 × `SUM` (`ag100_rfactor/zj`, `ag100_rfactor_params/weights_all`), 8 × `GAPIN` (`explicit_gap`, `r2_gap`, `zj_gap`, `smooth_gap`, `gaps3_all`, `gap_edge_lo_r2`, `gap_edge_lo_allw`, `gap_edge_hi_allw`) and 1 × `GRID` (`auto_gap`), all bounds-only declaration artefacts (see Known baseline issues); all 21 run clean without bounds checks, 10 of the 11 rfactor runs with outputs identical to the release build (`gap_edge_lo_allw` differs, see Known baseline issues, gap outside the common interval). The 10 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
+Status of the 64 tier-1 runs of the debug build (all 65 except the 1 with `debug = false`): refactored tree 64 clean. Baseline 42 clean, 1 real out-of-bounds read (`ag100_rfactor_params/autogap_edge_r2_v0std`, `AT(IBT,0)`, see Known baseline issues; the refactored tree no longer reads it), 21 known failures: 10 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1), 2 × `SUM` (`ag100_rfactor/zj`, `ag100_rfactor_params/weights_all`), 8 × `GAPIN` (`explicit_gap`, `r2_gap`, `zj_gap`, `smooth_gap`, `gaps3_all`, `gap_edge_lo_r2`, `gap_edge_lo_allw`, `gap_edge_hi_allw`) and 1 × `GRID` (`auto_gap`), all bounds-only declaration artefacts (see Known baseline issues); all 21 run clean without bounds checks, 10 of the 11 rfactor runs with outputs identical to the release build (`gap_edge_lo_allw` differs, see Known baseline issues, gap outside the common interval).
 
 ## Performance (A/B)
 
