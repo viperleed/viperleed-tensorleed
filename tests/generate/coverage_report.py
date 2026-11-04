@@ -63,8 +63,11 @@ def run_with_coverage(tl_root, case, run, workdir):
     counts = {}
     for src in program_sources(tl_root, program):
         f = src.name
+        gcov = compiled_in / f"{f}.gcov"
+        if not gcov.is_file():  # no executable lines, e.g. a module of constants
+            continue
         cnt = counts.setdefault(f, {})
-        for line in (compiled_in / f"{f}.gcov").read_text(errors="replace").splitlines():
+        for line in gcov.read_text(errors="replace").splitlines():
             m = _GCOV_LINE.match(line)
             if not m or m.group(1).strip() == "-" or int(m.group(2)) == 0:
                 continue

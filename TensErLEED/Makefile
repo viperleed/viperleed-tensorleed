@@ -33,7 +33,7 @@ STD_FFLAGS = -std=f2018
 
 B := $(BUILDDIR)
 
-REFCALC_F90 =
+REFCALC_F90 = lib/kinds.f90
 REFCALC_SOURCES = $(REFCALC_F90) src/ref-calc.f lib/lib.tleed.f
 RFACTOR_F90 = lib/rfacsb.f90 src/rfactor.f90
 RFACTOR_SOURCES = $(RFACTOR_F90)
