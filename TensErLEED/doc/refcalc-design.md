@@ -23,15 +23,15 @@ below and switches the driver's calls over to them.
 
 | Stage | Content |
 |---|---|
-| 3a | Build: Makefile rules for mixed fixed/free-form builds, module `kinds`, this document |
-| 3b | Input reading into derived types (`READIN`, `READGEO`) |
-| 3c | Energy-independent setup: Clebsch-Gordan and Gaunt coefficients, sublattice set-up |
-| 3d | Atomic t-matrices, beam selection, Bravais layers |
-| 3e | Composite layers (Beeby inversion) |
-| 3f | Bulk (layer doubling) and layer stacking |
-| 3g | Top layer, intensities, tensors, output files |
-| 3h | Remove the remaining COMMON blocks and `PARAM`; arrays sized from the input, per energy where it saves memory (number of beams in use, LMAX); driver in free form |
-| V1 | viperleed: for TensErLEED >= 3.0.0, no `PARAM` and no run-time compilation of `ref-calc`; writes the input-only sizes of section 5 into the input |
+| 1 | Build: Makefile rules for mixed fixed/free-form builds, module `kinds`, this document |
+| 2 | Input reading into derived types (`READIN`, `READGEO`) |
+| 3 | Energy-independent setup: Clebsch-Gordan and Gaunt coefficients, sublattice set-up |
+| 4 | Atomic t-matrices, beam selection, Bravais layers |
+| 5 | Composite layers (Beeby inversion) |
+| 6 | Bulk (layer doubling) and layer stacking |
+| 7 | Top layer, intensities, tensors, output files |
+| 8 | Remove the remaining COMMON blocks and `PARAM`; arrays sized from the input, per energy where it saves memory (number of beams in use, LMAX); driver in free form |
+| 9 | viperleed: for TensErLEED >= 3.0.0, no `PARAM` and no run-time compilation of `ref-calc`; writes the input-only sizes of section 5 into the input |
 
 ## 2. Target files and modules
 
@@ -40,19 +40,19 @@ Makefile in dependency order (modules first).
 
 | File | Module | Contents | Stage |
 |---|---|---|---|
-| `lib/kinds.f90` | `kinds` | kind parameters `sp`, `dp` | 3a (done) |
-| `lib/leed_types.f90` | `leed_types` | derived types replacing the COMMON blocks and the `PARAM` sizes (section 4) | created 3b, extended by each later stage |
-| `lib/leed_input.f90` | `leed_input` | reader: parses the input on stdin into `leed_types` | 3b |
-| `lib/leed_output.f90` | `leed_output` | writer: stdout log, `fd.out`, `amp.out`, tensor files | created 3b (input echo), files 3g |
-| `lib/angular_coefficients.f90` | `angular_coefficients` | Clebsch-Gordan/Gaunt coefficients, factorials, index tables | 3c |
-| `lib/atomic_scattering.f90` | `atomic_scattering` | phase shifts to temperature-dependent atomic t-matrices | 3c (`CPPP`), 3d |
-| `lib/beam_selection.f90` | `beam_selection` | beams in use at an energy; exit-beam bookkeeping of the tensor loop | 3d (`BEAMS`), 3g (`DECIDE`) |
-| `lib/bravais_layer.f90` | `bravais_layer` | lattice sums and reflection/transmission of Bravais layers | 3c (`SLIND`), 3d |
-| `lib/composite_layer.f90` | `composite_layer` | Beeby inversion for composite layers, interlayer propagators, tensor storage | 3e |
-| `lib/layer_stacking.f90` | `layer_stacking` | layer doubling for the bulk, stacking of the layers above it | 3f |
-| `lib/surface_amplitudes.f90` | `surface_amplitudes` | top layer, outgoing amplitudes, intensities, tensor amplitudes | 3g |
+| `lib/kinds.f90` | `kinds` | kind parameters `sp`, `dp` | 1 |
+| `lib/leed_types.f90` | `leed_types` | derived types replacing the COMMON blocks and the `PARAM` sizes (section 4) | created 2, extended by each later stage |
+| `lib/leed_input.f90` | `leed_input` | reader: parses the input on stdin into `leed_types` | 2 |
+| `lib/leed_output.f90` | `leed_output` | writer: stdout log, `fd.out`, `amp.out`, tensor files | created 2 (input echo), files 7 |
+| `lib/angular_coefficients.f90` | `angular_coefficients` | Clebsch-Gordan/Gaunt coefficients, factorials, index tables | 3 |
+| `lib/atomic_scattering.f90` | `atomic_scattering` | phase shifts to temperature-dependent atomic t-matrices | 3 (`CPPP`), 4 |
+| `lib/beam_selection.f90` | `beam_selection` | beams in use at an energy; exit-beam bookkeeping of the tensor loop | 4 (`BEAMS`), 7 (`DECIDE`) |
+| `lib/bravais_layer.f90` | `bravais_layer` | lattice sums and reflection/transmission of Bravais layers | 3 (`SLIND`), 4 |
+| `lib/composite_layer.f90` | `composite_layer` | Beeby inversion for composite layers, interlayer propagators, tensor storage | 5 |
+| `lib/layer_stacking.f90` | `layer_stacking` | layer doubling for the bulk, stacking of the layers above it | 6 |
+| `lib/surface_amplitudes.f90` | `surface_amplitudes` | top layer, outgoing amplitudes, intensities, tensor amplitudes | 7 |
 | `src/ref-calc.f` | program `LEED` | driver, fixed form; gains `use` statements as stages land | every stage |
-| `src/refcalc.f90` | program `refcalc` | free-form driver replacing `src/ref-calc.f` | 3h |
+| `src/refcalc.f90` | program `refcalc` | free-form driver replacing `src/ref-calc.f` | 8 |
 
 `lib/lib.tleed.f` stays the library the program `delta` links (section 3).
 
@@ -60,7 +60,7 @@ Makefile in dependency order (modules first).
 
 `LEED` calls every routine of `lib/lib.tleed.f` directly or indirectly
 except `DEBWAL` and `ZSU`; these two are not ported and leave the library in
-stage 3h. `delta` (`src/delta.f`, `lib/lib.delta.f`) uses `TSCATF`,
+stage 8. `delta` (`src/delta.f`, `lib/lib.delta.f`) uses `TSCATF`,
 `PSTEMP`, `BESSEL` and `CPPP` and no other routine of the library. These
 four stay textually unchanged in `lib/lib.tleed.f` for `delta` (guarded by
 `tests/tier1/test_delta.py`); `ref-calc` gets its own module versions. Every
@@ -72,68 +72,68 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 
 | Legacy routine | File | Target module | Stage | Notes |
 |---|---|---|---|---|
-| `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 3h | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
-| `READIN` | `lib.tleed.f` | `leed_input` | 3b | I/O: stdin, echo to stdout; calls `SLIND` |
-| `READGEO` | `lib.tleed.f` | `leed_input` | 3b | I/O: stdin, echo to stdout |
-| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3c | sublattice vectors for `FMAT`; uses `/SL/` |
-| `FACT` | `lib.tleed.f` | `angular_coefficients` | 3c | function |
-| `CA` | `lib.tleed.f` | `angular_coefficients` | 3c | function |
-| `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3c | |
-| `BLM` | `lib.tleed.f` | `angular_coefficients` | 3c | function; error message on stdout |
-| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3c | |
-| `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3c | |
-| `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3c | used by `delta`: frozen copy stays |
-| `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 3d | used by `delta`: frozen copy stays; message on stdout |
-| `PSTEMP` | `lib.tleed.f` | `atomic_scattering` | 3d | used by `delta`: frozen copy stays |
-| `BESSEL` | `lib.tleed.f` | `atomic_scattering` | 3d | used by `delta`: frozen copy stays |
-| `DEBWAL` | `lib.tleed.f` | none | removed 3h | unused |
-| `BEAMS` | `lib.tleed.f` | `beam_selection` | 3d | sets `NT`, the number of beams in use |
-| `FMAT` | `lib.tleed.f` | `bravais_layer` | 3d | blank COMMON as `AK(2)`; `/SL/` renamed |
-| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 3d | |
-| `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 3d | |
-| `XM` | `lib.tleed.f` | `bravais_layer` | 3d | |
-| `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 3d | also used by `RTINV_SIMPLE`; message on stdout |
-| `COPYPOS` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 3e | `/MPT/`, `/MFB/`; writes tensors to `TSTORE` |
-| `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 3e | reads `/MFB/` |
-| `TAUMAT` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `TAUY_SIMPLE` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `THMAT` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `GHMAT` | `lib.tleed.f` | `composite_layer` | 3e | one actual for two dummies (section 4.2) |
-| `GHD` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `GHSC` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `SB` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `SH` | `lib.tleed.f` | `composite_layer` | 3e | `REAL*8`/`COMPLEX*16` locals: `dp` |
-| `SRTLAY` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `CXMTXT` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `XMT` | `lib.tleed.f` | `composite_layer` | 3e | |
-| `DBLGAS_MOD` | `lib.tleed.f` | `layer_stacking` | 3f | |
-| `SUBRAS_BLAS` | `lib.tleed.f` | `layer_stacking` | 3f | messages on stdout |
-| `TLRTA_BLAS` | `lib.tleed.f` | `layer_stacking` | 3f | |
-| `DBGT_MOD` | `lib.tleed.f` | `layer_stacking` | 3f | |
-| `DECIDE` | `lib.tleed.f` | `beam_selection` | 3g | sets the k-parallel of blank COMMON; message on stdout |
-| `GET_TOPLAY_PROPAGATORS` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `GET_TOPLAY_MULTSCATT` | `lib.tleed.f` | `surface_amplitudes` | 3g | called with 7 arguments, declared with 6 |
-| `ADREF2T` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `MULTAMP_OPT` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `RINT_SIMPLE` | `lib.tleed.f` | `surface_amplitudes`, output to `leed_output` | 3g | I/O: writes `fd.out`, `amp.out` |
-| `FINAL1` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `ZGE` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `ZTU` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `ZSU` | `lib.tleed.f` | none | removed 3h | unused |
-| `FINALOV` | `lib.tleed.f` | `surface_amplitudes` | 3g | |
-| `HEAD` | `lib.tleed.f` | `leed_output` | 3g | I/O: headers of `fd.out`, `amp.out` |
-| `OPENOUT` | `lib.tleed.f` | driver (opening), `leed_output` | 3g | I/O: opens the tensor files |
-| `OUTAMP` | `lib.tleed.f` | `leed_output` | 3g | I/O: tensor files |
-| `OUTXIST` | `lib.tleed.f` | `leed_output` | 3g | I/O: tensor files |
-| `DELIMIT` | `lib.tleed.f` | `leed_output` | 3g | I/O: tensor files |
+| `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 8 | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
+| `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; calls `SLIND` |
+| `READGEO` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout |
+| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3 | sublattice vectors for `FMAT`; uses `/SL/` |
+| `FACT` | `lib.tleed.f` | `angular_coefficients` | 3 | function |
+| `CA` | `lib.tleed.f` | `angular_coefficients` | 3 | function |
+| `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3 | |
+| `BLM` | `lib.tleed.f` | `angular_coefficients` | 3 | function; error message on stdout |
+| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3 | |
+| `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3 | |
+| `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3 | used by `delta`: frozen copy stays |
+| `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays; message on stdout |
+| `PSTEMP` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
+| `BESSEL` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
+| `DEBWAL` | `lib.tleed.f` | none | removed 8 | unused |
+| `BEAMS` | `lib.tleed.f` | `beam_selection` | 4 | sets `NT`, the number of beams in use |
+| `FMAT` | `lib.tleed.f` | `bravais_layer` | 4 | blank COMMON as `AK(2)`; `/SL/` renamed |
+| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4 | |
+| `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4 | |
+| `XM` | `lib.tleed.f` | `bravais_layer` | 4 | |
+| `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4 | also used by `RTINV_SIMPLE`; message on stdout |
+| `COPYPOS` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | `/MPT/`, `/MFB/`; writes tensors to `TSTORE` |
+| `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | reads `/MFB/` |
+| `TAUMAT` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `TAUY_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `THMAT` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `GHMAT` | `lib.tleed.f` | `composite_layer` | 5 | one actual for two dummies (section 4.2) |
+| `GHD` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `GHSC` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `SB` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `SH` | `lib.tleed.f` | `composite_layer` | 5 | `REAL*8`/`COMPLEX*16` locals: `dp` |
+| `SRTLAY` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `CXMTXT` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `XMT` | `lib.tleed.f` | `composite_layer` | 5 | |
+| `DBLGAS_MOD` | `lib.tleed.f` | `layer_stacking` | 6 | |
+| `SUBRAS_BLAS` | `lib.tleed.f` | `layer_stacking` | 6 | messages on stdout |
+| `TLRTA_BLAS` | `lib.tleed.f` | `layer_stacking` | 6 | |
+| `DBGT_MOD` | `lib.tleed.f` | `layer_stacking` | 6 | |
+| `DECIDE` | `lib.tleed.f` | `beam_selection` | 7 | sets the k-parallel of blank COMMON; message on stdout |
+| `GET_TOPLAY_PROPAGATORS` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `GET_TOPLAY_MULTSCATT` | `lib.tleed.f` | `surface_amplitudes` | 7 | called with 7 arguments, declared with 6 |
+| `ADREF2T` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `MULTAMP_OPT` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `RINT_SIMPLE` | `lib.tleed.f` | `surface_amplitudes`, output to `leed_output` | 7 | I/O: writes `fd.out`, `amp.out` |
+| `FINAL1` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `ZGE` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `ZTU` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `ZSU` | `lib.tleed.f` | none | removed 8 | unused |
+| `FINALOV` | `lib.tleed.f` | `surface_amplitudes` | 7 | |
+| `HEAD` | `lib.tleed.f` | `leed_output` | 7 | I/O: headers of `fd.out`, `amp.out` |
+| `OPENOUT` | `lib.tleed.f` | driver (opening), `leed_output` | 7 | I/O: opens the tensor files |
+| `OUTAMP` | `lib.tleed.f` | `leed_output` | 7 | I/O: tensor files |
+| `OUTXIST` | `lib.tleed.f` | `leed_output` | 7 | I/O: tensor files |
+| `DELIMIT` | `lib.tleed.f` | `leed_output` | 7 | I/O: tensor files |
 
 ## 4. COMMON blocks and storage association
 
 No COMMON block survives the port: a ported routine receives what it took
 from COMMON as arguments or derived-type components. As long as a legacy
 caller remains, it passes its COMMON members as actual arguments; a block
-disappears with its last legacy user, and stage 3h removes the driver's
+disappears with its last legacy user, and stage 8 removes the driver's
 declarations. No COMMON block is initialised by `DATA`, and none is
 overlaid by `EQUIVALENCE`.
 
@@ -213,7 +213,7 @@ Hazards of each block:
   driver copies these matrices to and from the per-layer stores
   `REPSTO(MNLTYPE,MKNT,MKNT)` etc. over the full `MKNT` range, which moves
   the packed data intact. The port either keeps one consistent view (arrays
-  allocated `NT` by `NT` per energy, the per-energy sizing of stage 3h) or
+  allocated `NT` by `NT` per energy, the per-energy sizing of stage 8) or
   keeps packed buffers; mixing the two views breaks results only for
   energies with `NT < MKNT`.
 - **Element-as-array passing.**
@@ -247,7 +247,7 @@ least the count in the input) or explicit (reaches `ref-calc` only through
 `PARAM`). The tier-1 tests check that each strict value equals and each
 bound value covers what the input implies, and that a minimal `PARAM`
 derived from the input gives identical outputs. The port sizes every array
-from these derived values (stage 3h), never from a maximum; `NCA(LMAX)` and
+from these derived values (stage 8), never from a maximum; `NCA(LMAX)` and
 `NLMS(LMAX)` (the `DATA` tables in `LEED`) give the sizes of `CAA` and
 `CLM`.
 
@@ -264,7 +264,7 @@ results or parsing. `LEED` copies them from `PARAM` at start-up
 | `NPSI` (`MNPSI`) | `READIN`'s phase-shift energy loops, and so where `READGEO` starts reading |
 
 For TensErLEED >= 3.0.0, viperleed writes these four values into the input
-(stage V1) and the reader reads them (stage 3b, which fixes their place and
+(stage 9) and the reader reads them (stage 2, which fixes their place and
 format). The output formats do not change.
 
 ## 6. Conventions for the new files
@@ -308,21 +308,21 @@ format). The output formats do not change.
 
 ## 7. Open points
 
-Choices this document makes where the stage plan does not settle them:
+Choices made here:
 
-1. `SLIND` in stage 3c (energy-independent set-up) although `READIN`
-   (stage 3b) calls it; until 3c the ported reader calls the legacy routine.
-2. `BEAMS` in stage 3d (first stage running the per-energy computation);
-   `DECIDE` in stage 3g with the exit-beam loop of the tensor output.
-3. `CPPP` in stage 3c (called once before the energy loop), `TSCATF`,
-   `PSTEMP`, `BESSEL` in 3d.
-4. `SPHRM_MOD` in `bravais_layer` (3d), shared with `composite_layer`.
-5. `leed_output` created in stage 3b for the input echo on stdout of
-   `READIN`/`READGEO`; the output files in 3g.
-6. The driver stays fixed-form `src/ref-calc.f` until stage 3h, which
+1. `SLIND` in stage 3 (energy-independent set-up) although `READIN`
+   (stage 2) calls it; until stage 3 the ported reader calls the legacy routine.
+2. `BEAMS` in stage 4 (first stage running the per-energy computation);
+   `DECIDE` in stage 7 with the exit-beam loop of the tensor output.
+3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,
+   `PSTEMP`, `BESSEL` in stage 4.
+4. `SPHRM_MOD` in `bravais_layer` (stage 4), shared with `composite_layer`.
+5. `leed_output` created in stage 2 for the input echo on stdout of
+   `READIN`/`READGEO`; the output files in stage 7.
+6. The driver stays fixed-form `src/ref-calc.f` until stage 8, which
    replaces it with `src/refcalc.f90`.
 7. The input-only values of section 5 change the input format: tier-1
-   cases run the baseline and the port on the same frozen input, so stage 3b
+   cases run the baseline and the port on the same frozen input, so stage 2
    has to settle how the port gets these values while the baseline input
    stays unchanged (e.g. read only when present, or a converted copy of
    the input for the port).
