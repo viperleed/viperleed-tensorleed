@@ -51,11 +51,12 @@ tests/
   local.toml.example             machine-specific paths (copy to local.toml, git-ignored)
   known_debug_failures.toml      baseline runs that fail the debug build (xfail strict)
   harness/                       tokens.py (Fortran output tokenizer), compare.py, tensor.py (T_* layout),
-                                 runner.py (+ rusage_launcher.c, heap_probe.f90, trap_probe.f90), build.py, cases.py, paths.py, perf.py, tier2.py
+                                 runner.py (+ rusage_launcher.c, heap_probe.f90, trap_probe.f90), build.py, cases.py, paths.py, perf.py, tier2.py,
+                                 param_size.py (ref-calc PARAM values from the input)
   unit/                          tests of the harness and of TensErLEED/Makefile (marked unit + tier1)
   tier1/                         test_refcalc.py, test_rfactor.py, test_array_temporaries.py,
                                  test_debug_build.py, test_performance.py, test_rfacsb_routines.py,
-                                 test_poisoned_heap.py, test_delta.py
+                                 test_poisoned_heap.py, test_delta.py, test_param_size.py
                                  (+ rfacsb_routines/: driver.f90, values.json; delta/: PARAM)
   tier2/                         test_viperleed.py, systems/<name>/ (frozen viperleed inputs + expected.toml)
   benchmark/                     test_benchmark.py, README.md
@@ -119,6 +120,8 @@ A run fails if the exit code is non-zero; stdout/stderr contain `Fortran runtime
 Routine check (`tier1/test_rfacsb_routines.py`): single routines of `lib/rfacsb.f90` (`der`, `smooth`, `ysmooth` of module `derivatives`) are called by a small driver (`tier1/rfacsb_routines/driver.f90`, built with gfortran at the release and the debug flags) on curves of 1, 2, 3 and a few more points, and their results must equal, bit for bit, those of the legacy routines on the same inputs (`tier1/rfacsb_routines/values.json`, reals as hex bit patterns). The values come from `generate/make_rfacsb_routine_values.py`, which builds `generate/rfacsb_routines_legacy_driver.f` against the baseline's `lib/rfacsb.f` at `-O2` and `-O0` and requires both to agree.
 
 Delta guard (`tier1/test_delta.py`): `delta` is not refactored and links the legacy library `lib/lib.tleed.f`, which viperleed picks by the glob `lib/lib.tleed*`. The test compiles and links `delta` from the tree as viperleed 0.14.2 does (first match of `src/delta*`, `lib/lib.tleed*`, `lib/lib.delta*`, each compiled separately with `-O2`, plus `GLOBAL`; each glob must match exactly one file), with a fixed PARAM (`tier1/delta/PARAM`, the values of the tier-2 Ag(100) system); an undefined reference at the link step means `lib.tleed.f` lost a routine `delta` calls. It also requires `TSCATF`, `PSTEMP`, `BESSEL` and `CPPP` in `lib/lib.tleed.f` (from the `SUBROUTINE`/`FUNCTION` statement to its `END`) to be textually identical to the baseline commit's (read with `git show`).
+
+PARAM sizes (`tier1/test_param_size.py`, `harness/param_size.py`): every ref-calc PARAM value is either *strict* (`READIN`/`READGEO` stop unless it equals the count in the input: `MKNBS`, `MKNT`, `MNEL`, `MLMAX`, `MNSITE`, `MNLTYPE`, `MNBRAV`, `MNSTACK`), a *bound* (only an upper limit: `MNSUB`, and `MNLMO`/`MNLM`, the sizes of `CAA`/`CLM`, which ref-calc fills to `NCA(LMAX)`/`NLMS(LMAX)` without a check) or *explicit* (not derivable from the input: `MIDEG`, `MNL1`, `MNL2`, `MNPUN` = `MNT0`, `MNPSI`). `param_size.derive_sizes` reads the FIN (which holds the phase shifts) in the record layout of `READIN`/`READGEO`, with the explicit values from the run's PARAM, and returns every value, bounds at their minimum; `param_size.param_text` writes a PARAM from them as viperleed's `writePARAM` does, including the derived section-4 constants. For every refcalc run, the strict values must equal and the bound values must not exceed the run's PARAM, and ref-calc built with the minimal PARAM must write byte-identical outputs to the build with the run's PARAM (nothing is built or run when the two PARAM files are identical). `python -m generate.param_size_table` prints the table of values and the runs whose PARAM is larger than needed.
 
 Static check (`tier1/test_array_temporaries.py`): each program is built with `-O2 -Warray-temporaries`; any warning fails (large arrays must not get compiler-generated temporaries; the baseline has none, and array temporaries are invisible to the peak-RSS gate unless they coincide with the peak).
 
