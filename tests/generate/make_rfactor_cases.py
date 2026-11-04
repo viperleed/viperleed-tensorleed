@@ -76,8 +76,9 @@ PERMUTED_SYM = [1, 1, 2, 10]
 # ag100_rfactor_short: (beam, first energy (eV), number of points) kept of the
 # experimental data. Each beam takes another DER branch (rfacsb.f): NE = 2,
 # NE = 23 (the long formula at its threshold), NE = 22 and 15 (the short
-# formula with its one-sided end points). Each window lies where the
-# branches differ most for the baseline data.
+# formula with its one-sided end points). The 23-point window (beam 2 from
+# 85.5 eV) is the one where the NE >= 23 and NE < 23 formulas differ most
+# (scan of all 23-point windows).
 SHORT_BEAMS = [(1, 120.0, 2), (2, 85.5, 23), (3, 150.0, 22), (4, 170.0, 15)]
 
 
