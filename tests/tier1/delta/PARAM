@@ -1,0 +1,13 @@
+C  PARAM for delta as viperleed 0.14.2 writes it (calc/files/iodeltas.py,
+C  generateDeltaInput), with the values of the tier-2 system Ag(100)
+C  (tier2/systems/ag100): LMAX = 6-9, 72 phase-shift energies of 2 sites
+C  (refcalc/ag100 PARAM_L*), 4 beams (IVBEAMS), 5 vibration amplitudes and
+C  7 geometry steps (DISPLACEMENTS).
+
+      PARAMETER( MLMAX = 9 )
+      PARAMETER( MNLMB = 43351 )
+      PARAMETER( MNPSI = 72, MNEL = 2 )
+      PARAMETER( MNT0 = 4 )
+      PARAMETER( MNATOMS = 1 )
+      PARAMETER( MNDEB = 5 )
+      PARAMETER( MNCSTEP = 7 )

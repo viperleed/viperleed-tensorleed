@@ -55,8 +55,8 @@ tests/
   unit/                          tests of the harness and of TensErLEED/Makefile (marked unit + tier1)
   tier1/                         test_refcalc.py, test_rfactor.py, test_array_temporaries.py,
                                  test_debug_build.py, test_performance.py, test_rfacsb_routines.py,
-                                 test_poisoned_heap.py
-                                 (+ rfacsb_routines/: driver.f90, values.json)
+                                 test_poisoned_heap.py, test_delta.py
+                                 (+ rfacsb_routines/: driver.f90, values.json; delta/: PARAM)
   tier2/                         test_viperleed.py, systems/<name>/ (frozen viperleed inputs + expected.toml)
   benchmark/                     test_benchmark.py, README.md
   cases/refcalc|rfactor|benchmark/<case>/   case.toml, inputs/, expected/<run>/ (benchmark: no expected/;
@@ -117,6 +117,8 @@ Release flags: `-O2`. Debug flags: `-O0 -g -fcheck=all -ffpe-trap=invalid,zero,o
 A run fails if the exit code is non-zero; stdout/stderr contain `Fortran runtime error`, `Program received signal`, `Error termination` or a `STOP <n≠0>` line; or the output is incomplete (ref-calc: `fd.out` lacks an energy of the EI,EF,DE range; rfactor: `ROUT` lacks the `AVERAGE R-FACTOR =` summary). The last check is needed because many legacy error paths print a message and `STOP` with exit code 0. Comparisons fail on missing files, a different number of lines or of tokens on a line, a number in a different format, an overflow field (`*`, `**…`; except the two `*` of an rfactor beam label `*( 1  0)*` and a `*` in column 1 before a letter or blank, which marks a comment line of rfactor's standard output) where the expected file has a number or an overflow field of other text or end column, and any differing integer or text token. An overflow field matches a textually identical one ending in the same column.
 
 Routine check (`tier1/test_rfacsb_routines.py`): single routines of `lib/rfacsb.f90` (`der`, `smooth`, `ysmooth` of module `derivatives`) are called by a small driver (`tier1/rfacsb_routines/driver.f90`, built with gfortran at the release and the debug flags) on curves of 1, 2, 3 and a few more points, and their results must equal, bit for bit, those of the legacy routines on the same inputs (`tier1/rfacsb_routines/values.json`, reals as hex bit patterns). The values come from `generate/make_rfacsb_routine_values.py`, which builds `generate/rfacsb_routines_legacy_driver.f` against the baseline's `lib/rfacsb.f` at `-O2` and `-O0` and requires both to agree.
+
+Delta guard (`tier1/test_delta.py`): `delta` is not refactored and links the legacy library `lib/lib.tleed.f`, which viperleed picks by the glob `lib/lib.tleed*`. The test compiles and links `delta` from the tree as viperleed 0.14.2 does (first match of `src/delta*`, `lib/lib.tleed*`, `lib/lib.delta*`, each compiled separately with `-O2`, plus `GLOBAL`; each glob must match exactly one file), with a fixed PARAM (`tier1/delta/PARAM`, the values of the tier-2 Ag(100) system); an undefined reference at the link step means `lib.tleed.f` lost a routine `delta` calls. It also requires `TSCATF`, `PSTEMP`, `BESSEL` and `CPPP` in `lib/lib.tleed.f` (from the `SUBROUTINE`/`FUNCTION` statement to its `END`) to be textually identical to the baseline commit's (read with `git show`).
 
 Static check (`tier1/test_array_temporaries.py`): each program is built with `-O2 -Warray-temporaries`; any warning fails (large arrays must not get compiler-generated temporaries; the baseline has none, and array temporaries are invisible to the peak-RSS gate unless they coincide with the peak).
 
