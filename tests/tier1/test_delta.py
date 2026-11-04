@@ -17,7 +17,6 @@ __copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
 __created__ = '2026-11-04'
 __license__ = 'GPLv3+'
 
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -26,14 +25,10 @@ import pytest
 
 from generate.baseline_tree import BASELINE_COMMIT
 from harness.build import RELEASE
+from harness.fixed_form import routine
 
 DATA = Path(__file__).with_name("delta")
 SHARED_ROUTINES = ("TSCATF", "PSTEMP", "BESSEL", "CPPP")
-
-# a SUBROUTINE or FUNCTION statement (not a comment line), and a bare END
-_ROUTINE_START = re.compile(r"^[ \t]+(?:[\w*]+[ \t]+)*(?:SUBROUTINE|FUNCTION)[ \t]+(\w+)",
-                            re.I | re.M)
-_END = re.compile(r"^[ \t]+END[ \t]*$", re.I | re.M)
 
 
 def _viperleed_delta_sources(tl):
@@ -76,18 +71,6 @@ def test_delta_links_with_viperleed_file_set(tl_root, tmp_path):
     assert (tmp_path / "delta").is_file()
 
 
-def _routine(text, name):
-    """The text of routine name in fixed-form source text, from its
-    SUBROUTINE/FUNCTION statement to the first bare END after it."""
-    starts = [m for m in _ROUTINE_START.finditer(text) if m[1].upper() == name]
-    assert len(starts) == 1, f"{len(starts)} definitions of {name}"
-    end = _END.search(text, starts[0].end())
-    assert end, f"no END after {name}"
-    body = text[starts[0].start():end.end()]
-    assert len(_ROUTINE_START.findall(body)) == 1, f"{name} runs into the next routine"
-    return body
-
-
 def _baseline_text(path):
     """The text of path (relative to the repository root) at the baseline commit."""
     return subprocess.run(["git", "-C", str(Path(__file__).parent), "show",
@@ -104,7 +87,7 @@ def test_delta_routine_in_lib_tleed_frozen(tl_root, name):
     baseline commit until delta itself is refactored."""
     path = "TensErLEED/lib/lib.tleed.f"
     current = (tl_root / path).read_text()
-    assert _routine(current, name) == _routine(_baseline_text(path), name)
+    assert routine(current, name) == routine(_baseline_text(path), name)
 
 
 @pytest.mark.tier1
