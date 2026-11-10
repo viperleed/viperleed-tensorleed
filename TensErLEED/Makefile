@@ -80,13 +80,14 @@ $(B)/obj/refcalc/%.o: %.f90 | $(B)/obj/refcalc $(B)/mod/refcalc
 $(B)/obj/rfactor/%.o: %.f90 | $(B)/obj/rfactor $(B)/mod/rfactor
 	$(FC) $(FFLAGS) $(STD_FFLAGS) -J$(B)/mod/rfactor -o $@ -c $<
 
-# ref-calc: the fixed-form objects use the modules, so they depend on them
-# for real (an incremental make rebuilds them when a module changes)
+# ref-calc: the driver uses the modules, so it depends on their objects
+# (an incremental make rebuilds it when a module changes); lib.tleed.f
+# uses none
 $(B)/ref-calc.o: src/ref-calc.f src/GLOBAL $(B)/PARAM $(REFCALC_F90_OBJ)
 	$(FC) $(FFLAGS) -I$(B) -I$(B)/mod/refcalc -o $@ -c $<
 
-$(B)/lib.tleed.o: lib/lib.tleed.f src/GLOBAL $(REFCALC_F90_OBJ) | $(B)
-	$(FC) $(FFLAGS) -Isrc -I$(B) -I$(B)/mod/refcalc -o $@ -c $<
+$(B)/lib.tleed.o: lib/lib.tleed.f src/GLOBAL | $(B)
+	$(FC) $(FFLAGS) -Isrc -I$(B) -o $@ -c $<
 
 $(B)/refcalc: $(REFCALC_F90_OBJ) $(B)/ref-calc.o $(B)/lib.tleed.o
 	$(FC) $(FFLAGS) -o $@ $^ $(LDLIBS)

@@ -35,7 +35,8 @@ from pathlib import Path
 
 from .build import build_program
 from .compare import Tolerance, compare_files
-from .fin_convert import converted_input_file, reads_converted_fin
+from .fin_convert import convert_fin, reads_converted_fin
+from .param_size import read_param
 from .runner import ProgramFailed, run_program
 
 RUN_TIMEOUT_S = 900
@@ -269,7 +270,9 @@ def run_stdin(case, run, tl_root, workdir):
     NPSI are the same in the case's and the variants of it).
     """
     if case.program == "refcalc" and reads_converted_fin(tl_root):
-        return converted_input_file(run, workdir)
+        path = Path(workdir) / ".stdin"
+        path.write_text(convert_fin(Path(run.stdin).read_text(), read_param(run.param)))
+        return path
     return run.stdin
 
 

@@ -305,7 +305,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 
 ## Tier 2 (viperleed)
 
-Tier 2 is skipped, with a message naming WP-V1, for a tree whose `src/ref-calc*` driver contains a `USE` statement (`harness/tier2.refcalc_unavailable`): viperleed builds ref-calc from `lib/lib.tleed*` and the first `src/ref-calc*` only and cannot build a module-using ref-calc. It is decided from the tree, before viperleed starts; the baseline tree still runs it.
+Tier 2 is skipped, with a message saying tier 2 is unavailable until viperleed supports TensErLEED 3.0.0, for a tree whose `src/ref-calc*` driver contains a `USE` statement (`harness/tier2.refcalc_unavailable`): viperleed builds ref-calc from `lib/lib.tleed*` and the first `src/ref-calc*` only and cannot build a module-using ref-calc. It is decided from the tree, before viperleed starts; the baseline tree still runs it.
 
 `pytest tests -m tier2 --tl-root=<TL tree> [--viperleed-cmd "<cmd>"]` (default command: `viperleed` on `PATH`; to run another one, e.g. `conda run --no-capture-output -n <env> viperleed`, set it with `--viperleed-cmd`, the environment variable `TL_TEST_VIPERLEED_CMD` or `viperleed_cmd` in `tests/local.toml`, which take precedence in this order; the viperleed version is pinned in `tests/tolerances.toml`, `[tier2] viperleed_version`; the checksum rule is below). For each system in `tests/tier2/systems/` it runs `viperleed calc -t <tl_root>` with `RUN = 1 5` (reference calculation + error calculation using delta, superpos and rfactor of the same tree) and compares the refcalc R factor, the best V0 shift and every point of every `Errors_*.csv` in `OUT/Errors.zip` with `expected.toml`.
 

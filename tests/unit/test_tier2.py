@@ -299,12 +299,12 @@ def test_version_mismatch_fails_every_tier2_test_before_any_run(tmp_path, stub_s
 
 def test_tier2_skips_every_test_on_a_module_using_tree(tmp_path, stub_script, tl_root):
     """On the tree under test (module-using ref-calc), every tier-2 test is skipped
-    with the WP-V1 message and viperleed is not started at all."""
+    with the unavailability message and viperleed is not started at all."""
     cases, started, _ = _run_tier2_with_stub_viperleed(tmp_path, stub_script, tl_root)
     for case in cases:
         skipped = case.find("skipped")
         assert skipped is not None, case.get("name")
-        assert "WP-V1" in skipped.get("message")
+        assert "until viperleed supports TensErLEED 3.0.0" in skipped.get("message")
     assert not started
 
 
@@ -315,10 +315,10 @@ def test_baseline_tree_has_tier2_available(baseline_tl_root):
 
 def test_module_using_tree_has_tier2_unavailable(tl_root):
     """The tree under test, whose ref-calc driver uses modules, is marked unavailable
-    with a message that names WP-V1.
+    with a message that says tier 2 waits for viperleed to support TensErLEED 3.0.0.
 
     Failing means tier 2 would start viperleed on a tree it cannot build."""
-    assert "WP-V1" in tier2.refcalc_unavailable(tl_root)
+    assert "until viperleed supports TensErLEED 3.0.0" in tier2.refcalc_unavailable(tl_root)
 
 
 def test_use_statement_is_found_in_code_not_comments(tmp_path):

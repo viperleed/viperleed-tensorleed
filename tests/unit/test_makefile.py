@@ -48,7 +48,7 @@ def test_free_form_sources_compile_with_std_f2018(tl_root, tmp_path):
 
 def test_incremental_make_rebuilds_objects_using_a_changed_module(tl_root, tmp_path):
     """After a module of ref-calc changes, make without -B rebuilds the
-    fixed-form objects that may use it."""
+    driver, which uses it, and not lib.tleed.f, which does not."""
     tree = tmp_path / "TensErLEED"
     shutil.copytree(tl_root / "TensErLEED", tree, symlinks=True)
     param = next(run.param for case, run in iter_runs() if case.program == "refcalc")
@@ -64,4 +64,4 @@ def test_incremental_make_rebuilds_objects_using_a_changed_module(tl_root, tmp_p
     compiled = [shlex.split(line)[-1] for line in second.stdout.splitlines()
                 if " -c " in line]
     assert "src/ref-calc.f" in compiled
-    assert "lib/lib.tleed.f" in compiled
+    assert "lib/lib.tleed.f" not in compiled

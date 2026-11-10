@@ -99,8 +99,9 @@ def is_released_tl_tree(tl_root):
     return released and not status.stdout.strip()
 
 
-REFCALC_UNAVAILABLE = ("tier 2 of the refactored ref-calc is unavailable until WP-V1 "
-                       "(released viperleed cannot build a module-using ref-calc)")
+REFCALC_UNAVAILABLE = ("tier 2 of the refactored ref-calc is unavailable until viperleed "
+                       "supports TensErLEED 3.0.0 (released viperleed cannot build a "
+                       "module-using ref-calc)")
 _USE_STATEMENT = re.compile(r"^[ \t]+USE\b", re.I | re.M)
 
 

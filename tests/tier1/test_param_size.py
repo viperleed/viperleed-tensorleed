@@ -15,6 +15,7 @@ import pytest
 
 from harness.build import build_program, needs_param
 from harness.cases import iter_runs, run_built
+from harness.fin_convert import reads_converted_fin
 from harness.param_size import (BOUND, EXPLICIT, KIND, STRICT, param_text, read_param,
                                 run_sizes, size_mismatches)
 
@@ -110,9 +111,15 @@ def _equality_checks(tl_root):
     return found
 
 
+def _require_reader(tl_root):
+    """Skip unless the tree has the reader whose checks the test reads."""
+    if not reads_converted_fin(tl_root):
+        pytest.skip("the tree has no lib/leed_input.f90, whose checks this test reads")
+
+
 @pytest.mark.tier1
 def test_strict_sizes_are_the_ones_ref_calc_checks(tl_root):
-    """The strict sizes are exactly those read_input and read_geometry compare with .ne. and stop on.
+    """The strict sizes are exactly those read_input and read_geometry compare (/=) and stops on.
 
     The checks are read from lib/leed_input.f90 (if (a /= b) then ... call
     stop_with_error), their variables traced to PARAM through the actual
@@ -121,6 +128,7 @@ def test_strict_sizes_are_the_ones_ref_calc_checks(tl_root):
     checks (MNL1*MNL2 against MKNBS) do not count, and no bound size is
     among them. Failing means SIZES classifies a size differently from the
     source."""
+    _require_reader(tl_root)
     explicit = {name for name, kind in KIND.items() if kind == EXPLICIT}
     assert _equality_checks(tl_root) - explicit == {
         name for name, kind in KIND.items() if kind == STRICT}
@@ -134,6 +142,7 @@ def test_explicit_sizes_are_the_ones_ref_calc_checks_against_its_records(tl_root
     legacy FIN, but the TL >= 3.0.0 FIN holds them and the reader stops
     unless they equal the PARAM values. Failing means a record is read
     without a check, so PARAM and FIN could disagree silently."""
+    _require_reader(tl_root)
     explicit = {name for name, kind in KIND.items() if kind == EXPLICIT}
     assert explicit <= _equality_checks(tl_root)
 

@@ -37,7 +37,7 @@ C    before you use it.
 C
       program leed
 
-C  modules of the ported input reader
+C  modules of the input reader
 
       USE leed_types, ONLY: geometry, lattice, control, inner_potential,
      +                      beam_list, phase_shifts

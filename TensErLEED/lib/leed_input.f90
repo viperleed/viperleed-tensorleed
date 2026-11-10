@@ -4,14 +4,14 @@
 !! Every routine takes the unit to read from, which the caller has opened.
 !! Invalid input stops with a message on stderr and a non-zero exit code.
 
-! read_input is a port of SUBROUTINE READIN of lib.tleed.f, which reads in
+! read_input follows the legacy SUBROUTINE READIN, which read in
 ! most of the input for the LEED programs (lateral lattices, calculational
 ! features, beam list and phase shifts).
 !   TST is read in F11.8 format (07/05/92). Phase shifts are output for the
 !   first energy only. The number of elements and lmax + 1 are required for
 !   the dimension of the phase shifts (07/05/92).
 
-! Ported from SUBROUTINE READGEO of lib.tleed.f, which reads structural
+! read_geometry follows the legacy SUBROUTINE READGEO, which read structural
 ! (and some calculational) information for the reference surface in
 ! question.
 ! VB, 06/98

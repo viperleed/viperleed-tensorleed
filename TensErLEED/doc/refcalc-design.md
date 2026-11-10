@@ -78,7 +78,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | Legacy routine | File | Target module | Stage | Notes |
 |---|---|---|---|---|
 | `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 8 | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
-| `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; called `SLIND` (the driver now calls it after the reader) |
+| `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; `SLIND` is called after the reader |
 | `READGEO` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout |
 | `SLIND` | `lib.tleed.f` | `bravais_layer` | 3 | sublattice vectors for `FMAT`; uses `/SL/` |
 | `FACT` | `lib.tleed.f` | `angular_coefficients` | 3 | function |

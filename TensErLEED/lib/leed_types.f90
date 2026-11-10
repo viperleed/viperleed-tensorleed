@@ -75,8 +75,9 @@ module leed_types
     !! atomic units; ASBULK.
     real(sp) :: bulk_internal_vector(3) = 0.0_sp
     !> Interlayer vector of smallest distance, for the convergence
-    !! criterion; ASB. Only the first component is set, and only if a bulk
-    !! calculation is required.
+    !! criterion; ASB. Only the first component is set: from the
+    !! bulk unit if a bulk calculation is required, and by any stacked layer
+    !! with a smaller first interlayer component.
     real(sp) :: min_distance_vector(3)
     !> Layers on top of the bulk; index 1 is the top layer; (LTYPE, LDIST,
     !! TENS, LAYFILE).
@@ -84,7 +85,7 @@ module leed_types
   end type geometry
 
   !> Two-dimensional lattices of the substrate and of the superlattice
-  !! (legacy common block /SL/ and the vectors READIN returned).
+  !! (legacy common block /SL/).
   !! Lengths are in atomic units, reciprocal vectors in inverse atomic
   !! units. Each vector is (2): the components in the surface plane.
   type :: lattice
