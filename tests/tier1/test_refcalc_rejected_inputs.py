@@ -65,6 +65,14 @@ def _record(marker, value, column=0):
     return "".join(lines)
 
 
+def _line(marker, text):
+    """Converted FIN text with the line containing marker replaced by text."""
+    lines = _converted().splitlines(keepends=True)
+    (i,) = [i for i, line in enumerate(lines) if marker in line]
+    lines[i] = text + "\n"
+    return "".join(lines)
+
+
 def _param(old, new):
     """PARAM text with the one occurrence of old replaced by new."""
     text = RUN.param.read_text()
@@ -135,6 +143,20 @@ REJECTED = [
                  "NPUN = 11 in the input differs from MNPUN = 12 in PARAM", id="npun"),
     pytest.param(lambda: _record("NPSI (TL", 43), None,
                  "NPSI = 43 in the input differs from MNPSI = 44 in PARAM", id="npsi"),
+    # A record with a value missing is not completed from the next line
+    pytest.param(lambda: _line("IDEG NL1 NL2", "    2    2"), None,
+                 "The record of IDEG, NL1, NL2 needs 3 integer(s)", id="ideg-record-short"),
+    pytest.param(lambda: _line("IDEG NL1 NL2", "    2    2   IDEG NL1, NL2 missing"), None,
+                 "The record of IDEG, NL1, NL2 needs 3 integer(s)",
+                 id="ideg-record-short-comment"),
+    pytest.param(lambda: _line("NPUN (TL", ""), None,
+                 "The record of NPUN needs 1 integer(s)", id="npun-record-short"),
+    pytest.param(lambda: _line("NPUN (TL", "     NPUN missing"), None,
+                 "The record of NPUN needs 1 integer(s)", id="npun-record-short-comment"),
+    pytest.param(lambda: _line("NPSI (TL", ""), None,
+                 "The record of NPSI needs 1 integer(s)", id="npsi-record-short"),
+    pytest.param(lambda: _line("NPSI (TL", "     NPSI missing"), None,
+                 "The record of NPSI needs 1 integer(s)", id="npsi-record-short-comment"),
     pytest.param(lambda: _fin("LMAX", 5), None,
                  "Please enforce LMAX in input = MLMAX in PARAM", id="lmax"),
     pytest.param(lambda: _fin("PSFORMAT", 3), None,
@@ -185,33 +207,47 @@ def _assert_rejected(param_file, fin, param, message, tl_root, build_flags, tmp_
     assert message not in res.stdout
 
 
-def _reformatted(fin, marker, new_values, comment):
+# The values of a record written in another style than five-column fields
+RECORD_STYLES = {
+    # three-column fields, as the neighbouring LMAX, PSFORMAT and IFORM
+    # records (`  4  1  1`)
+    "columns": lambda values: "".join(f"{v:3d}" for v in values) + "   ",
+    # left-aligned, separated by one blank (`4 1 1 `)
+    "left": lambda values: " ".join(str(v) for v in values) + " ",
+    # separated by commas (`4,1,1 `)
+    "comma": lambda values: ",".join(str(v) for v in values) + " ",
+    }
+
+
+def _reformatted(fin, marker, new_values, style, comment):
     """FIN text with the numbers of the record commented marker rewritten.
 
-    The values are written in three-column fields (the style of the
-    neighbouring LMAX, PSFORMAT and IFORM records, e.g. `  4  1  1`) and
-    followed by comment."""
+    The values are written in style (a key of RECORD_STYLES) and followed
+    by comment."""
     lines = fin.splitlines(keepends=True)
     (i,) = [i for i, line in enumerate(lines) if marker in line]
-    lines[i] = "".join(f"{v:3d}" for v in new_values) + f"   {comment}\n"
+    lines[i] = RECORD_STYLES[style](new_values) + f"{comment}\n"
     return "".join(lines)
 
 
 @pytest.mark.tier1
+@pytest.mark.parametrize("style", RECORD_STYLES)
 @pytest.mark.parametrize("comment", ("", "IDEG NL1 NL2, with / a slash"))
-def test_refcalc_reads_new_records_list_directed(comment, tl_root, build_flags, tmp_path):
+def test_refcalc_reads_new_records_list_directed(style, comment, tl_root, build_flags,
+                                                 tmp_path):
     """The IDEG/NL1/NL2, NPUN and NPSI records are read for any field width.
 
-    The records written in narrow fields, or followed by text with
-    separators, give the same run as the records in five-column fields.
-    Failing means the records are read with a fixed format again."""
+    The records written in narrow fields, left-aligned or separated by
+    commas, with or without text with separators after them, give the same
+    run as the records in five-column fields. Failing means a record is
+    read with a fixed format again."""
     param = read_param(RUN.param)
     base = _converted()
     fin = base
     for marker, names in (("IDEG NL1 NL2", ("MIDEG", "MNL1", "MNL2")),
                           ("NPUN (TL", ("MNPUN",)),
                           ("NPSI (TL", ("MNPSI",))):
-        fin = _reformatted(fin, marker, [param[n] for n in names], comment)
+        fin = _reformatted(fin, marker, [param[n] for n in names], style, comment)
     assert fin != base
     exe = build_program(tl_root, CASE.program, RUN.param, build_flags)
     results = []

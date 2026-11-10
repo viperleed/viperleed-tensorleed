@@ -97,6 +97,7 @@ contains
     real(sp) :: sub_a(2, 2), super_a(2, 2)
     integer :: psfmt, ps_lmax, nel_input, n_beams_input
     integer :: ideg_input, nl1_input, nl2_input, n_output_input, n_energies_input
+    integer :: record(3)
     integer :: i, j, k, kk, n_in_set, ienergy, iel, l
 
     ! Consistency check
@@ -153,7 +154,10 @@ contains
     pot%vpi_substrate = vpi
     pot%vpi_overlayer = vpi
 
-    read (unit, *) ideg_input, nl1_input, nl2_input
+    call read_integer_record(unit, "IDEG, NL1, NL2", record(1:3))
+    ideg_input = record(1)
+    nl1_input = record(2)
+    nl2_input = record(3)
     if (ideg_input /= ideg) then
       call stop_with_error("IDEG = " // int_text(ideg_input) &
                            // " in the input differs from MIDEG = " &
@@ -209,7 +213,8 @@ contains
     call write_beam_criterion(out_unit, tst)
 
     ! Beams for which intensities are output, as positions in the input list
-    read (unit, *) n_output_input
+    call read_integer_record(unit, "NPUN", record(1:1))
+    n_output_input = record(1)
     if (n_output_input /= n_output) then
       call stop_with_error("NPUN = " // int_text(n_output_input) &
                            // " in the input differs from MNPUN = " &
@@ -243,7 +248,8 @@ contains
     call write_phase_shift_format(out_unit, psfmt)
     read (unit, '(26I3)') iform
     call write_iform(out_unit, iform)
-    read (unit, *) n_energies_input
+    call read_integer_record(unit, "NPSI", record(1:1))
+    n_energies_input = record(1)
     if (n_energies_input /= n_energies) then
       call stop_with_error("NPSI = " // int_text(n_energies_input) &
                            // " in the input differs from MNPSI = " &
@@ -545,6 +551,39 @@ contains
       end associate
     end do
   end subroutine read_geometry
+
+  !> Read a record of integers: one line, parsed list-directed.
+  !!
+  !! The values are taken from this line only, in any field width and
+  !! separated by blanks or commas; text may follow them. A line with fewer
+  !! values, or with text in place of a value, stops the program with a
+  !! message naming the record.
+  subroutine read_integer_record(unit, names, values)
+    !> Unit to read from
+    integer, intent(in) :: unit
+    !> Names of the values, for the message
+    character(len=*), intent(in) :: names
+    !> Values of the record
+    integer, intent(out) :: values(:)
+
+    !> Marks a value the line does not set (a list-directed read stops at a
+    !> slash and leaves the remaining values unchanged).
+    integer, parameter :: unset = -huge(0)
+    character(len=256) :: line
+    integer :: ios
+
+    read (unit, '(A)', iostat=ios) line
+    if (ios /= 0) then
+      call stop_with_error("The record of " // names // " is missing")
+    end if
+    values = unset
+    read (line, *, iostat=ios) values
+    if (ios /= 0 .or. any(values == unset)) then
+      call stop_with_error("The record of " // names // " needs " &
+                           // int_text(size(values)) &
+                           // " integer(s), found: " // trim(line))
+    end if
+  end subroutine read_integer_record
 
   !> The integer as text, without blanks.
   function int_text(value) result(text)
