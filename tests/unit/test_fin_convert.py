@@ -55,6 +55,22 @@ def test_records_are_at_the_positions_of_the_format(run):
 
 
 @pytest.mark.parametrize("run", RUNS)
+def test_npu_record_lines_between_npun_and_theta(run):
+    """The NPU record is 15 beams per line: ceil(NPUN / 15) lines before THETA FI.
+
+    Includes the runs with NPUN of 15, 16 and 30 (ag100_input_forms).
+    """
+    fin, param = _inputs(run)
+    lines = convert_fin(fin, param).splitlines()
+    tst = next(i for i, line in enumerate(lines) if line.rstrip().endswith("TST"))
+    theta = next(i for i, line in enumerate(lines) if line.rstrip().endswith("THETA FI"))
+    npun = param["MNPUN"]
+    npu = lines[tst + 2:theta]
+    assert len(npu) == -(-npun // 15)
+    assert sum(len(line.split()) for line in npu) == npun
+
+
+@pytest.mark.parametrize("run", RUNS)
 def test_energy_and_lmax_lines_are_where_viperleed_edits_them(run):
     """Line 2 stays at index 1; the first '   LMAX' line is unchanged and none is added.
 
