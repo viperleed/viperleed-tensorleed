@@ -48,12 +48,21 @@ def test_refcalc_param_sizes_follow_from_input(case, run):
     assert not problems, "\n".join(problems)
 
 
-# IF (a .ne. b) THEN, and its block up to END IF or ELSE
+# IF (a .ne. b) THEN, and its block up to END IF or ELSE (fixed form, READIN)
 _CHECK = re.compile(r"^[ \t]+IF[ \t]*\(([^\n]+?)\.ne\.([^\n]+?)\)[ \t]*THEN(.*?)"
                     r"^[ \t]+(?:END[ \t]*IF|ELSE)", re.I | re.M | re.S)
+# the same in free form (READGEO's port): a /= b or a .ne. b
+_CHECK_F90 = re.compile(r"^[ \t]*if[ \t]*\(([^\n]+?)(?:/=|\.ne\.)([^\n]+?)\)[ \t]*then(.*?)"
+                        r"^[ \t]*(?:end[ \t]*if|else)", re.I | re.M | re.S)
+_STOP = re.compile(r"^[ \t]+STOP\b", re.I | re.M)
+_STOP_F90 = re.compile(r"^[ \t]*call[ \t]+stop_with_error\b", re.I | re.M)
 # NAME = MNAME in ref-calc.f: a local copy of a PARAM value
 _COPY = re.compile(r"^[ \t]+(\w+)[ \t]*=[ \t]*(M\w+)[ \t]*$", re.M)
 _NAME = re.compile(r"[A-Za-z]\w*")
+_CALL = re.compile(r"^[ \t]+CALL[ \t]+read_geometry[ \t]*\(((?:[^\n]*\n(?:     \S)?)*?[^\n]*)\)[ \t]*$",
+                   re.I | re.M)
+_SUBROUTINE = re.compile(r"^[ \t]*subroutine[ \t]+read_geometry[ \t]*\(([^)]*)\)",
+                         re.I | re.M)
 
 
 def _param_definitions(text):
@@ -66,13 +75,27 @@ def _param_definitions(text):
     return defs
 
 
+def _reader_actuals(driver, reader):
+    """{dummy name: actual name} of the read_geometry call in the driver source.
+
+    The dummy names come from the subroutine statement in the free-form reader."""
+    call = _CALL.search(driver)
+    sub = _SUBROUTINE.search(reader)
+    assert call and sub, "no read_geometry call in ref-calc.f or no subroutine in leed_input.f90"
+    actuals = [a.strip() for a in re.sub(r"\n     \S", "", call.group(1)).split(",")]
+    dummies = [d.strip() for d in re.sub(r"&\s*\n\s*&?", "", sub.group(1)).split(",")]
+    assert len(actuals) == len(dummies)
+    return {d.upper(): a.upper() for d, a in zip(dummies, actuals)}
+
+
 def _equality_checks(tl_root):
     """The sizes (SIZES names) compared in an IF (a.ne.b) THEN ... STOP of
-    READIN or READGEO."""
+    READIN, or an if (a /= b) then ... call stop_with_error of read_geometry."""
     tl = tl_root / "TensErLEED"
     lib = (tl / "lib" / "lib.tleed.f").read_text()
-    copies = {local.upper(): param.upper()
-              for local, param in _COPY.findall((tl / "src" / "ref-calc.f").read_text())}
+    reader = (tl / "lib" / "leed_input.f90").read_text()
+    driver = (tl / "src" / "ref-calc.f").read_text()
+    copies = {local.upper(): param.upper() for local, param in _COPY.findall(driver)}
     defs = _param_definitions(Path(next(iter_runs(("refcalc",)))[1].param).read_text())
 
     def sizes(name):
@@ -82,26 +105,32 @@ def _equality_checks(tl_root):
         return {s for n in _NAME.findall(defs.get(name, "")) for s in sizes(n.upper())}
 
     found = set()
-    for name in ("READIN", "READGEO"):
-        for lhs, rhs, block in _CHECK.findall(routine(lib, name)):
-            if not re.search(r"^[ \t]+STOP\b", block, re.I | re.M):
+    reader_names = {dummy: copies[actual]
+                    for dummy, actual in _reader_actuals(driver, reader).items()
+                    if actual in copies}
+    for text, check, stop, names in ((routine(lib, "READIN"), _CHECK, _STOP, copies),
+                                     (reader, _CHECK_F90, _STOP_F90, reader_names)):
+        for lhs, rhs, block in check.findall(text):
+            if not stop.search(block):
                 continue
             for word in _NAME.findall(lhs + " " + rhs):
-                if word.upper() in copies:
-                    found |= sizes(copies[word.upper()])
+                if word.upper() in names:
+                    found |= sizes(names[word.upper()])
     return found
 
 
 @pytest.mark.tier1
 def test_strict_sizes_are_the_ones_ref_calc_checks(tl_root):
-    """The strict sizes are exactly those READIN/READGEO compare with .ne. and stop on.
+    """The strict sizes are exactly those READIN and read_geometry compare with .ne. and stop on.
 
-    The checks are read from lib.tleed.f (IF (a.ne.b) THEN ... STOP), their
-    variables traced to PARAM through ref-calc.f's copies (NSITE = MNSITE)
-    and the PARAMETER definitions (MLMAX1 = MLMAX+1). Explicit sizes in the
-    same checks (MNL1*MNL2 against MKNBS) do not count, and no bound size
-    is among them. Failing means SIZES classifies a size differently from
-    the source."""
+    The checks are read from lib.tleed.f (IF (a.ne.b) THEN ... STOP) and
+    lib/leed_input.f90 (if (a /= b) then ... call stop_with_error), their
+    variables traced to PARAM through ref-calc.f's copies (NSITE = MNSITE;
+    for the reader, through the actual arguments of its call) and the
+    PARAMETER definitions (MLMAX1 = MLMAX+1). Explicit sizes in the same
+    checks (MNL1*MNL2 against MKNBS) do not count, and no bound size is
+    among them. Failing means SIZES classifies a size differently from the
+    source."""
     explicit = {name for name, kind in KIND.items() if kind == EXPLICIT}
     assert _equality_checks(tl_root) - explicit == {
         name for name, kind in KIND.items() if kind == STRICT}

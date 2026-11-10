@@ -26,8 +26,14 @@ SYSTEMS = tier2.load_systems(Path(__file__).parent / "systems")
 
 
 @pytest.fixture(scope="session")
-def checked_viperleed_cmd(viperleed_cmd):
-    """viperleed_cmd, after checking it runs the pinned viperleed version."""
+def checked_viperleed_cmd(viperleed_cmd, tl_root):
+    """viperleed_cmd, after checking it runs the pinned viperleed version.
+
+    Skips, before viperleed is started, if the tree's ref-calc cannot be
+    built by viperleed."""
+    unavailable = tier2.refcalc_unavailable(tl_root)
+    if unavailable:
+        pytest.skip(unavailable)
     try:
         tier2.check_viperleed_version(viperleed_cmd,
                                       load_tolerances()["tier2"]["viperleed_version"])

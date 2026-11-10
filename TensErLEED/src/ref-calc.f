@@ -37,6 +37,11 @@ C    before you use it.
 C
       program leed
 
+C  modules of the ported input reader
+
+      USE leed_types, ONLY: geometry
+      USE leed_input, ONLY: read_geometry
+
 C  include parameter statements for dimensions etc
 
       INCLUDE "PARAM"
@@ -151,7 +156,7 @@ C  IFORM : Formatted (1) or unformatted (0) Tensor LEED output
 
       INTEGER IFORM
 
-C  variables for subroutine READGEO
+C  variables for the reader of the geometry (read_geometry)
 
 C  CONC  : concentration of element IEL on site type ISITE
 C  VIB   : vibrational amplitude of element IEL on site type ISITE
@@ -183,6 +188,8 @@ C  TENS  : tensor output for layer ISTACK desired?
       REAL SUBPOS
       DIMENSION SUBPOS(MNLTYPE,MNSUB,3) ! size on the order of 300
       INTEGER TSLAB,TOPLAYB,BOTLAYB
+      TYPE(geometry) GEOM
+      INTEGER IGL,IGS,IGP
       REAL ASA
       DIMENSION ASA(3)
       REAL ASBULK
@@ -625,14 +632,50 @@ C  calculational features, beam list and phase shifts
      +NL,V,VL,JJS,KNBS,KNB,KNT,SPQF,KSYM,SPQ,TST,TSTS,NPUN,NPU,
      +THETA,FI,NPSI,ES,PHSS,L1,NEL,LMAX1,IFORM,VPI,EI,EF,DE)
 
-C  subroutine READGEO reads structural information for the reference
+C  subroutine read_geometry reads structural information for the reference
 C  calculation (i.e. the vertical atomic arrangement within the
 C  2D lateral unit mesh)
 
-      CALL READGEO(NEL,NSITE,NLTYPE,NNSUB,NSTACK,NBRAV,
-     +             CONC,VIB,NSUB,LBRAV,LCOMP,LATT,STYPE,SUBPOS,
-     +             TSLAB,ASA,TOPLAYB,BOTLAYB,ASBULK,LTYPE,LDIST,TENS,
-     +             LAYFILE,ASB,NL)
+      CALL read_geometry(5,6,NEL,NSITE,NLTYPE,NNSUB,NSTACK,NBRAV,NL,
+     +                   GEOM)
+
+C  copy the result into the arrays used by the remaining routines
+
+      CONC(1:NSITE,1:NEL) = GEOM%sites%concentration
+      VIB(1:NSITE,1:NEL) = GEOM%sites%vibration_amplitude
+      DO IGL = 1,NLTYPE
+        LATT(IGL) = GEOM%layer_types(IGL)%lattice
+        NSUB(IGL) = GEOM%layer_types(IGL)%n_subplanes
+        LBRAV(IGL) = GEOM%layer_types(IGL)%bravais_index
+        LCOMP(IGL) = GEOM%layer_types(IGL)%composite_index
+        DO IGS = 1,NSUB(IGL)
+          STYPE(IGL,IGS) = GEOM%layer_types(IGL)%site_type(IGS)
+          DO IGP = 1,3
+            SUBPOS(IGL,IGS,IGP) =
+     +        GEOM%layer_types(IGL)%subplane_position(IGP,IGS)
+          ENDDO
+        ENDDO
+      ENDDO
+
+      TSLAB = GEOM%bulk_slab
+      IF (TSLAB.EQ.0) THEN
+        ASA = GEOM%bulk_unit_vector
+        TOPLAYB = GEOM%bulk_top_layer
+        BOTLAYB = GEOM%bulk_bottom_layer
+        ASBULK = GEOM%bulk_internal_vector
+      END IF
+      ASB(1) = GEOM%min_distance_vector(1)
+
+      DO IGL = 1,NSTACK
+        LTYPE(IGL) = GEOM%stack(IGL)%layer_type
+        LDIST(IGL,1:3) = GEOM%stack(IGL)%distance
+        TENS(IGL) = GEOM%stack(IGL)%tensor_output
+        IF (TENS(IGL).EQ.1) THEN
+          DO IGS = 1,NSUB(LTYPE(IGL))
+            LAYFILE(IGL,IGS) = GEOM%stack(IGL)%tensor_file(IGS)
+          ENDDO
+        END IF
+      ENDDO
 
 C*************************************************************
 C open output files, write title and general information
