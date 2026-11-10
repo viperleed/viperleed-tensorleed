@@ -111,19 +111,32 @@ class _Records:
             self.next()
 
 
+def _read_record(rec, names, width, explicit):
+    """Read a record of Iwidth integers into explicit under names (a converted FIN's)."""
+    line = rec.next()
+    for i, name in enumerate(names):
+        explicit[name] = _int(line[i*width:], width)
+
+
 def derive_sizes(fin_text, explicit):
     """{name: value} for every Size, from a FIN and the explicit values.
 
     The FIN is read in the order and with the record layout of READIN and
     READGEO; explicit ({name: value} of the EXPLICIT sizes) supplies the
     record counts the FIN does not give (beam sets, output beams, phase-shift
-    energies). Bounds are at their minimum. ValueError if the FIN does not
-    have the layout expected, or for LMAX < 2, where no size is correct
-    (ref-calc writes past CAA at LMAX = 1).
+    energies). With explicit=None the FIN is a converted one (TL >= 3.0.0
+    layout, see fin_convert.py) and holds these values itself. Bounds are at
+    their minimum. ValueError if the FIN does not have the layout expected,
+    or for LMAX < 2, where no size is correct (ref-calc writes past CAA at
+    LMAX = 1).
     """
-    sizes = dict(explicit)
+    from_fin = explicit is None
+    explicit = {} if from_fin else dict(explicit)
     rec = _Records(fin_text)
     rec.skip(7)  # title, EI/EF/DE, ARA1, ARA2, ARB1, ARB2, VPI/ASE/WORKFN
+    if from_fin:
+        _read_record(rec, ("MIDEG", "MNL1", "MNL2"), 5, explicit)
+    sizes = dict(explicit)
     sizes["MKNBS"] = explicit["MNL1"] * explicit["MNL2"]
     knt = 0
     for _ in range(sizes["MKNBS"]):
@@ -134,6 +147,9 @@ def derive_sizes(fin_text, explicit):
     tst = rec.next()
     if "." not in tst[:11]:
         raise ValueError(f"FIN: expected TST after {sizes['MKNBS']} beam sets, got {tst!r}")
+    if from_fin:
+        _read_record(rec, ("MNPUN",), 5, explicit)
+        sizes["MNPUN"] = explicit["MNPUN"]
     rec.skip(math.ceil(explicit["MNPUN"] / 15))  # NPU, format 15I5
     rec.skip(3)  # THETA/FI, EPS, LITER
     lmax = _int(rec.next(), 3)
@@ -146,6 +162,9 @@ def derive_sizes(fin_text, explicit):
     sizes["MNLM"] = MNLM_BY_LMAX[lmax - 1]
     psfmt = _int(rec.next(), 3)
     rec.skip(1)  # IFORM
+    if from_fin:
+        _read_record(rec, ("MNPSI",), 5, explicit)
+        sizes["MNPSI"] = explicit["MNPSI"]
     nel = _int(rec.next(), 3)
     sizes["MNEL"] = nel
     npsi = explicit["MNPSI"]
