@@ -119,7 +119,7 @@ def _require_reader(tl_root):
 
 @pytest.mark.tier1
 def test_strict_sizes_are_the_ones_ref_calc_checks(tl_root):
-    """The strict sizes are exactly those read_input and read_geometry compare (/=) and stops on.
+    """The strict sizes are exactly those read_input and read_geometry compare (/=) and stop on.
 
     The checks are read from lib/leed_input.f90 (if (a /= b) then ... call
     stop_with_error), their variables traced to PARAM through the actual

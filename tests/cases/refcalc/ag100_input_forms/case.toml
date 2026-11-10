@@ -39,5 +39,5 @@ stdin = "inputs/FIN_E045_L06_tslab1_asbulk_small"
 param = "inputs/PARAM_E045_L06_tslab1_asbulk_small"
 outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
 # TSLAB = 1 leaves ASB(1) unset; ref-calc.f divides by AMIN1(ASB(1),
-# ASA(1)) (legacy ref-calc.f:768, SIGFPE in the debug build).
+# ASA(1)) (legacy ref-calc.f:668, SIGFPE in the debug build).
 debug = false

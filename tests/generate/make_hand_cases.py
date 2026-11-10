@@ -55,7 +55,7 @@ stays the same and only the input form differs:
   surface one; E045_L06_tslab1_asbulk_small is that input with TSLAB = 1
   (bulk stack given by the user instead of layer doubling). With TSLAB = 1
   ASB is not set for the first component, and ref-calc divides by
-  AMIN1(ASB(1), ASA(1)) (ref-calc.f:768, SIGFPE in the debug build with
+  AMIN1(ASB(1), ASA(1)) (legacy ref-calc.f:668, SIGFPE in the debug build with
   legacy and ported code alike); the run opts out of the debug build
   (README, 'Rules').
 - ag100_rfactor_hand: the pendry run of ag100_rfactor, edited in WEXPEL.
@@ -676,7 +676,7 @@ def ag100_input_forms():
     add("E045_L06_tslab1_asbulk_small", set_fin_line(asbulk(fin_e045), "TSLAB", "  1"),
         param_e045,
         no_debug=["TSLAB = 1 leaves ASB(1) unset; ref-calc.f divides by AMIN1(ASB(1),",
-                  "ASA(1)) (legacy ref-calc.f:768, SIGFPE in the debug build)."])
+                  "ASA(1)) (legacy ref-calc.f:668, SIGFPE in the debug build)."])
     return {"program": "refcalc", "name": case,
             "description": "Ag(100) as ag100 with input forms viperleed does not write: "
                            "LMAX = 10, 15, 16 and 30 output beams (NPUN), ASBULK different "
