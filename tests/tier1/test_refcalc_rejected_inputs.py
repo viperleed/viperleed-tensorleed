@@ -26,6 +26,8 @@ from harness.runner import run_program
 
 CASE, RUN = next((c, r) for c, r in iter_runs(("refcalc",), only=("ir100_2x1_o",))
                  if r.name == "E050_L06")
+CASE_MIX, RUN_MIX = next((c, r) for c, r in iter_runs(("refcalc",), only=("ag100_mix",))
+                         if r.name == "E045_L06")
 CASE_PS2, RUN_PS2 = next((c, r) for c, r in iter_runs(("refcalc",), only=("ag100_psformat2",))
                          if r.name == "E045_L06")
 
@@ -82,8 +84,10 @@ REJECTED = [
     pytest.param(lambda: _fin("number of Bravais sublayers in layer 2", 0), None,
                  "Number of subplanes in layer type 2 less than 1",
                  id="nsub-zero"),
-    pytest.param(lambda: _fin("Atom N=2 (Ir)", 4), None,
-                 "Site type 4 in sublayer 2 of layer 1: No such site defined",
+    # NSITE = 2 differs from NEL = 4 here, so the bound cannot be mistaken
+    pytest.param(lambda: _fin("Atom N=2 (Ag)", 3, run=RUN_MIX),
+                 lambda: RUN_MIX.param.read_text(),
+                 "Site type 3 in sublayer 1 of layer 2: No such site defined",
                  id="site-type-above-nsite"),
     pytest.param(lambda: _fin("Atom N=2 (Ir)", 0), None,
                  "Site type 0 in sublayer 2 of layer 1: No such site defined",
