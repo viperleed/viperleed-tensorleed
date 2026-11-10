@@ -12,8 +12,9 @@ case.toml:
     outputs = ["fd.out", "T_*"]        # globs, resolved in expected/<name>/
     debug = false             # optional; skips the run in the debug build (README, 'Rules')
     poison_heap = true        # optional; tier 1 runs it again with a poisoned heap (README, 'Rules')
-All paths are relative to the case directory. The output name "stdout" stands
-for the program's standard output, which run_built stores under that name.
+All paths are relative to the case directory. The output names "stdout" and
+"stdout.exact" stand for the program's standard output, which run_built stores
+under that name (the two differ only in their tolerance).
 """
 
 __authors__ = (
@@ -43,7 +44,7 @@ KINDS = ("refcalc", "rfactor")  # case kinds run in tier 1
 TESTS_DIR = Path(__file__).parents[1]
 CASES_DIR = TESTS_DIR / "cases"
 TOLERANCES_FILE = TESTS_DIR / "tolerances.toml"
-STDOUT_OUTPUT = "stdout"  # output name of the captured standard output
+STDOUT_OUTPUTS = ("stdout", "stdout.exact")  # output names of the captured standard output
 
 
 @dataclass
@@ -280,8 +281,9 @@ def run_built(case, run, exe, workdir, tl_root, env=None):
         shutil.copy(src, workdir / name)
     stdin = run_stdin(case, run, tl_root, workdir)
     res = run_program(exe, workdir, stdin, timeout=RUN_TIMEOUT_S, env=env)
-    if STDOUT_OUTPUT in run.outputs:
-        shutil.copy(workdir / ".stdout", workdir / STDOUT_OUTPUT)
+    for name in STDOUT_OUTPUTS:
+        if name in run.outputs:
+            shutil.copy(workdir / ".stdout", workdir / name)
     info = {k: v for k, v in asdict(res).items() if k not in ("stdout", "stderr")}
     info.update(case=case.name, run=run.name, exe=str(exe))
     (workdir / ".runinfo.json").write_text(json.dumps(info, indent=1))

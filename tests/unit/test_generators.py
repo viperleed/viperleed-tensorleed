@@ -201,15 +201,16 @@ SAME_AS_SOURCE = [
 
 
 def _differ_beyond_title(case_dir, source_dir, runs, files):
-    """Expected files of `runs` that differ between two cases apart from line 1."""
+    """Expected files of `runs` (but stdout.exact) that differ between two cases apart from line 1."""
     def body(path):
         """Text of a file after its title line, None if the file is missing."""
         return path.read_text().split("\n", 1)[1] if path.is_file() else None
     differ = []
     for run in runs:
         ours, theirs = case_dir / "expected" / run, source_dir / "expected" / run
-        names = files or sorted({p.name for p in ours.iterdir()}
-                                | {p.name for p in theirs.iterdir()})
+        # the standard output echoes the input, which differs between the cases
+        names = files or sorted(({p.name for p in ours.iterdir()}
+                                 | {p.name for p in theirs.iterdir()}) - {"stdout.exact"})
         differ += [f"{run}/{name}" for name in names
                    if body(ours / name) is None or body(ours / name) != body(theirs / name)]
     return differ

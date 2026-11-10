@@ -146,7 +146,7 @@ debug = false                            # optional; not run in the debug build 
 poison_heap = true                       # optional; tier 1 runs it again with a poisoned heap (Rules)
 ```
 
-The output name `stdout` stands for the program's standard output, which the harness stores under that name in the run directory (`harness/cases.py`, `run_built`); every rfactor run lists it.
+The output name `stdout` stands for the program's standard output, which the harness stores under that name in the run directory (`harness/cases.py`, `run_built`); every rfactor run lists it. The ref-calc runs list `stdout.exact` instead, the same standard output under a name whose tolerance is none: it is compared exactly (title, echoed input, energies, phase-shift lines). Both names are stored by `run_built`.
 
 Every directory in `expected/` must be named after a run, and every file in it must match one of that run's output globs (`tests/unit/test_cases.py`); a stray directory or file would never be compared.
 

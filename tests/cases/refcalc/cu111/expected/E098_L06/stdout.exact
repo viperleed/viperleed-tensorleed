@@ -1,0 +1,55 @@
+ tl-test cu111                                                                   
+ SURF VECS        2.5560   0.0000
+                 -1.2780   2.2136
+ PARAMETERS FOR SURFACE 
+ SURF VECS        2.5560   0.0000
+                 -1.2780   2.2136
+ VPI = 4.5000    ASE =  1.0000    WORKFN =  2.6500
+ TST =  0.00100000
+ PUNCHED BEAMS       2    5    7    8   14
+ THETA  FI =    0.00   0.00
+ EPS =  0.0010  LITER =  10
+ LMAX =   6
+ PHASE SHIFTS
+ PHASESHIFT FORMAT IS  1
+ IFORM =            1
+ PARAMETERS FOR INNER POTENTIAL
+    C1      C2      C3      C4   
+   -0.37  -73.52   12.51  -11.91
+ 1st ENERGY FOR ELEMENT/SITE:  1
+ E =  0.5512    -0.3440  0.0458 -0.2224  0.0060  0.0003  0.0000  0.0000
+ 1st ENERGY FOR ELEMENT/SITE:  2
+ E =  0.5512    -0.3707  0.0297 -0.2471  0.0058  0.0003  0.0000  0.0000
+
+
+ Tensor output for layer no.            5  required. Filename(s): 
+ Layer            5 , subplane            1 : T_5                                     
+ Tensor output for layer no.            4  required. Filename(s): 
+ Layer            4 , subplane            1 : T_4                                     
+ Tensor output for layer no.            3  required. Filename(s): 
+ Layer            3 , subplane            1 : T_3                                     
+ Tensor output for layer no.            2  required. Filename(s): 
+ Layer            2 , subplane            1 : T_2                                     
+ Tensor output for layer no.            1  required. Filename(s): 
+ Layer            1 , subplane            1 : T_1                                     
+
+ work function =  2.65 eV
+ energy offset inside =  9.93 eV
+ Energy in crystal:    3.96640038      Hartrees.
+ That's    98.0000000      eV in the vacuum.
+ Computation for incident beam started.
+ Compute layer diffraction matrices, NEXIT =           0
+ X =     0.1068E+02
+ X =     0.1066E+02
+ X =     0.1066E+02
+   3  ITER IN SUBREF
+ Beam NEXIT =            1  can propagate in vacuum - computation required.
+ Scattering matrices known from previous beams - only compute incoming amplitudes.
+ Beam NEXIT =            2  can propagate in vacuum - computation required.
+ Scattering matrices known from previous beams - only compute incoming amplitudes.
+ Beam NEXIT =            3  can propagate in vacuum - computation required.
+ Scattering matrices known from previous beams - only compute incoming amplitudes.
+ Beam NEXIT =            4  can propagate in vacuum - computation required.
+ Scattering matrices known from previous beams - only compute incoming amplitudes.
+ Beam NEXIT =            5  can't propagate at current energy - skip computation.
+ Program ends with energy    98.0000000      eV.

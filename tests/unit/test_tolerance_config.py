@@ -61,13 +61,14 @@ def test_skip_allowlist_detects_unlisted_entries():
 
 
 def test_titles_in_outputs_are_the_fixed_case_title():
-    """The only title line in expected outputs is the fixed title of the case."""
+    """The only title line in expected outputs is the fixed title of the case (in the echoed phase-shift file header of ref-calc stdout, too)."""
     for path in _expected_files():
         case = path.parents[2].name
         for line in path.read_text(errors="replace").splitlines():
             if "tl-test" in line:
                 assert line.strip() in (f"tl-test {case}", f"*tl-test {case}",
-                                        f"* tl-test {case}"), (path, line)
+                                        f"* tl-test {case}",
+                                        f"phase shifts of tl-test {case}, Rundgren_v1.7 layout"), (path, line)
 
 
 def _dropped_text(text, ignore_line_patterns, skip_lines):
