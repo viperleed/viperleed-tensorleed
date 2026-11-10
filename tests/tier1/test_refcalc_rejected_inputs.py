@@ -1,5 +1,7 @@
 """Tier 1: ref-calc rejects the inputs that its readers check.
 
+The inputs are the converted FINs (TL >= 3.0.0 layout) of the cases; the
+tests skip for a tree whose ref-calc does not read that layout.
 Each test corrupts one value of the input of ir100_2x1_o/E050_L06 (or of
 ag100_psformat2/E045_L06 for the checks of phase-shift format 2), or one size
 in its PARAM, so that exactly one check of the reader fires,
@@ -18,6 +20,8 @@ import pytest
 
 from harness.build import build_program
 from harness.cases import RUN_TIMEOUT_S, iter_runs
+from harness.fin_convert import convert_fin, reads_converted_fin
+from harness.param_size import read_param
 from harness.runner import run_program
 
 CASE, RUN = next((c, r) for c, r in iter_runs(("refcalc",), only=("ir100_2x1_o",))
@@ -26,16 +30,36 @@ CASE_PS2, RUN_PS2 = next((c, r) for c, r in iter_runs(("refcalc",), only=("ag100
                          if r.name == "E045_L06")
 
 
+@pytest.fixture(autouse=True)
+def _tree_reads_converted_fin(tl_root):
+    if not reads_converted_fin(tl_root):
+        pytest.skip("the ref-calc of this tree does not read the TL >= 3.0.0 FIN")
+
+
+def _converted(run=RUN):
+    """The converted FIN text of a run."""
+    return convert_fin(run.stdin.read_text(), read_param(run.param))
+
+
 def _fin(marker, value, occurrence=0, offset=0, run=RUN):
-    """FIN text with the integer (first three columns) of a line set to value.
+    """Converted FIN text with the integer (first three columns) of a line set to value.
 
     The line is offset lines after the occurrence-th (from 0) one that
     contains marker."""
-    lines = run.stdin.read_text().splitlines(keepends=True)
+    lines = _converted(run).splitlines(keepends=True)
     hits = [i for i, line in enumerate(lines) if marker in line]
     assert len(hits) > occurrence, f"{marker!r} not found {occurrence + 1} times in FIN"
     i = hits[occurrence] + offset
     lines[i] = f"{value:3d}" + lines[i][3:]
+    return "".join(lines)
+
+
+def _record(marker, value, column=0):
+    """Converted FIN text with one integer (5 columns) of the record commented marker set to value."""
+    lines = _converted().splitlines(keepends=True)
+    (i,) = [i for i, line in enumerate(lines) if marker in line]
+    start = 5 * column
+    lines[i] = lines[i][:start] + f"{value:5d}" + lines[i][start + 5:]
     return "".join(lines)
 
 
@@ -64,7 +88,7 @@ REJECTED = [
     pytest.param(lambda: _fin("Atom N=2 (Ir)", 0), None,
                  "Site type 0 in sublayer 2 of layer 1: No such site defined",
                  id="site-type-zero"),
-    pytest.param(lambda: RUN.stdin.read_text(),
+    pytest.param(_converted,
                  lambda: _param("MNBRAV  = 1", "MNBRAV  = 2"),
                  "Number of Bravais layers in actual input does not match "
                  "dimension MNBRAV", id="nbrav"),
@@ -89,19 +113,29 @@ REJECTED = [
                  id="tensor-substrate-layer-with-superlattice"),
     pytest.param(lambda: _fin("TENSOR_OUTPUT", 2), None,
                  "Tensor LEED flag for layer 6 not 0 or 1", id="tensor-flag"),
-    pytest.param(lambda: RUN.stdin.read_text(),
+    pytest.param(_converted,
                  lambda: _param("MKNBS = 2", "MKNBS = 3"),
                  "Number of beam sets, MKNBS, differs from number of "
                  "sublattices", id="nl-neq-knbs"),
-    pytest.param(lambda: RUN.stdin.read_text(),
+    pytest.param(_converted,
                  lambda: _param("MKNT =  85", "MKNT =  86"),
                  "Number of beams in full dynamic beam list, 85 is "
                  "inconsistent with dimension MKNT = 86", id="knt"),
+    pytest.param(lambda: _record("IDEG NL1 NL2", 3, 0), None,
+                 "IDEG = 3 in the input differs from MIDEG = 2 in PARAM", id="ideg"),
+    pytest.param(lambda: _record("IDEG NL1 NL2", 4, 1), None,
+                 "NL1 = 4 in the input differs from MNL1 = 2 in PARAM", id="nl1"),
+    pytest.param(lambda: _record("IDEG NL1 NL2", 2, 2), None,
+                 "NL2 = 2 in the input differs from MNL2 = 1 in PARAM", id="nl2"),
+    pytest.param(lambda: _record("NPUN (TL", 11), None,
+                 "NPUN = 11 in the input differs from MNPUN = 12 in PARAM", id="npun"),
+    pytest.param(lambda: _record("NPSI (TL", 43), None,
+                 "NPSI = 43 in the input differs from MNPSI = 44 in PARAM", id="npsi"),
     pytest.param(lambda: _fin("LMAX", 5), None,
                  "Please enforce LMAX in input = MLMAX in PARAM", id="lmax"),
     pytest.param(lambda: _fin("PSFORMAT", 3), None,
                  "Phaseshift format incorrectly assigned", id="psformat"),
-    pytest.param(lambda: _fin("IFORM", 4, offset=1), None,
+    pytest.param(lambda: _fin("IFORM", 4, offset=2), None,
                  "NEL from phaseshift file not consistent with MNEL",
                  id="nel-psformat1"),
     ]
@@ -152,9 +186,9 @@ def test_refcalc_does_not_check_bravais_subplane_position(tl_root, build_flags, 
     it is at least 2, so it never fires; the port keeps the dead check (the
     behaviour is preserved, not fixed). Failing means the check became
     effective."""
-    fin = RUN.stdin.read_text().replace("3   0.0000   0.0000   0.0000  Atom N=14",
-                                        "3   0.0000   0.0000   0.1000  Atom N=14")
-    assert fin != RUN.stdin.read_text()
+    fin = _converted().replace("3   0.0000   0.0000   0.0000  Atom N=14",
+                               "3   0.0000   0.0000   0.1000  Atom N=14")
+    assert fin != _converted()
     (tmp_path / "FIN").write_text(fin)
     exe = build_program(tl_root, CASE.program, RUN.param, build_flags)
     res = run_program(exe, tmp_path, tmp_path / "FIN", timeout=RUN_TIMEOUT_S)

@@ -126,6 +126,18 @@ def test_strict_sizes_are_the_ones_ref_calc_checks(tl_root):
         name for name, kind in KIND.items() if kind == STRICT}
 
 
+@pytest.mark.tier1
+def test_explicit_sizes_are_the_ones_ref_calc_checks_against_its_records(tl_root):
+    """Every explicit size is compared with its record of the input by read_input.
+
+    The explicit sizes (IDEG, NL1, NL2, NPUN, NPSI) cannot be derived from a
+    legacy FIN, but the TL >= 3.0.0 FIN holds them and the reader stops
+    unless they equal the PARAM values. Failing means a record is read
+    without a check, so PARAM and FIN could disagree silently."""
+    explicit = {name for name, kind in KIND.items() if kind == EXPLICIT}
+    assert explicit <= _equality_checks(tl_root)
+
+
 def _output_files(workdir, patterns):
     return {p.name: p for pattern in patterns
             for p in Path(workdir).glob(pattern) if p.is_file()}
@@ -147,7 +159,7 @@ def _build_run_compare(case, run, param, tl_root, build_flags, reference_dir, tm
     Returns the executable."""
     exe = build_program(tl_root, case.program, param, build_flags)
     workdir = tmp_path / "run"
-    run_built(case, run, exe, workdir)
+    run_built(case, run, exe, workdir, tl_root)
     _assert_same_outputs(workdir, reference_dir, run.outputs)
     return exe
 

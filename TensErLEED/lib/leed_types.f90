@@ -100,6 +100,11 @@ module leed_types
     real(sp) :: substrate_area = 0.0_sp
     !> Area of the superlattice unit mesh; TVB.
     real(sp) :: superlattice_area = 0.0_sp
+    !> Degree of the symmetry used in the layer-matrix routines; IDEG.
+    integer :: symmetry_degree = 0
+    !> Repetitions of the substrate mesh along each superlattice vector;
+    !! NL1, NL2.
+    integer :: repetitions(2) = 0
   end type lattice
 
   !> Convergence and angular-momentum controls (legacy common block /MS/).

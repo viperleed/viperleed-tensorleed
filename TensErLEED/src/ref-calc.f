@@ -634,9 +634,9 @@ C*************************************************************
 C  subroutine read_input reads lateral lattice information, general
 C  calculational features, beam list and phase shifts
 
-      CALL read_input(5,6,NL,KNBS,KNT,NPUN,NPSI,NEL,LMAX1,TITLE,LAT,
-     +                CTRL,POT,VPI,EI,EF,DE,BMSET,TST,THETA,FI,IFORM,
-     +                PHASE)
+      CALL read_input(5,6,NL,KNBS,KNT,NPUN,NPSI,NEL,LMAX1,IDEG,NL1,NL2,
+     +                TITLE,LAT,CTRL,POT,VPI,EI,EF,DE,BMSET,TST,THETA,
+     +                FI,IFORM,PHASE)
 
 C  copy the result into the variables used by the remaining routines
 
@@ -650,6 +650,11 @@ C  copy the result into the variables used by the remaining routines
       RBR2 = LAT%superlattice_reciprocal(:,2)
       TVA = LAT%substrate_area
       TVB = LAT%superlattice_area
+      IDEG = LAT%symmetry_degree
+      NL1 = LAT%repetitions(1)
+      NL2 = LAT%repetitions(2)
+      NPUN = SIZE(BMSET%output)
+      NPSI = SIZE(PHASE%energy)
 
       LMAX = CTRL%lmax
       EPS = CTRL%eps

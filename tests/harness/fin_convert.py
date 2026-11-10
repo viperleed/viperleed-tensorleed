@@ -12,7 +12,9 @@ viperleed's edit_fin_energy_lmax (viperleed 0.14.x,
 calc/sections/refcalc.py:436-455), which edits line 2 and splits at the
 first '   LMAX', still works.
 convert_fin adds the records to a legacy FIN, strip_fin removes them,
-converted_values reads them.
+converted_values reads them. reads_converted_fin tells from a TL tree
+whether its ref-calc reads the converted layout, and converted_input_file
+writes the FIN a run of such a tree is fed.
 """
 
 __authors__ = (
@@ -23,8 +25,9 @@ __created__ = '2026-11-10'
 __license__ = 'GPLv3+'
 
 import math
+from pathlib import Path
 
-from .param_size import _int, _Records
+from .param_size import _int, _Records, read_param
 
 _COMMENT_COLUMN = 45  # as the LMAX, PSFORMAT and IFORM lines
 _RECORDS = (  # (name of the PARAM values, comment)
@@ -98,3 +101,20 @@ def converted_values(fin_text):
         for i, name in enumerate(names):
             values[name] = _int(lines[index][5*i:], 5)
     return values
+
+
+def reads_converted_fin(tl_root):
+    """True if the ref-calc of the tree reads the TL >= 3.0.0 FIN.
+
+    The ported reader (lib/leed_input.f90) reads only that layout; the
+    legacy ref-calc, which takes the values from PARAM, reads only the
+    original.
+    """
+    return (Path(tl_root) / "TensErLEED" / "lib" / "leed_input.f90").is_file()
+
+
+def converted_input_file(run, workdir):
+    """Write the converted FIN of a run (values from its PARAM) to workdir/.stdin; return the path."""
+    path = Path(workdir) / ".stdin"
+    path.write_text(convert_fin(Path(run.stdin).read_text(), read_param(run.param)))
+    return path

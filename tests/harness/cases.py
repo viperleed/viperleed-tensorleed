@@ -34,6 +34,7 @@ from pathlib import Path
 
 from .build import build_program
 from .compare import Tolerance, compare_files
+from .fin_convert import converted_input_file, reads_converted_fin
 from .runner import ProgramFailed, run_program
 
 RUN_TIMEOUT_S = 900
@@ -249,29 +250,43 @@ def file_set_failure(actual_dir, outputs, expected_names):
 def execute_run(case, run, tl_root, flags, workdir, env=None):
     """Build case.program from tl_root, run it in workdir, return RunResult.
 
-    env: extra environment variables for the program. Copies run.files into workdir (under their keys), feeds run.stdin,
+    env: extra environment variables for the program. Copies run.files into workdir (under their keys), feeds run_stdin(),
     stores the standard output as workdir/stdout if run.outputs lists it,
     writes the RunResult (without stdout/stderr) to workdir/.runinfo.json,
     and raises ProgramFailed if the program did not terminate cleanly.
     """
     exe = build_program(tl_root, case.program, run.param, flags)
-    return run_built(case, run, exe, workdir, env)
+    return run_built(case, run, exe, workdir, tl_root, env)
 
 
-def run_built(case, run, exe, workdir, env=None):
-    """Run an already built executable; see execute_run."""
+def run_stdin(case, run, tl_root, workdir):
+    """The file to feed a run of the tree tl_root on stdin.
+
+    run.stdin, except for a ref-calc that reads the TL >= 3.0.0 FIN: then a
+    converted copy of it, written into workdir with the values of the run's
+    PARAM (for any PARAM the run is built with: IDEG, NL1, NL2, NPUN and
+    NPSI are the same in the case's and the variants of it).
+    """
+    if case.program == "refcalc" and reads_converted_fin(tl_root):
+        return converted_input_file(run, workdir)
+    return run.stdin
+
+
+def run_built(case, run, exe, workdir, tl_root, env=None):
+    """Run an executable built from the tree tl_root; see execute_run."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     for name, src in run.files.items():
         shutil.copy(src, workdir / name)
-    res = run_program(exe, workdir, run.stdin, timeout=RUN_TIMEOUT_S, env=env)
+    stdin = run_stdin(case, run, tl_root, workdir)
+    res = run_program(exe, workdir, stdin, timeout=RUN_TIMEOUT_S, env=env)
     if STDOUT_OUTPUT in run.outputs:
         shutil.copy(workdir / ".stdout", workdir / STDOUT_OUTPUT)
     info = {k: v for k, v in asdict(res).items() if k not in ("stdout", "stderr")}
     info.update(case=case.name, run=run.name, exe=str(exe))
     (workdir / ".runinfo.json").write_text(json.dumps(info, indent=1))
     res.check()
-    check_complete(case.program, run.stdin, workdir)
+    check_complete(case.program, stdin, workdir)
     return res
 
 

@@ -88,13 +88,13 @@ def test_rfactor_rejects_unsupported_input(wexpel, name, rfactor_exe, tmp_path):
 
 
 @pytest.mark.tier1
-def test_rfactor_missing_v0rr_counts_as_zero(rfactor_exe, tmp_path):
+def test_rfactor_missing_v0rr_counts_as_zero(rfactor_exe, tl_root, tmp_path):
     """A WEXPEL without V0RR gives the same results as one with V0RR = 0.
 
     Failing means a missing V0RR is no longer treated as 0."""
     src = tmp_path / "WEXPEL_no_v0rr"
     src.write_text(_replace("V0RR=      0.0,", ""))
     run = dataclasses.replace(RUN, files={"WEXPEL": src})
-    run_built(CASE, run, rfactor_exe, tmp_path / "wd")
+    run_built(CASE, run, rfactor_exe, tmp_path / "wd", tl_root)
     failures = format_failures(compare_outputs(tmp_path / "wd", expected_outputs(CASE, RUN)))
     assert not failures, "\n".join(failures)

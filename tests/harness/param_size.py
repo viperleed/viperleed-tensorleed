@@ -5,9 +5,10 @@ the executable. Each size is one of three kinds (SIZES, the column 'kind'):
   strict:   READIN/READGEO (lib/lib.tleed.f) stop unless the value equals
             the count in the input;
   bound:    the value only needs to be at least the count in the input;
-  explicit: the value reaches ref-calc only through PARAM and cannot be
-            derived from the input (IDEG, NL1/NL2, NPUN, NPSI); it is taken
-            from the run's PARAM.
+  explicit: the value cannot be derived from a legacy FIN (IDEG, NL1/NL2,
+            NPUN, NPSI); it is taken from the run's PARAM. The TL >= 3.0.0
+            FIN holds them in records of their own, and the ref-calc
+            reader stops unless they equal the PARAM values.
 derive_sizes reads the stdin input of ref-calc ("FIN", which also holds the
 phase shifts) with the explicit values and returns every size, bounds at
 their minimum. param_text writes a PARAM file as viperleed's writePARAM
@@ -38,7 +39,8 @@ class Size(NamedTuple):
 
 
 SIZES = (
-    Size("MIDEG", EXPLICIT, "PARAM: degree of the symmetry used in SLIND/FMAT; not in FIN"),
+    Size("MIDEG", EXPLICIT, "PARAM: degree of the symmetry used in SLIND/FMAT; "
+                            "not in a legacy FIN"),
     Size("MNL1", EXPLICIT, "PARAM: superlattice repetitions along a1; not in FIN"),
     Size("MNL2", EXPLICIT, "PARAM: superlattice repetitions along a2; not in FIN"),
     Size("MKNBS", STRICT, "FIN beam list: number of beam sets; READIN stops unless "
