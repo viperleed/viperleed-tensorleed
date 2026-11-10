@@ -4,6 +4,13 @@
 !! Every routine takes the unit to read from, which the caller has opened.
 !! Invalid input stops with a message on stderr and a non-zero exit code.
 
+! read_input is a port of SUBROUTINE READIN of lib.tleed.f, which reads in
+! most of the input for the LEED programs (lateral lattices, calculational
+! features, beam list and phase shifts).
+!   TST is read in F11.8 format (07/05/92). Phase shifts are output for the
+!   first energy only. The number of elements and lmax + 1 are required for
+!   the dimension of the phase shifts (07/05/92).
+
 ! Ported from SUBROUTINE READGEO of lib.tleed.f, which reads structural
 ! (and some calculational) information for the reference surface in
 ! question.
@@ -12,20 +19,253 @@
 !> Reader of the input of ref-calc.
 module leed_input
   use kinds, only: sp
-  use leed_output, only: stop_with_error, write_no_bulk_calculation, &
-                         write_tensor_file, write_tensor_not_required, &
-                         write_tensor_required
-  use leed_types, only: geometry
+  use leed_output
+  use leed_types, only: beam_list, control, geometry, inner_potential, &
+                        lattice, phase_shifts
   implicit none
 
   private
 
-  public :: read_geometry
+  public :: read_input, read_geometry
 
   !> Bohr radius in Angstrom (BOHR of the legacy file GLOBAL).
   real(sp), parameter :: bohr = 0.529177_sp
+  !> Hartree in eV (HARTREE of the legacy file GLOBAL).
+  real(sp), parameter :: hartree = 27.211396_sp
+  real(sp), parameter :: pi = 3.14159265359_sp
 
 contains
+
+  !> Read the lattices, calculational features, beam list and phase shifts.
+  !!
+  !! The sizes the program was built with are compared with the counts of
+  !! the input; a mismatch stops the program. Lengths are converted from
+  !! Angstrom to atomic units, angles from degrees to radian, the imaginary
+  !! part of the inner potential from eV to Hartree (and made negative).
+  !! The phase shifts are echoed for the first energy only.
+  subroutine read_input(unit, out_unit, n_sublattices, n_beam_sets, &
+                        n_beams, n_output, n_energies, n_elements, lmax1, &
+                        title, lat, ctrl, pot, vpi, ei, ef, de, beams, &
+                        tst, theta, fi, iform, phase)
+    !> Unit to read from
+    integer, intent(in) :: unit
+    !> Unit to echo the input to
+    integer, intent(in) :: out_unit
+    !> Number of sublattices, must equal n_beam_sets; NL
+    integer, intent(in) :: n_sublattices
+    !> Number of beam sets; KNBS
+    integer, intent(in) :: n_beam_sets
+    !> Total number of beams, must equal the input; KNT
+    integer, intent(in) :: n_beams
+    !> Number of beams to output; NPUN
+    integer, intent(in) :: n_output
+    !> Number of energies at which phase shifts are read; NPSI
+    integer, intent(in) :: n_energies
+    !> Number of elements in the phase shifts, must equal the input; NEL
+    integer, intent(in) :: n_elements
+    !> Highest angular momentum plus one, must be the input lmax + 1;
+    !! LMAX1
+    integer, intent(in) :: lmax1
+    character(len=80), intent(out) :: title
+    type(lattice), intent(out) :: lat
+    type(control), intent(out) :: ctrl
+    type(inner_potential), intent(out) :: pot
+    !> Imaginary part of the inner potential; VPI
+    real(sp), intent(out) :: vpi
+    !> Initial energy, final energy and step; EI, EF, DE
+    real(sp), intent(out) :: ei, ef, de
+    type(beam_list), intent(out) :: beams
+    !> Criterion for the selection of beams; TST
+    real(sp), intent(out) :: tst
+    !> Polar and azimuthal angle of incidence in radian; THETA, FI
+    real(sp), intent(out) :: theta, fi
+    !> Format of the tensor output; IFORM
+    integer, intent(out) :: iform
+    type(phase_shifts), intent(out) :: phase
+
+    character(len=80) :: ps_comment, ps_title
+    real(sp) :: atv, ase, workfn
+    real(sp) :: sub_a(2, 2), super_a(2, 2)
+    integer :: psfmt, ps_lmax, nel_input, n_beams_input
+    integer :: i, j, k, kk, n_in_set, ienergy, iel, l
+
+    ! Consistency check
+    if (n_sublattices /= n_beam_sets) then
+      call stop_with_error("Number of beam sets, MKNBS, differs from " &
+                           // "number of sublattices, MNL = MNL1*MNL2! " &
+                           // "Assuming incorrect input, I stop!")
+    end if
+
+    read (unit, '(A80)') title
+    call write_title(out_unit, title)
+
+    read (unit, '(3F9.2)') ei, ef, de
+
+    ! The two basis vectors of the substrate layer lattice, in terms of the
+    ! planar cartesian Y- and Z-axes (the X-axis is perpendicular to the
+    ! surface).
+    read (unit, '(3F9.4)') (sub_a(i, 1), i=1, 2)
+    read (unit, '(3F9.4)') (sub_a(i, 2), i=1, 2)
+    call write_substrate_vectors(out_unit, sub_a(:, 1), sub_a(:, 2))
+    sub_a = sub_a / bohr
+    lat%substrate_vector = sub_a
+    lat%substrate_area = abs(sub_a(1, 1) * sub_a(2, 2) &
+                             - sub_a(2, 1) * sub_a(1, 2))
+    atv = 2.0_sp * pi / lat%substrate_area
+    ! Reciprocal-lattice basis vectors of the substrate
+    lat%substrate_reciprocal(1, 1) = sub_a(2, 2) * atv
+    lat%substrate_reciprocal(2, 1) = -sub_a(1, 2) * atv
+    lat%substrate_reciprocal(1, 2) = -sub_a(2, 1) * atv
+    lat%substrate_reciprocal(2, 2) = sub_a(1, 1) * atv
+
+    ! The same for the superlattice of an overlayer
+    read (unit, '(3F9.4)') (super_a(i, 1), i=1, 2)
+    read (unit, '(3F9.4)') (super_a(i, 2), i=1, 2)
+    call write_superlattice_vectors(out_unit, super_a(:, 1), super_a(:, 2))
+    super_a = super_a / bohr
+    lat%superlattice_vector = super_a
+    lat%superlattice_area = abs(super_a(1, 1) * super_a(2, 2) &
+                                - super_a(2, 1) * super_a(1, 2))
+    atv = 2.0_sp * pi / lat%superlattice_area
+    lat%superlattice_reciprocal(1, 1) = super_a(2, 2) * atv
+    lat%superlattice_reciprocal(2, 1) = -super_a(1, 2) * atv
+    lat%superlattice_reciprocal(1, 2) = -super_a(2, 1) * atv
+    lat%superlattice_reciprocal(2, 2) = super_a(1, 1) * atv
+
+    ! Imaginary part of the inner potential, and spacing between the
+    ! surface (where muffin-tin constant and damping set in) and the
+    ! top-layer nuclei, in Angstrom.
+    read (unit, '(3F9.4)') vpi, ase, workfn
+    call write_inner_potential(out_unit, vpi, ase, workfn)
+    pot%surface_distance = ase / bohr
+    pot%work_function = workfn
+    vpi = -vpi / hartree
+    pot%vpi_substrate = vpi
+    pot%vpi_overlayer = vpi
+
+    ! The beam sets, each as reciprocal-lattice vectors in terms of the
+    ! substrate ones and with their symmetry codes.
+    allocate (beams%set_size(n_beam_sets))
+    allocate (beams%index(2, n_beams), beams%momentum(2, n_beams))
+    allocate (beams%symmetry(2, n_beams))
+    n_beams_input = 0
+    do j = 1, n_beam_sets
+      read (unit, '(15I5)') beams%set_size(j)
+      n_in_set = beams%set_size(j)
+      do k = 1, n_in_set
+        kk = k + n_beams_input
+        read (unit, '(2F10.5,4I3)') beams%index(1, kk), beams%index(2, kk), &
+                                    (beams%symmetry(i, kk), i=1, 2)
+        do i = 1, 2
+          beams%momentum(i, kk) &
+              = beams%index(1, kk) * lat%substrate_reciprocal(i, 1) &
+                + beams%index(2, kk) * lat%substrate_reciprocal(i, 2)
+        end do
+      end do
+      n_beams_input = n_beams_input + beams%set_size(j)
+    end do
+    if (n_beams_input /= n_beams) then
+      call stop_with_error("Number of beams in full dynamic beam list, " &
+                           // int_text(n_beams_input) &
+                           // " is inconsistent with dimension MKNT = " &
+                           // int_text(n_beams) &
+                           // " from PARAM! Please correct!")
+    end if
+
+    ! Criterion for the selection of beams: a beam may not decay to less
+    ! than this fraction of its initial value travelling from any layer to
+    ! the next.
+    read (unit, '(1F11.8)') tst
+    call write_beam_criterion(out_unit, tst)
+
+    ! Beams for which intensities are output, as positions in the input list
+    allocate (beams%output(n_output))
+    read (unit, '(15I5)') (beams%output(k), k=1, n_output)
+    call write_output_beams(out_unit, beams%output)
+
+    ! Direction of incidence (degrees)
+    read (unit, '(2F9.4)') theta, fi
+    call write_incidence(out_unit, theta, fi)
+    theta = theta * pi / 180.0_sp
+    fi = fi * pi / 180.0_sp
+
+    ! Convergence criteria for layer doubling
+    read (unit, '(F7.4)') ctrl%eps
+    read (unit, '(26I3)') ctrl%liter
+    call write_convergence(out_unit, ctrl%eps, ctrl%liter)
+
+    read (unit, '(26I3)') ctrl%lmax
+    call write_lmax(out_unit, ctrl%lmax)
+    if (ctrl%lmax /= lmax1 - 1) then
+      call stop_with_error("Please enforce LMAX in input = MLMAX in " &
+                           // "PARAM. Inaccurate dimensions may lead to " &
+                           // "problems.")
+    end if
+
+    call write_phase_shift_header(out_unit)
+    read (unit, '(26I3)') psfmt
+    call write_phase_shift_format(out_unit, psfmt)
+    read (unit, '(26I3)') iform
+    call write_iform(out_unit, iform)
+    call write_inner_potential_header(out_unit)
+
+    allocate (phase%energy(n_energies))
+    allocate (phase%value(n_energies, n_elements, lmax1))
+
+    select case (psfmt)
+    case (1)
+      read (unit, '(I3,1x,4F8.2)') nel_input, pot%c(4), pot%c(1), pot%c(2), &
+                                   pot%c(3)
+      if (nel_input /= n_elements) then
+        call stop_with_error("NEL from phaseshift file not consistent " &
+                             // "with MNEL! Please correct!")
+      end if
+      call write_phase_shift_coefficients(out_unit, pot%c(1:4))
+
+      ! Energies (Hartree) at which phase shifts are input, and the phase
+      ! shifts (radian). Linear interpolation occurs for energies between
+      ! the tabulated ones (and linear extrapolation above the highest).
+      do ienergy = 1, n_energies
+        read (unit, '(F7.4)') phase%energy(ienergy)
+        do iel = 1, n_elements
+          read (unit, '(10F7.4)') (phase%value(ienergy, iel, l), l=1, lmax1)
+          if (ctrl%lmax < 10) read (unit, *)
+        end do
+      end do
+
+    case (2)
+      read (unit, '(26I3)') nel_input
+      if (nel_input /= n_elements) then
+        call stop_with_error("NEL from phaseshift file not consistent " &
+                             // "with MNEL! Please correct!")
+      end if
+
+      read (unit, '(1A8,1A70)') ps_comment, ps_title
+      call write_phase_shift_file_title(out_unit, ps_title)
+      read (unit, '(3x,I3,2x,F6.2,1x,4F7.2,2x,F7.2,3F8.4)') ps_lmax, &
+          pot%em, pot%c
+      call write_phase_shift_parameters(out_unit, pot%em, pot%c)
+
+      do iel = 1, n_elements
+        read (unit, *)
+        read (unit, *)
+        do ienergy = 1, n_energies
+          read (unit, '(F8.3,20F8.4)') phase%energy(ienergy), &
+              (phase%value(ienergy, iel, l), l=1, lmax1)
+          phase%energy(ienergy) = phase%energy(ienergy) / hartree
+        end do
+      end do
+
+    case default
+      call stop_with_error("Phaseshift format incorrectly assigned!")
+    end select
+
+    do iel = 1, n_elements
+      call write_first_phase_shifts(out_unit, iel, phase%energy(1), &
+                                    phase%value(1, iel, :))
+    end do
+    call write_end_of_input(out_unit)
+  end subroutine read_input
 
   !> Read the structural information for the reference calculation.
   !!

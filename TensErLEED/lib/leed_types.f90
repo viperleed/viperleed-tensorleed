@@ -14,6 +14,7 @@ module leed_types
   private
 
   public :: atom_sites, layer_type, stacked_layer, geometry
+  public :: lattice, control, inner_potential, beam_list, phase_shifts
 
   !> The kinds of atoms, distinguished by element, vibrational amplitude
   !! and concentration.
@@ -81,4 +82,78 @@ module leed_types
     !! TENS, LAYFILE).
     type(stacked_layer), allocatable :: stack(:)
   end type geometry
+
+  !> Two-dimensional lattices of the substrate and of the superlattice
+  !! (legacy common block /SL/ and the vectors READIN returned).
+  !! Lengths are in atomic units, reciprocal vectors in inverse atomic
+  !! units. Each vector is (2): the components in the surface plane.
+  type :: lattice
+    !> Basis vectors of the substrate lattice; ARA1, ARA2.
+    real(sp) :: substrate_vector(2, 2) = 0.0_sp
+    !> Reciprocal basis vectors of the substrate lattice; RAR1, RAR2.
+    real(sp) :: substrate_reciprocal(2, 2) = 0.0_sp
+    !> Basis vectors of the superlattice; ARB1, ARB2.
+    real(sp) :: superlattice_vector(2, 2) = 0.0_sp
+    !> Reciprocal basis vectors of the superlattice; RBR1, RBR2.
+    real(sp) :: superlattice_reciprocal(2, 2) = 0.0_sp
+    !> Area of the substrate unit mesh; TVA.
+    real(sp) :: substrate_area = 0.0_sp
+    !> Area of the superlattice unit mesh; TVB.
+    real(sp) :: superlattice_area = 0.0_sp
+  end type lattice
+
+  !> Convergence and angular-momentum controls (legacy common block /MS/).
+  type :: control
+    !> Highest angular momentum considered; LMAX.
+    integer :: lmax = 0
+    !> Convergence criterion of the layer doubling; EPS.
+    real(sp) :: eps = 0.0_sp
+    !> Maximum number of iterations of the layer doubling; LITER.
+    integer :: liter = 0
+  end type control
+
+  !> Parameters of the inner potential (legacy common blocks /ADS/ and
+  !! /INPOT/). Components that a phase-shift file format does not provide
+  !! stay zero.
+  type :: inner_potential
+    !> Distance between the topmost atomic nuclei and the onset of the
+    !! inner potential; ASE.
+    real(sp) :: surface_distance = 0.0_sp
+    !> Imaginary part of the inner potential at the substrate and at the
+    !! overlayer; VPIS, VPIO.
+    real(sp) :: vpi_substrate = 0.0_sp
+    real(sp) :: vpi_overlayer = 0.0_sp
+    !> Parameters of the phase-shift program for the real part of the
+    !! inner potential; EM, C1 ... C8.
+    real(sp) :: em = 0.0_sp
+    real(sp) :: c(8) = 0.0_sp
+    !> Work function; WORKFN.
+    real(sp) :: work_function = 0.0_sp
+  end type inner_potential
+
+  !> The beams of the calculation, in sets, and those to be output.
+  type :: beam_list
+    !> Number of beams in each beam set, (n_beam_sets); KNB.
+    integer, allocatable :: set_size(:)
+    !> Beams in units of the reciprocal substrate vectors, (2, n_beams);
+    !! SPQF.
+    real(sp), allocatable :: index(:, :)
+    !> Beams in atomic units, (2, n_beams); SPQ.
+    real(sp), allocatable :: momentum(:, :)
+    !> Symmetry codes of the beams for the superlattice and the substrate
+    !! region, (2, n_beams); KSYM.
+    integer, allocatable :: symmetry(:, :)
+    !> Beams of which the intensities are written out, as positions in
+    !! the beam list, (n_output); NPU.
+    integer, allocatable :: output(:)
+  end type beam_list
+
+  !> The tabulated phase shifts.
+  type :: phase_shifts
+    !> Energies in Hartree at which phase shifts are tabulated,
+    !! (n_energies); ES.
+    real(sp), allocatable :: energy(:)
+    !> Phase shifts in radian, (n_energies, n_elements, lmax + 1); PHSS.
+    real(sp), allocatable :: value(:, :, :)
+  end type phase_shifts
 end module leed_types

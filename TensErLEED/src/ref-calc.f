@@ -39,8 +39,9 @@ C
 
 C  modules of the ported input reader
 
-      USE leed_types, ONLY: geometry
-      USE leed_input, ONLY: read_geometry
+      USE leed_types, ONLY: geometry, lattice, control, inner_potential,
+     +                      beam_list, phase_shifts
+      USE leed_input, ONLY: read_input, read_geometry
 
 C  include parameter statements for dimensions etc
 
@@ -77,7 +78,7 @@ C  storage for variable dimensions (see PARAM)
 
       REAL EMACH
 
-C  variables for subroutine READIN():
+C  variables for the reader of the general input (read_input):
 
 C  title: descriptive title for calculation to be performed
 C  TVA  : area of (1x1) unit mesh
@@ -189,6 +190,11 @@ C  TENS  : tensor output for layer ISTACK desired?
       DIMENSION SUBPOS(MNLTYPE,MNSUB,3) ! size on the order of 300
       INTEGER TSLAB,TOPLAYB,BOTLAYB
       TYPE(geometry) GEOM
+      TYPE(lattice) LAT
+      TYPE(control) CTRL
+      TYPE(inner_potential) POT
+      TYPE(beam_list) BMSET
+      TYPE(phase_shifts) PHASE
       INTEGER IGL,IGS,IGP
       REAL ASA
       DIMENSION ASA(3)
@@ -625,12 +631,58 @@ C*************************************************************
 C read information required for entire calculation
 C*************************************************************
 
-C  subroutine READIN reads lateral lattice information, general
+C  subroutine read_input reads lateral lattice information, general
 C  calculational features, beam list and phase shifts
 
-      CALL READIN(TITLE,TVA,RAR1,RAR2,TVB,IDEG,
-     +NL,V,VL,JJS,KNBS,KNB,KNT,SPQF,KSYM,SPQ,TST,TSTS,NPUN,NPU,
-     +THETA,FI,NPSI,ES,PHSS,L1,NEL,LMAX1,IFORM,VPI,EI,EF,DE)
+      CALL read_input(5,6,NL,KNBS,KNT,NPUN,NPSI,NEL,LMAX1,TITLE,LAT,
+     +                CTRL,POT,VPI,EI,EF,DE,BMSET,TST,THETA,FI,IFORM,
+     +                PHASE)
+
+C  copy the result into the variables used by the remaining routines
+
+      ARA1 = LAT%substrate_vector(:,1)
+      ARA2 = LAT%substrate_vector(:,2)
+      RAR1 = LAT%substrate_reciprocal(:,1)
+      RAR2 = LAT%substrate_reciprocal(:,2)
+      ARB1 = LAT%superlattice_vector(:,1)
+      ARB2 = LAT%superlattice_vector(:,2)
+      RBR1 = LAT%superlattice_reciprocal(:,1)
+      RBR2 = LAT%superlattice_reciprocal(:,2)
+      TVA = LAT%substrate_area
+      TVB = LAT%superlattice_area
+
+      LMAX = CTRL%lmax
+      EPS = CTRL%eps
+      LITER = CTRL%liter
+      L1 = LMAX+1
+
+      ASE = POT%surface_distance
+      VPIS = POT%vpi_substrate
+      VPIO = POT%vpi_overlayer
+      EM = POT%em
+      C1 = POT%c(1)
+      C2 = POT%c(2)
+      C3 = POT%c(3)
+      C4 = POT%c(4)
+      C5 = POT%c(5)
+      C6 = POT%c(6)
+      C7 = POT%c(7)
+      C8 = POT%c(8)
+      WORKFN = POT%work_function
+
+      TSTS = TST
+      KNB = BMSET%set_size
+      SPQF = BMSET%index
+      SPQ = BMSET%momentum
+      KSYM = BMSET%symmetry
+      NPU = BMSET%output
+      ES = PHASE%energy
+      PHSS = PHASE%value
+
+C  SLIND compares substrate lattice and superlattice (read via /SL/)
+C  for the benefit of FMAT
+
+      CALL SLIND(V,VL,JJS,NL,IDEG,2.0E-4)
 
 C  subroutine read_geometry reads structural information for the reference
 C  calculation (i.e. the vertical atomic arrangement within the
