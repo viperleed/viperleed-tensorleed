@@ -188,11 +188,12 @@ def _assert_rejected(param_file, fin, param, message, tl_root, build_flags, tmp_
 def _reformatted(fin, marker, new_values, comment):
     """FIN text with the numbers of the record commented marker rewritten.
 
-    The values are separated by single blanks (no fixed field width) and
+    The values are written in three-column fields (the style of the
+    neighbouring LMAX, PSFORMAT and IFORM records, e.g. `  4  1  1`) and
     followed by comment."""
     lines = fin.splitlines(keepends=True)
     (i,) = [i for i, line in enumerate(lines) if marker in line]
-    lines[i] = " ".join(str(v) for v in new_values) + f"   {comment}\n"
+    lines[i] = "".join(f"{v:3d}" for v in new_values) + f"   {comment}\n"
     return "".join(lines)
 
 
