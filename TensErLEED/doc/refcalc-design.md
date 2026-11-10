@@ -270,9 +270,12 @@ results or parsing. `LEED` copies them from `PARAM` at start-up
 
 For TensErLEED >= 3.0.0 the input carries these values in three records,
 each next to the data it sizes; the reader requires all three, and text
-after the numbers is a comment, as elsewhere in the input:
+after the numbers is a comment, as elsewhere in the input. The reader
+reads them list-directed, so any field width works (blank- or
+comma-separated values, and no `/` before the last number); the format
+below is what the converter and viperleed write:
 
-| Record | Format | Place |
+| Record | Written as | Place |
 |---|---|---|
 | `IDEG`, `NL1`, `NL2` | `3I5` | directly after the `VPI`/`ASE`/`WORKFN` record, before the beam sets |
 | `NPUN` | `I5` | directly before the `NPU` record(s) |

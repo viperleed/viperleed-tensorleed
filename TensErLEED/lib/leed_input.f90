@@ -153,7 +153,7 @@ contains
     pot%vpi_substrate = vpi
     pot%vpi_overlayer = vpi
 
-    read (unit, '(3I5)') ideg_input, nl1_input, nl2_input
+    read (unit, *) ideg_input, nl1_input, nl2_input
     if (ideg_input /= ideg) then
       call stop_with_error("IDEG = " // int_text(ideg_input) &
                            // " in the input differs from MIDEG = " &
@@ -209,7 +209,7 @@ contains
     call write_beam_criterion(out_unit, tst)
 
     ! Beams for which intensities are output, as positions in the input list
-    read (unit, '(I5)') n_output_input
+    read (unit, *) n_output_input
     if (n_output_input /= n_output) then
       call stop_with_error("NPUN = " // int_text(n_output_input) &
                            // " in the input differs from MNPUN = " &
@@ -243,7 +243,7 @@ contains
     call write_phase_shift_format(out_unit, psfmt)
     read (unit, '(26I3)') iform
     call write_iform(out_unit, iform)
-    read (unit, '(I5)') n_energies_input
+    read (unit, *) n_energies_input
     if (n_energies_input /= n_energies) then
       call stop_with_error("NPSI = " // int_text(n_energies_input) &
                            // " in the input differs from MNPSI = " &

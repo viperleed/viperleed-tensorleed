@@ -182,6 +182,46 @@ def _assert_rejected(param_file, fin, param, message, tl_root, build_flags, tmp_
     assert message not in res.stdout
 
 
+def _reformatted(fin, marker, new_values, comment):
+    """FIN text with the numbers of the record commented marker rewritten.
+
+    The values are separated by single blanks (no fixed field width) and
+    followed by comment."""
+    lines = fin.splitlines(keepends=True)
+    (i,) = [i for i, line in enumerate(lines) if marker in line]
+    lines[i] = " ".join(str(v) for v in new_values) + f"   {comment}\n"
+    return "".join(lines)
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("comment", ("", "IDEG NL1 NL2, with / a slash"))
+def test_refcalc_reads_new_records_list_directed(comment, tl_root, build_flags, tmp_path):
+    """The IDEG/NL1/NL2, NPUN and NPSI records are read for any field width.
+
+    The records written in narrow fields, or followed by text with
+    separators, give the same run as the records in five-column fields.
+    Failing means the records are read with a fixed format again."""
+    param = read_param(RUN.param)
+    base = _converted()
+    fin = base
+    for marker, names in (("IDEG NL1 NL2", ("MIDEG", "MNL1", "MNL2")),
+                          ("NPUN (TL", ("MNPUN",)),
+                          ("NPSI (TL", ("MNPSI",))):
+        fin = _reformatted(fin, marker, [param[n] for n in names], comment)
+    assert fin != base
+    exe = build_program(tl_root, CASE.program, RUN.param, build_flags)
+    results = []
+    for name, text in (("fixed", base), ("free", fin)):
+        run_dir = tmp_path / name
+        run_dir.mkdir()
+        (run_dir / "FIN").write_text(text)
+        results.append(run_program(exe, run_dir, run_dir / "FIN", timeout=RUN_TIMEOUT_S))
+    fixed, free = results
+    assert fixed.returncode == 0, fixed.stderr
+    assert free.returncode == 0, free.stderr
+    assert free.stdout == fixed.stdout
+
+
 @pytest.mark.tier1
 def test_refcalc_does_not_check_bravais_subplane_position(tl_root, build_flags, tmp_path):
     """A Bravais layer with a subplane position other than (0,0,0) is not rejected.
