@@ -255,14 +255,18 @@ def test_caller_cannot_set_checksum_parameter(tmp_path):
 def _run_tier2_with_stub_viperleed(tmp_path, stub_script, tl_root):
     """Run tests/tier2 on tl_root with a stub viperleed of version 0.0.1.
 
-    Returns (testcase elements of the report, whether the stub was started at all)."""
+    Returns (testcase elements of the report, whether the stub was started at all,
+    whether it was asked for anything other than its version, i.e. a calculation)."""
     tests_dir = Path(__file__).parents[1]
-    marker = tmp_path / "viperleed_ran"
+    started = tmp_path / "viperleed_started"
+    ran = tmp_path / "viperleed_ran_calculation"
     fake = stub_script(tmp_path / "viperleed", f"""
         import pathlib, sys
-        pathlib.Path({str(marker)!r}).touch()
+        pathlib.Path({str(started)!r}).touch()
         if sys.argv[1:] == ["calc", "--version"]:
             print("{BANNER.format('0.0.1')}")
+        else:
+            pathlib.Path({str(ran)!r}).touch()
         """)
     report = tmp_path / "report.xml"
     env = {k: v for k, v in os.environ.items()
@@ -274,14 +278,14 @@ def _run_tier2_with_stub_viperleed(tmp_path, stub_script, tl_root):
                    cwd=tests_dir, env=env, capture_output=True, text=True, timeout=120)
     cases = list(ElementTree.parse(report).getroot().iter("testcase"))
     assert len(cases) == len(tier2.load_systems(tests_dir / "tier2" / "systems")) > 0
-    return cases, marker.exists()
+    return cases, started.exists(), ran.exists()
 
 
 def test_version_mismatch_fails_every_tier2_test_before_any_run(tmp_path, stub_script,
                                                                 baseline_tl_root):
     """With a viperleed of another version, every tier-2 test fails with the version
     message and viperleed is never asked to run a calculation."""
-    cases, _ = _run_tier2_with_stub_viperleed(tmp_path, stub_script, baseline_tl_root)
+    cases, _, ran = _run_tier2_with_stub_viperleed(tmp_path, stub_script, baseline_tl_root)
     pinned = load_tolerances()["tier2"]["viperleed_version"]
     for case in cases:
         outcome = case.find("failure")
@@ -290,12 +294,13 @@ def test_version_mismatch_fails_every_tier2_test_before_any_run(tmp_path, stub_s
         assert outcome is not None, case.get("name")
         assert f"tier 2 needs viperleed {pinned}" in outcome.text
         assert "runs 0.0.1" in outcome.text
+    assert not ran
 
 
 def test_tier2_skips_every_test_on_a_module_using_tree(tmp_path, stub_script, tl_root):
     """On the tree under test (module-using ref-calc), every tier-2 test is skipped
     with the WP-V1 message and viperleed is not started at all."""
-    cases, started = _run_tier2_with_stub_viperleed(tmp_path, stub_script, tl_root)
+    cases, started, _ = _run_tier2_with_stub_viperleed(tmp_path, stub_script, tl_root)
     for case in cases:
         skipped = case.find("skipped")
         assert skipped is not None, case.get("name")
