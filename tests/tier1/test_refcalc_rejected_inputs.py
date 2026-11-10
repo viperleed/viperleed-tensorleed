@@ -168,7 +168,8 @@ def test_refcalc_rejects_wrong_number_of_elements_in_psformat2(tl_root, build_fl
 def _assert_rejected(param_file, fin, param, message, tl_root, build_flags, tmp_path):
     """Run refcalc on fin (and the PARAM text param(), if any, else param_file).
 
-    Assert a non-zero exit code and message on stderr but not on stdout."""
+    Assert a non-zero exit code and, as first text on stderr, the message,
+    which must not be on stdout."""
     if param:
         param_file = tmp_path / "PARAM"
         param_file.write_text(param())
@@ -179,6 +180,8 @@ def _assert_rejected(param_file, fin, param, message, tl_root, build_flags, tmp_
     res = run_program(exe, run_dir, tmp_path / "FIN", timeout=RUN_TIMEOUT_S)
     assert res.returncode != 0, f"exit code 0; stderr:\n{res.stderr}"
     assert message in res.stderr, res.stderr
+    first_line = res.stderr.splitlines()[0]
+    assert first_line.startswith("ref-calc: ") and message in first_line, res.stderr
     assert message not in res.stdout
 
 

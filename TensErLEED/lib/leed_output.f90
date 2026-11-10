@@ -25,11 +25,13 @@ module leed_output
 
 contains
 
-  !> Write message on stderr and stop with a non-zero exit code.
+  !> Write message on stderr, ahead of the text of the stop, and stop with a
+  !> non-zero exit code.
   subroutine stop_with_error(message)
     character(len=*), intent(in) :: message
 
     write (error_unit, '(a)') 'ref-calc: ' // message
+    flush (error_unit)
     error stop 1
   end subroutine stop_with_error
 
