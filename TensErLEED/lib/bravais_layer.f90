@@ -31,8 +31,7 @@ contains
   !! sublattice into which sublattice js is rotated by the j-th rotation.
   !! If no sublattice matches (ideg does not fit the substrate lattice and
   !! the superlattice; possible only for nl > 1), the routine stops with an
-  !! error; the legacy code set jjs to nl + 1 there, which then indexes
-  !! past the arrays of FMAT. Author: Pendry.
+  !! error. Author: Pendry.
   !!
   !! The substrate lattice vectors define the sublattices, the reciprocal
   !! vectors of the superlattice identify them. The arrays v, vl and jjs are

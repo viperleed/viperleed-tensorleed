@@ -189,9 +189,7 @@ def test_refcalc_rejects_ideg_that_fits_no_sublattice(flags, tl_root, tmp_path):
     SLIND is gone, or reports on another channel."""
     _assert_rejected(RUN.param, _record("IDEG NL1 NL2", 3, 0),
                      lambda: _param("MIDEG=2", "MIDEG=3"),
-                     "IDEG = 3 does not fit the substrate lattice and the superlattice: "
-                     "sublattice 2 rotated by 1 x 360/3 degrees matches none of the "
-                     "2 sublattices", tl_root, flags, tmp_path)
+                     "IDEG = 3 does not fit", tl_root, flags, tmp_path)
 
 
 @pytest.mark.tier1

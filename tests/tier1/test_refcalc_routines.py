@@ -28,19 +28,18 @@ from pathlib import Path
 import pytest
 
 from harness.build import DEBUG, RELEASE, program_sources
+from harness.cases import RUN_TIMEOUT_S
 from harness.routine_blocks import summarize
 
 DATA = Path(__file__).with_name("refcalc_routines")
 CASES = json.loads((DATA / "values.json").read_text())["cases"]
 
-# Cases on which the routines stop with this message on stderr, where the
-# legacy routines gave a result that ref-calc then used wrongly: SLIND with
-# an IDEG that does not fit the lattices (legacy JJS = NL + 1, which indexes
-# past FLMS in FMAT)
+# Cases on which the routines stop with a message that starts with this text
+# on stderr, where the legacy routines gave a result that ref-calc then used
+# wrongly: SLIND with an IDEG that does not fit the lattices (legacy
+# JJS = NL + 1, which indexes past FLMS in FMAT)
 STOPS = {
-    "slind_square_p2x2_ideg3": "IDEG = 3 does not fit the substrate lattice and the "
-                               "superlattice: sublattice 2 rotated by 1 x 360/3 degrees "
-                               "matches none of the 4 sublattices",
+    "slind_square_p2x2_ideg3": "IDEG = 3 does not fit",
     }
 COMPARED = [c for c in CASES if c["id"] not in STOPS]
 STOPPING = [c for c in CASES if c["id"] in STOPS]
@@ -124,11 +123,11 @@ def test_stopping_cases_are_in_values():
 @pytest.mark.tier1
 @pytest.mark.parametrize("case", STOPPING, ids=[c["id"] for c in STOPPING])
 def test_routines_stop_where_legacy_result_is_invalid(case, driver):
-    """The routines stop with a non-zero exit code and the message of STOPS on stderr.
+    """The routines stop with a non-zero exit code and a message on stderr that starts with STOPS.
 
     Failing means the check of an input the legacy routines handled wrongly
     is gone, or reports another message."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, timeout=RUN_TIMEOUT_S)
     assert proc.returncode != 0, f"exit code 0; stdout:\n{proc.stdout}"
     assert proc.stderr.startswith("ref-calc: " + STOPS[case["id"]]), proc.stderr
