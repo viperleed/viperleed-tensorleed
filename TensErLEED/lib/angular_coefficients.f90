@@ -8,12 +8,18 @@
 
 !> Angular-momentum coefficients and (L,M) index tables.
 module angular_coefficients
+  use constants, only: pi
   use kinds, only: sp, dp
+  use leed_output, only: stop_with_error
   implicit none
 
   private
 
-  public :: composite_layer_coefficients
+  public :: composite_layer_coefficients, matrix_coefficients
+
+  !> The single-precision literal 3.14159265 as a double precision number,
+  !! which is what the legacy REAL*8 variables PI of BLM and CELMG held.
+  real(dp), parameter :: pi_dp = real(pi, dp)
 
 contains
 
@@ -114,6 +120,136 @@ contains
     ca = ((-1.0_sp)**(ma1 + ma3)) * yint
   end function composite_layer_coefficient
 
+  !> Integral of the product of three spherical harmonics (legacy BLM).
+  !!
+  !! Each harmonic can be expressed as a prefactor times a Legendre
+  !! function. The three prefactors are lumped together as factor 'C', and
+  !! the integral of the three Legendre functions follows Gaunt's summation
+  !! scheme, set out by Slater, Atomic Structure, vol. 1, 309, 310.
+  !! Author: Pendry.
+  !!
+  !! fac(n + 1) must hold n! (set by matrix_coefficients).
+  function harmonics_product_integral(l1, m1, l2, m2, l3, m3, lmax, fac) &
+      result(blm)
+    integer, intent(in) :: l1, m1, l2, m2, l3, m3
+    integer, intent(in) :: lmax  !< largest angular momentum l
+    real(dp), intent(in) :: fac(:)
+    real(sp) :: blm
+
+    integer :: nl1, nl2, nl3, nm1, nm2, nm3, ic, ntemp
+    integer :: is, ia1, ia2, ia3, ia4, ia5, ia6, ia7, ia8, ia9
+    integer :: ib1, ib2, ib3, ib4, ib5, it1, it2, it
+    integer :: ic1, ic2, ic3, ic4, ic5, ic6
+    real(dp) :: a, b, bn, c, cn, alt_sign
+    character(len=32) :: arguments
+
+    if (m1 + m2 + m3 /= 0) then
+      blm = 0.0_sp
+      return
+    end if
+    if (l1 > lmax + lmax .or. l2 > lmax .or. l3 > lmax &
+        .or. l1 < abs(m1) .or. l2 < abs(m2) .or. l3 < abs(m3)) then
+      ! The arguments of matrix_coefficients stay within these bounds for
+      ! every lmax, so no input reaches this branch.
+      write (arguments, '(6(i3, ","))') l1, m1, l2, m2, l3, m3
+      call stop_with_error("INVALID ARGUMENTS FOR BLM  " // trim(arguments))
+    end if
+    if (mod(l1 + l2 + l3, 2) /= 0) then
+      blm = 0.0_sp
+      return
+    end if
+
+    nl1 = l1
+    nl2 = l2
+    nl3 = l3
+    nm1 = abs(m1)
+    nm2 = abs(m2)
+    nm3 = abs(m3)
+    ic = (nm1 + nm2 + nm3) / 2
+    if (max(nm1, nm2, nm3) > nm1) then
+      if (max(nm2, nm3) <= nm2) then
+        nl1 = l2
+        nl2 = l1
+        nm1 = nm2
+        nm2 = abs(m1)
+      else
+        nl1 = l3
+        nl3 = l1
+        nm1 = nm3
+        nm3 = abs(m1)
+      end if
+    end if
+    if (nl2 < nl3) then
+      ntemp = nl2
+      nl2 = nl3
+      nl3 = ntemp
+      ntemp = nm2
+      nm2 = nm3
+      nm3 = ntemp
+    end if
+    if (nl3 < abs(nl2 - nl1)) then
+      blm = 0.0_sp
+      return
+    end if
+
+    ! Factor 'A'
+    is = (nl1 + nl2 + nl3) / 2
+    ia1 = is - nl2 - nm3
+    ia2 = nl2 + nm2
+    ia3 = nl2 - nm2
+    ia4 = nl3 + nm3
+    ia5 = nl1 + nl2 - nl3
+    ia6 = is - nl1
+    ia7 = is - nl2
+    ia8 = is - nl3
+    ia9 = nl1 + nl2 + nl3 + 1
+    a = ((-1.0_dp)**ia1) / fac(ia3 + 1) * fac(ia2 + 1) / fac(ia6 + 1) &
+        * fac(ia4 + 1)
+    a = a / fac(ia7 + 1) * fac(ia5 + 1) / fac(ia8 + 1) * fac(is + 1) &
+        / fac(ia9 + 1)
+
+    ! Sum 'B'
+    ib1 = nl1 + nm1
+    ib2 = nl2 + nl3 - nm1
+    ib3 = nl1 - nm1
+    ib4 = nl2 - nl3 + nm1
+    ib5 = nl3 - nm3
+    it1 = max(0, -ib4) + 1
+    it2 = min(ib2, ib3, ib5) + 1
+    b = 0.0_dp
+    alt_sign = (-1.0_dp)**it1
+    ib1 = ib1 + it1 - 2
+    ib2 = ib2 - it1 + 2
+    ib3 = ib3 - it1 + 2
+    ib4 = ib4 + it1 - 2
+    ib5 = ib5 - it1 + 2
+    do it = it1, it2
+      alt_sign = -alt_sign
+      ib1 = ib1 + 1
+      ib2 = ib2 - 1
+      ib3 = ib3 - 1
+      ib4 = ib4 + 1
+      ib5 = ib5 - 1
+      bn = alt_sign / fac(it) * fac(ib1 + 1) / fac(ib3 + 1) * fac(ib2 + 1)
+      bn = bn / fac(ib4 + 1) / fac(ib5 + 1)
+      b = b + bn
+    end do
+
+    ! Factor 'C'
+    ic1 = nl1 - nm1
+    ic2 = nl1 + nm1
+    ic3 = nl2 - nm2
+    ic4 = nl2 + nm2
+    ic5 = nl3 - nm3
+    ic6 = nl3 + nm3
+    cn = real((2 * nl1 + 1) * (2 * nl2 + 1) * (2 * nl3 + 1), dp) / pi_dp
+    c = cn / fac(ic2 + 1) * fac(ic1 + 1) / fac(ic4 + 1) * fac(ic3 + 1)
+    c = c / fac(ic6 + 1) * fac(ic5 + 1)
+    c = sqrt(c) / 2.0_dp
+
+    blm = real(((-1.0_dp)**ic) * a * b * c, sp)
+  end function harmonics_product_integral
+
   !> Clebsch-Gordan coefficients for the composite layer, in the order in
   !! which the composite-layer propagators use them (legacy CAAA).
   !!
@@ -155,5 +291,128 @@ contains
       end do
     end do
   end subroutine composite_layer_coefficients
+
+  !> Clebsch-Gordan type coefficients clm (CLM and ELM of the legacy code)
+  !! for the matrices X and TAU (legacy CELMG).
+  !!
+  !! The non-zero values are tabulated first for (l2+m2) and (l3+m3) odd,
+  !! and then for (l2+m2) and (l3+m3) even, the same scheme by which they
+  !! are retrieved in the routines XM and XMT. Author: Pendry.
+  !!
+  !! On return fac(n + 1) holds n! for n = 0, ..., 4 * lmax + 1; the other
+  !! elements are not touched. fac needs at least 4 * lmax + 2 elements.
+  subroutine matrix_coefficients(lmax, clm, fac)
+    integer, intent(in) :: lmax  !< largest angular momentum l
+    real(sp), intent(out) :: clm(:)
+    real(dp), intent(inout) :: fac(:)
+
+    integer :: l2max, nf, i, n, ll, lm, ln, lo, l, m, lm2, lm3, lp, lq, k, ii
+    integer :: il2, i2, il3, i3, l1, l2, l3, m1, m2, m3, la1, lb1, la11, lb11
+    integer :: l11, phase_exponent, ylm_index
+    real(dp) :: cl, a, b, asg, cm, alm
+    real(sp), allocatable :: ylm(:), fac2(:), fac1(:)
+
+    l2max = lmax + lmax
+    nf = 4 * lmax + 1
+    n = 2 * lmax + 1
+    allocate (ylm(n * n), fac2(n * n), fac1(n))
+
+    fac(1) = 1.0_dp
+    do i = 1, nf
+      fac(i + 1) = real(i, dp) * fac(i)
+    end do
+
+    ! The array ylm is first loaded with spherical harmonics, arguments
+    ! theta = pi/2, phi = 0.
+    lm = 0
+    cl = 0.0_dp
+    a = 1.0_dp
+    b = 1.0_dp
+    asg = 1.0_dp
+    ll = l2max + 1
+    ! Multiplicative factors required
+    do l = 1, ll
+      fac1(l) = asg * sqrt((2.0_dp * cl + 1.0_dp) * a &
+                           / (4.0_dp * pi_dp * b * b))
+      cm = -cl
+      ln = l + l - 1
+      do m = 1, ln
+        lo = lm + m
+        fac2(lo) = sqrt((cl + 1.0_dp + cm) * (cl + 1.0_dp - cm) &
+                        / ((2.0_dp * cl + 3.0_dp) * (2.0_dp * cl + 1.0_dp)))
+        cm = cm + 1.0_dp
+      end do
+      cl = cl + 1.0_dp
+      a = a * 2.0_dp * cl * (2.0_dp * cl - 1.0_dp) / 4.0_dp
+      b = b * cl
+      asg = -asg
+      lm = lm + ln
+    end do
+
+    ! First all the ylm for m = +-l and m = +-(l-1) are calculated by
+    ! explicit formulae.
+    lm = 1
+    asg = -1.0_dp
+    ylm(1) = fac1(1)
+    do l = 1, l2max
+      ln = lm + l + l + 1
+      ylm(ln) = fac1(l + 1)
+      ylm(lm + 1) = asg * fac1(l + 1)
+      ylm(ln - 1) = 0.0_sp
+      ylm(lm + 2) = 0.0_sp
+      asg = -asg
+      lm = ln
+    end do
+
+    ! Using ylm and yl(m-1) in a recurrence relation, yl(m+1) is calculated.
+    lm = 1
+    ll = l2max - 1
+    do l = 1, ll
+      ln = l + l - 1
+      lm2 = lm + ln + 4
+      lm3 = lm - ln
+      do m = 1, ln
+        lo = lm2 + m
+        lp = lm3 + m
+        lq = lm + m + 1
+        ylm(lo) = -(fac2(lp) * ylm(lp)) / fac2(lq)
+      end do
+      lm = lm + l + l + 1
+    end do
+
+    k = 1
+    do ii = 0, 1
+      ll = lmax + ii
+      do il2 = 1, ll
+        l2 = il2 - ii
+        m2 = -l2 + 1 - ii
+        do i2 = 1, il2
+          do il3 = 1, ll
+            l3 = il3 - ii
+            m3 = -l3 + 1 - ii
+            do i3 = 1, il3
+              la1 = max(abs(l2 - l3), abs(m2 - m3))
+              lb1 = l2 + l3
+              la11 = la1 + 1
+              lb11 = lb1 + 1
+              m1 = m3 - m2
+              do l11 = la11, lb11, 2
+                l1 = la11 + lb11 - l11 - 1
+                phase_exponent = (l3 - l2 - l1) / 2 + m3
+                ylm_index = l1 * (l1 + 1) - m1 + 1
+                alm = ((-1.0_dp)**phase_exponent) * 4.0_dp * pi_dp &
+                      * harmonics_product_integral(l1, m1, l2, m2, l3, -m3, &
+                                                   lmax, fac)
+                clm(k) = ylm(ylm_index) * alm
+                k = k + 1
+              end do
+              m3 = m3 + 2
+            end do
+          end do
+          m2 = m2 + 2
+        end do
+      end do
+    end do
+  end subroutine matrix_coefficients
 
 end module angular_coefficients

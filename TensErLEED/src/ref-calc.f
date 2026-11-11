@@ -45,7 +45,8 @@ C  modules of the input reader
 
 C  modules of the setup routines
 
-      USE angular_coefficients, ONLY: composite_layer_coefficients
+      USE angular_coefficients, ONLY: composite_layer_coefficients,
+     +                                  matrix_coefficients
 
 C  include parameter statements for dimensions etc
 
@@ -232,14 +233,11 @@ C  LEV  : number of even (lm) components
 C  LOD  : number of odd  (lm) components
 C  LEV2 : 2*LEV
 C  NCA  : lmax-dependent dimension of CAA (cf data statement later)
-C  NCAA : dimension for composite layer Clebsh-Gordans, from CAAA()
+C  NCAA : dimension for composite layer Clebsh-Gordans, from composite_layer_coefficients()
 C  CAA  : Clebsh-Gordon-coefficients for composite layer
-C  N,NN,NLM: dimensions for computation of Clebsh-Gordons for matrices
-C         X and TAU, CELMG()
+C  NLM  : dimension of CLM (as NLMS)
 C  NLMS : lmax-dependent dimension of X and TAU Clebsh-Gordans CLM
 C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (RSMF,RTINV)
-C  YLMC : special ylm for celmg
-C  FAC2,FAC1: auxiliary arrays in CELMG
 C  NFAC : variable dimension for array FAC
 C  FAC  : array that contains values n! - formerly dragged through code
 C         via a common block
@@ -255,11 +253,11 @@ C  PPP  : gaunt coefficients for temperature-dependent phaseshifts
       DIMENSION NCA(MNDIM)
       REAL CAA
       DIMENSION CAA(MNLMO)
-      INTEGER N,NN,NLM
+      INTEGER NLM
       INTEGER NLMS
       DIMENSION NLMS(MNDIM)
-      REAL CLM,YLMC,FAC2,FAC1
-      DIMENSION CLM(MNLM),YLMC(MNN),FAC2(MNN),FAC1(MN)
+      REAL CLM
+      DIMENSION CLM(MNLM)
       INTEGER NFAC
       DOUBLE PRECISION FAC
       DIMENSION FAC(MNFAC)
@@ -799,11 +797,9 @@ C  compute CLEBSCH-GORDON COEFFICIENTS FOR COMPOSITE LAYER, CAA
 
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR MATRICES X AND TAU, CLM
 
-      N=2*LMAX+1
-      NN=N*N
       NLM=NLMS(LMAX)
       NFAC = MNFAC
-      CALL CELMG(CLM,NLM,YLMC,FAC2,NN,FAC1,N,LMAX,NFAC,FAC)
+      CALL matrix_coefficients(LMAX,CLM(1:NLM),FAC(1:NFAC))
 
 C  compute PERMUTATIONS OF (L,M)-SEQUENCE LX,LXI,LT,LXM
 

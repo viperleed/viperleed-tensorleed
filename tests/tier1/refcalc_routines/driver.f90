@@ -15,7 +15,7 @@
 !! legacy routines of the baseline.
 program refcalc_routines_driver
   use, intrinsic :: iso_fortran_env, only: int32, int64
-  use angular_coefficients, only: composite_layer_coefficients
+  use angular_coefficients, only: composite_layer_coefficients, matrix_coefficients
   use kinds, only: sp, dp
   implicit none
 
@@ -90,13 +90,9 @@ contains
     integer, intent(in) :: lmax
     real(sp), intent(out) :: clm(:)
     real(dp), intent(inout) :: fac(:)
-    integer :: n
-    real(sp), allocatable :: ylmc(:), fac2(:), fac1(:)
 
-    n = 2 * lmax + 1
-    allocate(ylmc(n * n), fac2(n * n), fac1(n))
     clm = 0.0_sp
-    call celmg(clm, size(clm), ylmc, fac2, n * n, fac1, n, lmax, size(fac), fac)
+    call matrix_coefficients(lmax, clm, fac)
   end subroutine clm_table
 
   !> LXGENT: permutations of the (L,M) sequence
