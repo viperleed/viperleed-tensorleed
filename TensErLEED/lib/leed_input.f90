@@ -18,6 +18,7 @@
 
 !> Reader of the input of ref-calc.
 module leed_input
+  use constants, only: bohr, hartree, pi
   use kinds, only: sp
   use leed_output
   use leed_types, only: beam_list, control, geometry, inner_potential, &
@@ -27,12 +28,6 @@ module leed_input
   private
 
   public :: read_input, read_geometry
-
-  !> Bohr radius in Angstrom (BOHR of the legacy file GLOBAL).
-  real(sp), parameter :: bohr = 0.529177_sp
-  !> Hartree in eV (HARTREE of the legacy file GLOBAL).
-  real(sp), parameter :: hartree = 27.211396_sp
-  real(sp), parameter :: pi = 3.14159265359_sp
 
 contains
 
