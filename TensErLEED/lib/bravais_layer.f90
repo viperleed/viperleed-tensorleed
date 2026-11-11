@@ -9,6 +9,7 @@
 module bravais_layer
   use constants, only: pi
   use kinds, only: sp
+  use leed_output, only: stop_with_error
   use leed_types, only: lattice
   implicit none
 
@@ -28,7 +29,10 @@ contains
   !! Finds how the sublattices js of the superlattice are transformed into
   !! one another by rotations through j * 2 pi / ideg: jjs(js, j) is the
   !! sublattice into which sublattice js is rotated by the j-th rotation.
-  !! If no sublattice matches, jjs is nl + 1. Author: Pendry.
+  !! If no sublattice matches (ideg does not fit the substrate lattice and
+  !! the superlattice; possible only for nl > 1), the routine stops with an
+  !! error; the legacy code set jjs to nl + 1 there, which then indexes
+  !! past the arrays of FMAT. Author: Pendry.
   !!
   !! The substrate lattice vectors define the sublattices, the reciprocal
   !! vectors of the superlattice identify them. The arrays v, vl and jjs are
@@ -54,6 +58,7 @@ contains
     integer :: i, j, k, ideg, jl1, kl2, nl1, nl2
     real(sp) :: s1, s2, adr1, adr2, adr, ang, ainc, cang, sang, a, b, test
     complex(sp) :: vla, vlb, ci
+    character(len=200) :: message
     ! Legacy names: br1, br2 = substrate_vector; rar1, rar2 =
     ! superlattice_reciprocal
     real(sp) :: br1(2), br2(2), rar1(2), rar2(2)
@@ -106,6 +111,13 @@ contains
           test = abs(vla - vl(j, 1)) + abs(vlb - vl(j, 2))
           if (test - 5.0_sp * epsd <= 0.0_sp) exit
         end do
+        if (j > nl) then
+          write (message, '(a,i0,a,i0,a,i0,a,i0,a,i0,a)') 'IDEG = ', ideg, &
+            ' does not fit the substrate lattice and the superlattice: ' &
+            // 'sublattice ', i, ' rotated by ', k, ' x 360/', ideg, &
+            ' degrees matches none of the ', nl, ' sublattices'
+          call stop_with_error(trim(message))
+        end if
         jjs(i, k) = j
       end do
     end do
