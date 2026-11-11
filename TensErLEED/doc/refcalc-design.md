@@ -33,10 +33,16 @@ below and switches the driver's calls over to them.
 | 8 | Remove the remaining COMMON blocks and `PARAM`; arrays sized from the input, per energy where it saves memory (number of beams in use, LMAX); driver in free form |
 | 9 | viperleed: for TensErLEED >= 3.0.0, no `PARAM` and no run-time compilation of `ref-calc`; writes the input-only sizes of section 5 into the input |
 
-Stages 1 and 2 are done: `READIN` and `READGEO` live in `leed_input` as
+Stages 1 to 3 are done: `READIN` and `READGEO` live in `leed_input` as
 `read_input` and `read_geometry`, their stdout echo in `leed_output`, and
 the driver copies what they return into its COMMON blocks and
-`PARAM`-sized arrays for the routines still in `lib.tleed.f`.
+`PARAM`-sized arrays for the routines still in `lib.tleed.f`. The
+energy-independent setup runs in `angular_coefficients` (`CAA`, `CLM`, the
+`(L,M)` permutations), `atomic_scattering` (`PPP`) and `bravais_layer`
+(`V`, `VL`, `JJS`, from the `lattice` type); the driver keeps its
+`PARAM`-sized arrays for the legacy consumers and passes them to the
+ported routines. The constants of `src/GLOBAL` and `pi` live in
+`constants`; the fixed-form sources still include `GLOBAL`.
 
 ## 2. Target files and modules
 
@@ -46,6 +52,7 @@ Makefile in dependency order (modules first).
 | File | Module | Contents | Stage |
 |---|---|---|---|
 | `lib/kinds.f90` | `kinds` | kind parameters `sp`, `dp` | 1 |
+| `lib/constants.f90` | `constants` | physical and numerical constants: `bohr`, `hartree`, `memach` (the `PARAMETER`s of `src/GLOBAL`), `pi` (the legacy single-precision literal) | 3 |
 | `lib/leed_types.f90` | `leed_types` | derived types replacing the COMMON blocks and the `PARAM` sizes (section 4) | created 2, extended by each later stage |
 | `lib/leed_input.f90` | `leed_input` | reader: parses the input on stdin into `leed_types` | 2 |
 | `lib/leed_output.f90` | `leed_output` | writer: stdout log, `fd.out`, `amp.out`, tensor files | created 2 (input echo), files 7 |
@@ -80,14 +87,14 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 8 | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
 | `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; `SLIND` is called after the reader |
 | `READGEO` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout |
-| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3 | sublattice vectors for `FMAT`; uses `/SL/` |
-| `FACT` | `lib.tleed.f` | `angular_coefficients` | 3 | function |
-| `CA` | `lib.tleed.f` | `angular_coefficients` | 3 | function |
-| `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3 | |
-| `BLM` | `lib.tleed.f` | `angular_coefficients` | 3 | function; error message on stdout |
-| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3 | |
-| `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3 | |
-| `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3 | used by `delta`: frozen copy stays |
+| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3, done | `sublattice_equivalences`; takes the `lattice` type instead of `/SL/`; when no equivalent sublattice matches, `JJS` gets `NL + 1` as in the legacy code |
+| `FACT` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `scaled_factorial`; single-precision literals kept |
+| `CA` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `composite_layer_coefficient`; default-`REAL` intermediates and the literal `12.56637` kept |
+| `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3, done | `composite_layer_coefficients` |
+| `BLM` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `harmonics_product_integral`; invalid-argument message on stderr, non-zero exit |
+| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3, done | `matrix_coefficients`; `YLMC`, `FAC1`, `FAC2` are local; `FAC` stays a workspace argument, filled by `matrix_coefficients` and again by `legendre_product_integrals` |
+| `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3, done | `lm_permutations` |
+| `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3, done | `legendre_product_integrals`; used by `delta`: frozen copy stays |
 | `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays; message on stdout |
 | `PSTEMP` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
 | `BESSEL` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
@@ -348,9 +355,10 @@ change.
 Choices made here:
 
 1. `SLIND` in stage 3 (energy-independent set-up) although `READIN`
-   (stage 2) called it; until stage 3 the driver calls the legacy routine
-   after the ported reader, once it has copied the lattice into `/SL/`
-   (`SLIND` writes nothing, so the stdout order is unchanged).
+   (stage 2) called it; the driver calls the port after the ported reader
+   with the reader's `lattice` and still copies the lattice into `/SL/`
+   for `FMAT`, `GHD`, `GHMAT` and `TAUMAT` (`SLIND` writes nothing, so the
+   stdout order is unchanged).
 2. `BEAMS` in stage 4 (first stage running the per-energy computation);
    `DECIDE` in stage 7 with the exit-beam loop of the tensor output.
 3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,

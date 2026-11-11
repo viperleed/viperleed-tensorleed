@@ -43,6 +43,14 @@ C  modules of the input reader
      +                      beam_list, phase_shifts
       USE leed_input, ONLY: read_input, read_geometry
 
+C  modules of the setup routines
+
+      USE angular_coefficients, ONLY: composite_layer_coefficients,
+     +                                  matrix_coefficients,
+     +                                  lm_permutations
+      USE atomic_scattering, ONLY: legendre_product_integrals
+      USE bravais_layer, ONLY: sublattice_equivalences
+
 C  include parameter statements for dimensions etc
 
       INCLUDE "PARAM"
@@ -91,7 +99,7 @@ C  ASB  : convergence criterion - should be set .le. the smallest interlayer
 C         distance for which layer doubling is used (enters into TST)
 C  FR   : obsolete
 C  ASE  : distance between first layer coordinate and onset of inner potential
-C  V,VL,JJS : variables for subroutine SLIND
+C  V,VL,JJS : variables for sublattice_equivalences
 C  KNB  : number of beams in each beam set
 C  SPQF : lateral momentum of beams in units of reciprocal lattice vectors
 C  SPQ  : lateral momentum of beams in atomic units
@@ -228,14 +236,11 @@ C  LEV  : number of even (lm) components
 C  LOD  : number of odd  (lm) components
 C  LEV2 : 2*LEV
 C  NCA  : lmax-dependent dimension of CAA (cf data statement later)
-C  NCAA : dimension for composite layer Clebsh-Gordans, from CAAA()
+C  NCAA : dimension for composite layer Clebsh-Gordans, from composite_layer_coefficients()
 C  CAA  : Clebsh-Gordon-coefficients for composite layer
-C  N,NN,NLM: dimensions for computation of Clebsh-Gordons for matrices
-C         X and TAU, CELMG()
+C  NLM  : dimension of CLM (as NLMS)
 C  NLMS : lmax-dependent dimension of X and TAU Clebsh-Gordans CLM
 C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (RSMF,RTINV)
-C  YLMC : special ylm for celmg
-C  FAC2,FAC1: auxiliary arrays in CELMG
 C  NFAC : variable dimension for array FAC
 C  FAC  : array that contains values n! - formerly dragged through code
 C         via a common block
@@ -251,11 +256,11 @@ C  PPP  : gaunt coefficients for temperature-dependent phaseshifts
       DIMENSION NCA(MNDIM)
       REAL CAA
       DIMENSION CAA(MNLMO)
-      INTEGER N,NN,NLM
+      INTEGER NLM
       INTEGER NLMS
       DIMENSION NLMS(MNDIM)
-      REAL CLM,YLMC,FAC2,FAC1
-      DIMENSION CLM(MNLM),YLMC(MNN),FAC2(MNN),FAC1(MN)
+      REAL CLM
+      DIMENSION CLM(MNLM)
       INTEGER NFAC
       DOUBLE PRECISION FAC
       DIMENSION FAC(MNFAC)
@@ -684,10 +689,10 @@ C  copy the result into the variables used by the remaining routines
       ES = PHASE%energy
       PHSS = PHASE%value
 
-C  SLIND compares substrate lattice and superlattice (read via /SL/)
+C  sublattice_equivalences compares substrate lattice and superlattice
 C  for the benefit of FMAT
 
-      CALL SLIND(V,VL,JJS,NL,IDEG,2.0E-4)
+      CALL sublattice_equivalences(LAT,NL,V,VL,JJS)
 
 C  subroutine read_geometry reads structural information for the reference
 C  calculation (i.e. the vertical atomic arrangement within the
@@ -791,19 +796,18 @@ C  counters, variable array dimensions etc.
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR COMPOSITE LAYER, CAA
 
       NCAA=NCA(LMAX)
-      CALL CAAA(CAA,NCAA,LMMAX)
+      CALL composite_layer_coefficients(LMAX,CAA(1:NCAA))
 
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR MATRICES X AND TAU, CLM
 
-      N=2*LMAX+1
-      NN=N*N
       NLM=NLMS(LMAX)
       NFAC = MNFAC
-      CALL CELMG(CLM,NLM,YLMC,FAC2,NN,FAC1,N,LMAX,NFAC,FAC)
+      CALL matrix_coefficients(LMAX,CLM(1:NLM),FAC(1:NFAC))
 
 C  compute PERMUTATIONS OF (L,M)-SEQUENCE LX,LXI,LT,LXM
 
-      CALL LXGENT(LX,LXI,LT,LXM,LMAX,LMMAX)
+      CALL lm_permutations(LMAX,LX(1:LMMAX),LXI(1:LMMAX),
+     +                     LT(1:LMMAX),LXM(1:LMMAX))
 
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR COMPUTATION OF TEMPERATURE-
 C  DEPENDENT PHASE SHIFTS, CPPP
@@ -813,7 +817,7 @@ C  DEPENDENT PHASE SHIFTS, CPPP
       NN1=NN2+NN3-1
 
 
-      CALL  CPPP (PPP,NN1,NN2,NN3,NFAC,FAC)
+      CALL legendre_product_integrals(NN1,NN2,NN3,PPP,FAC(1:NFAC))
 
 C*************************************************************
 C  Loop over energies - calculate from initial to final energy

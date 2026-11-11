@@ -1,6 +1,7 @@
 """Baseline-tree and coverage guards of the generators (tests/generate),
 the hand-made cases' identity with their source cases, the generated
-benchmark inputs, and the Fortran formats the rfactor input generator writes.
+benchmark inputs, the Fortran formats the rfactor input generator writes,
+and the flag-set check and hex encoding of the routine-check generators.
 
 The viperleed generators are imported with a stub fortranformat module
 and a dummy viperleed_examples location, so these tests run in tl-tests.
@@ -21,7 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from generate import baseline_tree, make_expected, make_hand_cases, rfactor_inputs
+from generate import (baseline_tree, make_expected, make_hand_cases, rfactor_inputs,
+                      routine_values)
 from generate.baseline_tree import GeneratorError, check_baseline_tree
 from harness.cases import CASES_DIR, load_cases_from
 from unit.gitrepo import git
@@ -299,3 +301,35 @@ def test_format_int_line_matches_fortran(values, expected):
     """format_int_line writes 25I4 records as gfortran does, with the blank
     record after a multiple of 25 values."""
     assert rfactor_inputs.format_int_line(values) == expected
+
+
+def _fake_driver(results_by_flags):
+    """build and run callables whose results depend only on the flags."""
+    return (lambda workdir, flags: flags,
+            lambda exe, stdin: results_by_flags[exe])
+
+
+def test_routine_values_flag_sets_agreeing_accepted(tmp_path):
+    summary = {"CAA": {"n": 1}}
+    build, run = _fake_driver({flags: dict(summary) for flags in routine_values.FLAG_SETS})
+    rows = routine_values.results_per_flag_set(build, run, [("c", "what", ["X"])],
+                                               tmp_path)
+    assert rows == [("c", "what", ["X"], summary)]
+
+
+def test_routine_values_extra_array_in_one_flag_set_refused(tmp_path):
+    first, *others = routine_values.FLAG_SETS
+    results = {first: {"CAA": {"n": 1}}}
+    results.update({flags: {"CAA": {"n": 1}, "EXTRA": {"n": 1}} for flags in others})
+    build, run = _fake_driver(results)
+    with pytest.raises(GeneratorError, match="differ"):
+        routine_values.results_per_flag_set(build, run, [("c", "what", ["X"])], tmp_path)
+
+
+@pytest.mark.parametrize("value, expected", [
+    (1.0, "3f800000"),
+    (-2.5, "c0200000"),
+    (0.1, "3dcccccd"),
+])
+def test_routine_values_hex32_is_big_endian_bits(value, expected):
+    assert routine_values.hex32(value) == expected

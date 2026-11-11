@@ -58,8 +58,8 @@ def fixture_design_doc(tl_root):
 
 
 def test_legacy_names_found(tl_root):
-    """The source scan finds the main program, a function and blank COMMON."""
-    assert {"LEED", "FACT", "TSCATF"} <= set(_routine_names(tl_root))
+    """The source scan finds the main program, subroutines and blank COMMON."""
+    assert {"LEED", "CPPP", "TSCATF"} <= set(_routine_names(tl_root))
     assert {"blank COMMON", "/SL/"} <= set(_common_names(tl_root))
 
 
