@@ -37,6 +37,12 @@ C    before you use it.
 C
       program leed
 
+C  modules of the input reader
+
+      USE leed_types, ONLY: geometry, lattice, control, inner_potential,
+     +                      beam_list, phase_shifts
+      USE leed_input, ONLY: read_input, read_geometry
+
 C  include parameter statements for dimensions etc
 
       INCLUDE "PARAM"
@@ -72,7 +78,7 @@ C  storage for variable dimensions (see PARAM)
 
       REAL EMACH
 
-C  variables for subroutine READIN():
+C  variables for the reader of the general input (read_input):
 
 C  title: descriptive title for calculation to be performed
 C  TVA  : area of (1x1) unit mesh
@@ -151,7 +157,7 @@ C  IFORM : Formatted (1) or unformatted (0) Tensor LEED output
 
       INTEGER IFORM
 
-C  variables for subroutine READGEO
+C  variables for the reader of the geometry (read_geometry)
 
 C  CONC  : concentration of element IEL on site type ISITE
 C  VIB   : vibrational amplitude of element IEL on site type ISITE
@@ -183,6 +189,13 @@ C  TENS  : tensor output for layer ISTACK desired?
       REAL SUBPOS
       DIMENSION SUBPOS(MNLTYPE,MNSUB,3) ! size on the order of 300
       INTEGER TSLAB,TOPLAYB,BOTLAYB
+      TYPE(geometry) GEOM
+      TYPE(lattice) LAT
+      TYPE(control) CTRL
+      TYPE(inner_potential) POT
+      TYPE(beam_list) BMSET
+      TYPE(phase_shifts) PHASE
+      INTEGER IGL,IGS,IGP
       REAL ASA
       DIMENSION ASA(3)
       REAL ASBULK
@@ -618,21 +631,108 @@ C*************************************************************
 C read information required for entire calculation
 C*************************************************************
 
-C  subroutine READIN reads lateral lattice information, general
+C  subroutine read_input reads lateral lattice information, general
 C  calculational features, beam list and phase shifts
 
-      CALL READIN(TITLE,TVA,RAR1,RAR2,TVB,IDEG,
-     +NL,V,VL,JJS,KNBS,KNB,KNT,SPQF,KSYM,SPQ,TST,TSTS,NPUN,NPU,
-     +THETA,FI,NPSI,ES,PHSS,L1,NEL,LMAX1,IFORM,VPI,EI,EF,DE)
+      CALL read_input(5,6,NL,KNBS,KNT,NPUN,NPSI,NEL,LMAX1,IDEG,NL1,NL2,
+     +                TITLE,LAT,CTRL,POT,VPI,EI,EF,DE,BMSET,TST,THETA,
+     +                FI,IFORM,PHASE)
 
-C  subroutine READGEO reads structural information for the reference
+C  copy the result into the variables used by the remaining routines
+
+      ARA1 = LAT%substrate_vector(:,1)
+      ARA2 = LAT%substrate_vector(:,2)
+      RAR1 = LAT%substrate_reciprocal(:,1)
+      RAR2 = LAT%substrate_reciprocal(:,2)
+      ARB1 = LAT%superlattice_vector(:,1)
+      ARB2 = LAT%superlattice_vector(:,2)
+      RBR1 = LAT%superlattice_reciprocal(:,1)
+      RBR2 = LAT%superlattice_reciprocal(:,2)
+      TVA = LAT%substrate_area
+      TVB = LAT%superlattice_area
+      IDEG = LAT%symmetry_degree
+      NL1 = LAT%repetitions(1)
+      NL2 = LAT%repetitions(2)
+      NPUN = SIZE(BMSET%output)
+      NPSI = SIZE(PHASE%energy)
+
+      LMAX = CTRL%lmax
+      EPS = CTRL%eps
+      LITER = CTRL%liter
+      L1 = LMAX+1
+
+      ASE = POT%surface_distance
+      VPIS = POT%vpi_substrate
+      VPIO = POT%vpi_overlayer
+      EM = POT%em
+      C1 = POT%c(1)
+      C2 = POT%c(2)
+      C3 = POT%c(3)
+      C4 = POT%c(4)
+      C5 = POT%c(5)
+      C6 = POT%c(6)
+      C7 = POT%c(7)
+      C8 = POT%c(8)
+      WORKFN = POT%work_function
+
+      TSTS = TST
+      KNB = BMSET%set_size
+      SPQF = BMSET%index
+      SPQ = BMSET%momentum
+      KSYM = BMSET%symmetry
+      NPU = BMSET%output
+      ES = PHASE%energy
+      PHSS = PHASE%value
+
+C  SLIND compares substrate lattice and superlattice (read via /SL/)
+C  for the benefit of FMAT
+
+      CALL SLIND(V,VL,JJS,NL,IDEG,2.0E-4)
+
+C  subroutine read_geometry reads structural information for the reference
 C  calculation (i.e. the vertical atomic arrangement within the
 C  2D lateral unit mesh)
 
-      CALL READGEO(NEL,NSITE,NLTYPE,NNSUB,NSTACK,NBRAV,
-     +             CONC,VIB,NSUB,LBRAV,LCOMP,LATT,STYPE,SUBPOS,
-     +             TSLAB,ASA,TOPLAYB,BOTLAYB,ASBULK,LTYPE,LDIST,TENS,
-     +             LAYFILE,ASB,NL)
+      CALL read_geometry(5,6,NEL,NSITE,NLTYPE,NNSUB,NSTACK,NBRAV,NL,
+     +                   GEOM)
+
+C  copy the result into the arrays used by the remaining routines
+
+      CONC(1:NSITE,1:NEL) = GEOM%sites%concentration
+      VIB(1:NSITE,1:NEL) = GEOM%sites%vibration_amplitude
+      DO IGL = 1,NLTYPE
+        LATT(IGL) = GEOM%layer_types(IGL)%lattice
+        NSUB(IGL) = GEOM%layer_types(IGL)%n_subplanes
+        LBRAV(IGL) = GEOM%layer_types(IGL)%bravais_index
+        LCOMP(IGL) = GEOM%layer_types(IGL)%composite_index
+        DO IGS = 1,NSUB(IGL)
+          STYPE(IGL,IGS) = GEOM%layer_types(IGL)%site_type(IGS)
+          DO IGP = 1,3
+            SUBPOS(IGL,IGS,IGP) =
+     +        GEOM%layer_types(IGL)%subplane_position(IGP,IGS)
+          ENDDO
+        ENDDO
+      ENDDO
+
+      TSLAB = GEOM%bulk_slab
+      IF (TSLAB.EQ.0) THEN
+        ASA = GEOM%bulk_unit_vector
+        TOPLAYB = GEOM%bulk_top_layer
+        BOTLAYB = GEOM%bulk_bottom_layer
+        ASBULK = GEOM%bulk_internal_vector
+      END IF
+      ASB(1) = GEOM%min_distance_vector(1)
+
+      DO IGL = 1,NSTACK
+        LTYPE(IGL) = GEOM%stack(IGL)%layer_type
+        LDIST(IGL,1:3) = GEOM%stack(IGL)%distance
+        TENS(IGL) = GEOM%stack(IGL)%tensor_output
+        IF (TENS(IGL).EQ.1) THEN
+          DO IGS = 1,NSUB(LTYPE(IGL))
+            LAYFILE(IGL,IGS) = GEOM%stack(IGL)%tensor_file(IGS)
+          ENDDO
+        END IF
+      ENDDO
 
 C*************************************************************
 C open output files, write title and general information

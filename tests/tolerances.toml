@@ -81,6 +81,12 @@ rtol = 0.0
 atol_frac = 0.0
 ulps = 1.5
 
+[numeric."stdout.exact"]
+# ref-calc standard output (title, echoed input, per-energy lines): any difference fails.
+# Not recalibrated by calibrate_tolerances.py.
+rtol = 0.0
+atol_frac = 0.0
+
 [tier2]
 # R factors in R_OUT / Errors_*.csv are printed with 4 decimals; displacements,
 # V0 shifts with 2-4 decimals. Calibration (-O0 vs -O2): see README.

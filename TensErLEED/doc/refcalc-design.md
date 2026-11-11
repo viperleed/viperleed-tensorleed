@@ -33,6 +33,11 @@ below and switches the driver's calls over to them.
 | 8 | Remove the remaining COMMON blocks and `PARAM`; arrays sized from the input, per energy where it saves memory (number of beams in use, LMAX); driver in free form |
 | 9 | viperleed: for TensErLEED >= 3.0.0, no `PARAM` and no run-time compilation of `ref-calc`; writes the input-only sizes of section 5 into the input |
 
+Stages 1 and 2 are done: `READIN` and `READGEO` live in `leed_input` as
+`read_input` and `read_geometry`, their stdout echo in `leed_output`, and
+the driver copies what they return into its COMMON blocks and
+`PARAM`-sized arrays for the routines still in `lib.tleed.f`.
+
 ## 2. Target files and modules
 
 All new files are free-form `.f90`, listed in `REFCALC_F90` of the
@@ -73,7 +78,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | Legacy routine | File | Target module | Stage | Notes |
 |---|---|---|---|---|
 | `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 8 | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
-| `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; calls `SLIND` |
+| `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; `SLIND` is called after the reader |
 | `READGEO` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout |
 | `SLIND` | `lib.tleed.f` | `bravais_layer` | 3 | sublattice vectors for `FMAT`; uses `/SL/` |
 | `FACT` | `lib.tleed.f` | `angular_coefficients` | 3 | function |
@@ -263,9 +268,41 @@ results or parsing. `LEED` copies them from `PARAM` at start-up
 | `NPUN` (`MNPUN`) | `READIN` reads `NPU(1:NPUN)`; `HEAD` (headers of `fd.out`, `amp.out`) and `BEAMS`; `NT0 = MNT0`, equal to it, is the number of exit beams of the tensor loop in `LEED` and the length of `XIST` written by `OUTXIST` |
 | `NPSI` (`MNPSI`) | `READIN`'s phase-shift energy loops, and so where `READGEO` starts reading |
 
-For TensErLEED >= 3.0.0, viperleed writes these four values into the input
-(stage 9) and the reader reads them (stage 2, which fixes their place and
-format). The output formats do not change.
+For TensErLEED >= 3.0.0 the input carries these values in three records,
+each next to the data it sizes; the reader requires all three, and text
+after the numbers is a comment, as elsewhere in the input. The reader
+reads them list-directed, so any field width works (blank- or
+comma-separated values, and no `/` before the last number); the format
+below is what the converter and viperleed write:
+
+| Record | Written as | Place |
+|---|---|---|
+| `IDEG`, `NL1`, `NL2` | `3I5` | directly after the `VPI`/`ASE`/`WORKFN` record, before the beam sets |
+| `NPUN` | `I5` | directly before the `NPU` record(s) |
+| `NPSI` | `I5` | directly after the `IFORM` record, before the phase-shift block |
+
+Line 2 does not move, and no comment of these records contains the text
+`   LMAX`: viperleed edits the energy range and `LMAX` of an existing input
+by line position and by that text. Example (Ir(100)-(2x1)-O, comments
+starting in column 46 as for `IFORM`):
+
+```
+     5.00     1.00     2.65   V0i,ASE,WORKFN
+    2    2    1                              IDEG NL1 NL2 (TL >= 3.0.0)
+...
+   12                                        NPUN (TL >= 3.0.0)
+    2    4    6   10   12   14   18   46   48   52   54   58
+...
+  1                                          IFORM - formatted input and output
+   44                                        NPSI (TL >= 3.0.0)
+```
+
+The ported reader reads only this format. As long as `PARAM` exists, it
+stops when a value differs from its `PARAM` counterpart. viperleed writes
+these records from stage 9 on; until then the test suite converts each
+frozen input for the tree under test (`tests/harness/fin_convert.py`),
+while the legacy program reads the original. The output formats do not
+change.
 
 ## 6. Conventions for the new files
 
@@ -311,7 +348,9 @@ format). The output formats do not change.
 Choices made here:
 
 1. `SLIND` in stage 3 (energy-independent set-up) although `READIN`
-   (stage 2) calls it; until stage 3 the ported reader calls the legacy routine.
+   (stage 2) called it; until stage 3 the driver calls the legacy routine
+   after the ported reader, once it has copied the lattice into `/SL/`
+   (`SLIND` writes nothing, so the stdout order is unchanged).
 2. `BEAMS` in stage 4 (first stage running the per-energy computation);
    `DECIDE` in stage 7 with the exit-beam loop of the tensor output.
 3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,
@@ -321,8 +360,8 @@ Choices made here:
    `READIN`/`READGEO`; the output files in stage 7.
 6. The driver stays fixed-form `src/ref-calc.f` until stage 8, which
    replaces it with `src/refcalc.f90`.
-7. The input-only values of section 5 change the input format: tier-1
-   cases run the baseline and the port on the same frozen input, so stage 2
-   has to settle how the port gets these values while the baseline input
-   stays unchanged (e.g. read only when present, or a converted copy of
-   the input for the port).
+7. The input-only values of section 5 change the input format (records
+   and places in section 5). Tier-1 inputs stay frozen: the test suite
+   gives a tree with the ported reader a converted copy of each input
+   (values from the run's `PARAM`) and the legacy program the original;
+   which one a tree gets is decided from the tree, not from the input.

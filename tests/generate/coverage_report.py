@@ -33,7 +33,7 @@ from pathlib import Path
 
 from harness.build import (BuildFlags, build_in, needs_param, program_sources,
                            uses_makefile)
-from harness.cases import iter_runs
+from harness.cases import iter_runs, run_stdin
 from harness.runner import run_program
 
 COVERAGE = BuildFlags("coverage", "-O0 --coverage", "-llapack -lblas")
@@ -55,7 +55,8 @@ def run_with_coverage(tl_root, case, run, workdir):
              uses_makefile(tl_root), needs_param(tl_root, program), keep_tree=True)
     for name, src in run.files.items():
         shutil.copy(src, workdir / name)
-    res = run_program(workdir / program, workdir, run.stdin, timeout=900)
+    res = run_program(workdir / program, workdir, run_stdin(case, run, tl_root, workdir),
+                      timeout=900)
     if res.returncode != 0:
         print(f"  WARNING: {case.name}/{run.name} exit code {res.returncode}")
     # gcov resolves the source paths from the directory the build compiled in

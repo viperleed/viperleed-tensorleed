@@ -65,6 +65,7 @@ MAX_PRINT_ULPS = 10.0   # deviations up to this many ulps count as print-level n
 ULPS_SAFETY = 3.0       # print-level rule: rounding flips are quantised
 ULPS_FLOOR = 2.0
 LAST_DIGIT_PATTERNS = {"ROUT": 1e-4, "ROUTSHORT": 1e-4}  # pattern: last printed unit
+EXACT_PATTERNS = {"stdout.exact"}  # no deviation passes
 ONE_UNIT_PATTERNS = {"stdout"}  # one unit in each value's own last printed digit
 
 
@@ -156,11 +157,12 @@ def insensitivity(tol):
 
 def kept_patterns():
     """Patterns with a structural rule (scale "tensor", file_cap or exact F
-    columns): not recalibrated by this script, kept as they are;
+    columns) or exact (no tolerance at all): not recalibrated by this script, kept as they are;
     check them with check_noise_variants.py."""
     return {p for p, t in load_tolerances()["numeric"].items()
             if t.get("scale") == "tensor"
-            or {"file_cap", "exact_f_decimals", "exact_columns"} & set(t)}
+            or {"file_cap", "exact_f_decimals", "exact_columns"} & set(t)
+            or p in EXACT_PATTERNS}
 
 
 def _toml_block(text, pattern):
@@ -210,7 +212,7 @@ def render_toml(proposed, variants):
         "# 'insensitive' = share of non-zero expected values for which a 1 % change passes.",
         "# Loosen only with evidence of pure floating-point reordering (README, 'Rules').",
     ]
-    order = ["fd.out", "amp.out", "T_*", "ROUT", "ROUTSHORT", "*.column", "stdout"]
+    order = ["fd.out", "amp.out", "T_*", "ROUT", "ROUTSHORT", "*.column", "stdout", "stdout.exact"]
     for pattern in order + [p for p in proposed if p not in order]:
         if pattern in kept_patterns():
             lines += ["", _toml_block(old, pattern)]

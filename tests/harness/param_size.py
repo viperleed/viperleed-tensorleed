@@ -5,9 +5,10 @@ the executable. Each size is one of three kinds (SIZES, the column 'kind'):
   strict:   READIN/READGEO (lib/lib.tleed.f) stop unless the value equals
             the count in the input;
   bound:    the value only needs to be at least the count in the input;
-  explicit: the value reaches ref-calc only through PARAM and cannot be
-            derived from the input (IDEG, NL1/NL2, NPUN, NPSI); it is taken
-            from the run's PARAM.
+  explicit: the value cannot be derived from a legacy FIN (IDEG, NL1/NL2,
+            NPUN, NPSI); it is taken from the run's PARAM. The TL >= 3.0.0
+            FIN holds them in records of their own, and the ref-calc
+            reader stops unless they equal the PARAM values.
 derive_sizes reads the stdin input of ref-calc ("FIN", which also holds the
 phase shifts) with the explicit values and returns every size, bounds at
 their minimum. param_text writes a PARAM file as viperleed's writePARAM
@@ -27,6 +28,8 @@ import re
 from pathlib import Path
 from typing import NamedTuple
 
+from .fin_convert import Records, converted_values, int_field, strip_fin
+
 STRICT, BOUND, EXPLICIT = "strict", "bound", "explicit"
 
 
@@ -38,7 +41,8 @@ class Size(NamedTuple):
 
 
 SIZES = (
-    Size("MIDEG", EXPLICIT, "PARAM: degree of the symmetry used in SLIND/FMAT; not in FIN"),
+    Size("MIDEG", EXPLICIT, "PARAM: degree of the symmetry used in SLIND/FMAT; "
+                            "not in a legacy FIN"),
     Size("MNL1", EXPLICIT, "PARAM: superlattice repetitions along a1; not in FIN"),
     Size("MNL2", EXPLICIT, "PARAM: superlattice repetitions along a2; not in FIN"),
     Size("MKNBS", STRICT, "FIN beam list: number of beam sets; READIN stops unless "
@@ -87,47 +91,28 @@ def explicit_values(param):
     return {s.name: param[s.name] for s in SIZES if s.kind == EXPLICIT}
 
 
-def _int(line, width):
-    """Integer in the first width columns of line, read as Fortran Iw (blank is 0)."""
-    field = line[:width].strip()
-    return int(field) if field else 0
-
-
-class _Records:
-    """The lines of a FIN, read one record at a time."""
-
-    def __init__(self, text):
-        self.lines = text.splitlines()
-        self.pos = 0
-
-    def next(self):
-        if self.pos >= len(self.lines):
-            raise ValueError("FIN ends early")
-        self.pos += 1
-        return self.lines[self.pos - 1]
-
-    def skip(self, n):
-        for _ in range(n):
-            self.next()
-
-
 def derive_sizes(fin_text, explicit):
     """{name: value} for every Size, from a FIN and the explicit values.
 
     The FIN is read in the order and with the record layout of READIN and
     READGEO; explicit ({name: value} of the EXPLICIT sizes) supplies the
     record counts the FIN does not give (beam sets, output beams, phase-shift
-    energies). Bounds are at their minimum. ValueError if the FIN does not
-    have the layout expected, or for LMAX < 2, where no size is correct
-    (ref-calc writes past CAA at LMAX = 1).
+    energies). With explicit=None the FIN is a converted one (TL >= 3.0.0
+    layout, see fin_convert.py) and holds these values itself. Bounds are at
+    their minimum. ValueError if the FIN does not have the layout expected,
+    or for LMAX < 2, where no size is correct (ref-calc writes past CAA at
+    LMAX = 1).
     """
-    sizes = dict(explicit)
-    rec = _Records(fin_text)
+    if explicit is None:
+        explicit = converted_values(fin_text)
+        fin_text = strip_fin(fin_text)
+    rec = Records(fin_text)
     rec.skip(7)  # title, EI/EF/DE, ARA1, ARA2, ARB1, ARB2, VPI/ASE/WORKFN
+    sizes = dict(explicit)
     sizes["MKNBS"] = explicit["MNL1"] * explicit["MNL2"]
     knt = 0
     for _ in range(sizes["MKNBS"]):
-        knb = _int(rec.next(), 5)
+        knb = int_field(rec.next(), 5)
         rec.skip(knb)
         knt += knb
     sizes["MKNT"] = knt
@@ -136,7 +121,7 @@ def derive_sizes(fin_text, explicit):
         raise ValueError(f"FIN: expected TST after {sizes['MKNBS']} beam sets, got {tst!r}")
     rec.skip(math.ceil(explicit["MNPUN"] / 15))  # NPU, format 15I5
     rec.skip(3)  # THETA/FI, EPS, LITER
-    lmax = _int(rec.next(), 3)
+    lmax = int_field(rec.next(), 3)
     if lmax < 2:
         # legacy bug (README, known issues): CAAA writes CAA(2) past NCA(1) = 1
         raise ValueError(f"FIN: LMAX = {lmax}; ref-calc needs LMAX >= 2: at LMAX = 1 "
@@ -144,9 +129,9 @@ def derive_sizes(fin_text, explicit):
     sizes["MLMAX"] = lmax
     sizes["MNLMO"] = MNLMO_BY_LMAX[lmax - 1]
     sizes["MNLM"] = MNLM_BY_LMAX[lmax - 1]
-    psfmt = _int(rec.next(), 3)
+    psfmt = int_field(rec.next(), 3)
     rec.skip(1)  # IFORM
-    nel = _int(rec.next(), 3)
+    nel = int_field(rec.next(), 3)
     sizes["MNEL"] = nel
     npsi = explicit["MNPSI"]
     if psfmt == 1:
@@ -161,27 +146,27 @@ def derive_sizes(fin_text, explicit):
         raise ValueError(f"FIN: phase-shift format {psfmt} is neither 1 nor 2")
 
     rec.skip(3)
-    nsite = _int(rec.next(), 3)
+    nsite = int_field(rec.next(), 3)
     sizes["MNSITE"] = nsite
     rec.skip(nsite * (1 + nel))
     rec.skip(3)
-    nltype = _int(rec.next(), 3)
+    nltype = int_field(rec.next(), 3)
     sizes["MNLTYPE"] = nltype
     nsub = []
     for _ in range(nltype):
         rec.skip(2)  # header, LATT
-        nsub.append(_int(rec.next(), 3))
+        nsub.append(int_field(rec.next(), 3))
         rec.skip(nsub[-1])
     sizes["MNBRAV"] = nsub.count(1)
     sizes["MNSUB"] = max(nsub)
     rec.skip(3)
     rec.skip(5)  # TSLAB and four records (ASA, TOPLAYB, BOTLAYB, ASBULK or skipped)
     rec.skip(3)
-    nstack = _int(rec.next(), 3)
+    nstack = int_field(rec.next(), 3)
     sizes["MNSTACK"] = nstack
     for _ in range(nstack):
-        ltype = _int(rec.next(), 3)
-        if _int(rec.next(), 3) == 1:  # TENS: one file name per subplane
+        ltype = int_field(rec.next(), 3)
+        if int_field(rec.next(), 3) == 1:  # TENS: one file name per subplane
             rec.skip(nsub[ltype - 1])
     return sizes
 

@@ -48,15 +48,16 @@ def compare_performance(case, run, candidate_root, baseline_root, reps, workroot
     RSS.
     """
     workroot = Path(workroot)
-    exes = {"base": cases.build_program(baseline_root, case.program, run.param, RELEASE),
-            "cand": cases.build_program(candidate_root, case.program, run.param, RELEASE)}
+    roots = {"base": baseline_root, "cand": candidate_root}
+    exes = {label: cases.build_program(root, case.program, run.param, RELEASE)
+            for label, root in roots.items()}
     counter = iter(range(10**9))
 
     def once(label):
         """Execute the program of label ("base" or "cand") once in a fresh run directory."""
         workdir = workroot / f"{case.name}-{run.name}-{label}-{next(counter)}"
         shutil.rmtree(workdir, ignore_errors=True)
-        res = cases.run_built(case, run, exes[label], workdir)
+        res = cases.run_built(case, run, exes[label], workdir, roots[label])
         shutil.rmtree(workdir, ignore_errors=True)
         return res
 

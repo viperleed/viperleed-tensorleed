@@ -7,22 +7,22 @@ covers = ["composite-layer", "beeby", "superstructure", "several-beam-sets", "tw
 name = "E050_L06"
 stdin = "inputs/FIN_E050_L06"
 param = "inputs/PARAM_L06"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
 
 [[runs]]
 name = "E118_L07"
 stdin = "inputs/FIN_E118_L07"
 param = "inputs/PARAM_L07"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
 
 [[runs]]
 name = "E170_L08"
 stdin = "inputs/FIN_E170_L08"
 param = "inputs/PARAM_L08"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
 
 [[runs]]
 name = "E110-122_L07"
 stdin = "inputs/FIN_E110-122_L07"
 param = "inputs/PARAM_L07"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]

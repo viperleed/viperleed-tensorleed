@@ -44,3 +44,24 @@ def test_free_form_sources_compile_with_std_f2018(tl_root, tmp_path):
         lines = [words for words in compile_lines if words[-1] == src]
         assert len(lines) == 1, f"{src} is not compiled exactly once"
         assert "-std=f2018" in lines[0], f"{src}: {shlex.join(lines[0])}"
+
+
+def test_incremental_make_rebuilds_objects_using_a_changed_module(tl_root, tmp_path):
+    """After a module of ref-calc changes, make without -B rebuilds the
+    driver, which uses it, and not lib.tleed.f, which does not."""
+    tree = tmp_path / "TensErLEED"
+    shutil.copytree(tl_root / "TensErLEED", tree, symlinks=True)
+    param = next(run.param for case, run in iter_runs() if case.program == "refcalc")
+    make = ["make", "-C", str(tree), "refcalc", f"BUILDDIR={tmp_path / 'build'}",
+            "FFLAGS=-O0", f"PARAM={param}"]
+    first = subprocess.run(make, capture_output=True, text=True)
+    assert first.returncode == 0, first.stderr[-3000:]
+    kinds = tree / "lib" / "kinds.f90"
+    kinds.write_text(kinds.read_text().replace(
+        "end module", "integer, parameter :: new_kind = 1\nend module", 1))
+    second = subprocess.run(make, capture_output=True, text=True)
+    assert second.returncode == 0, second.stderr[-3000:]
+    compiled = [shlex.split(line)[-1] for line in second.stdout.splitlines()
+                if " -c " in line]
+    assert "src/ref-calc.f" in compiled
+    assert "lib/lib.tleed.f" not in compiled

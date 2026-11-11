@@ -11,6 +11,12 @@ refcalc = [
     "ag100_bulk2/E141_L08",
     "ag100_bulk2/E210_L09",
     "ag100_bulk2/E138-147_L08",
+    "ag100_input_forms/E210_L10",
+    "ag100_input_forms/E045_L06_npun15",
+    "ag100_input_forms/E045_L06_npun16",
+    "ag100_input_forms/E045_L06_npun30",
+    "ag100_input_forms/E045_L06_asbulk_small",
+    "ag100_input_forms/E045_L06_tslab1_asbulk_small",
     "ag100_mix/E045_L06",
     "ag100_mix/E141_L08",
     "ag100_mix/E210_L09",
@@ -36,6 +42,8 @@ refcalc = [
     "ir100_2x1_o_unsorted/E118_L07_three_heights",
     "ag100_psformat2/E045_L06",
     "ag100_psformat2/E141_L08",
+    "ag100_psformat2/E045_L06_em",
+    "ag100_psformat2/E045_L06_hartree_energies",
 ]
 rfactor = [
     "ag100_rfactor/pendry",

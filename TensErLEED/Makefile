@@ -33,7 +33,8 @@ STD_FFLAGS = -std=f2018
 
 B := $(BUILDDIR)
 
-REFCALC_F90 = lib/kinds.f90
+REFCALC_F90 = lib/kinds.f90 lib/leed_types.f90 lib/leed_output.f90 \
+              lib/leed_input.f90
 REFCALC_SOURCES = $(REFCALC_F90) src/ref-calc.f lib/lib.tleed.f
 RFACTOR_F90 = lib/rfacsb.f90 src/rfactor.f90
 RFACTOR_SOURCES = $(RFACTOR_F90)
@@ -79,11 +80,13 @@ $(B)/obj/refcalc/%.o: %.f90 | $(B)/obj/refcalc $(B)/mod/refcalc
 $(B)/obj/rfactor/%.o: %.f90 | $(B)/obj/rfactor $(B)/mod/rfactor
 	$(FC) $(FFLAGS) $(STD_FFLAGS) -J$(B)/mod/rfactor -o $@ -c $<
 
-# ref-calc
-$(B)/ref-calc.o: src/ref-calc.f src/GLOBAL $(B)/PARAM | $(REFCALC_F90_OBJ)
-	$(FC) $(FFLAGS) -I$(B) -o $@ -c $<
+# ref-calc: the driver uses the modules, so it depends on their objects
+# (an incremental make rebuilds it when a module changes); lib.tleed.f
+# uses none
+$(B)/ref-calc.o: src/ref-calc.f src/GLOBAL $(B)/PARAM $(REFCALC_F90_OBJ)
+	$(FC) $(FFLAGS) -I$(B) -I$(B)/mod/refcalc -o $@ -c $<
 
-$(B)/lib.tleed.o: lib/lib.tleed.f src/GLOBAL | $(B) $(REFCALC_F90_OBJ)
+$(B)/lib.tleed.o: lib/lib.tleed.f src/GLOBAL | $(B)
 	$(FC) $(FFLAGS) -Isrc -I$(B) -o $@ -c $<
 
 $(B)/refcalc: $(REFCALC_F90_OBJ) $(B)/ref-calc.o $(B)/lib.tleed.o

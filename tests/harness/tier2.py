@@ -99,6 +99,25 @@ def is_released_tl_tree(tl_root):
     return released and not status.stdout.strip()
 
 
+REFCALC_UNAVAILABLE = ("tier 2 of the refactored ref-calc is unavailable until viperleed "
+                       "supports TensErLEED 3.0.0 (released viperleed cannot build a "
+                       "module-using ref-calc)")
+_USE_STATEMENT = re.compile(r"^[ \t]+USE\b", re.I | re.M)
+
+
+def refcalc_unavailable(tl_root):
+    """REFCALC_UNAVAILABLE if the ref-calc driver of tl_root uses a module, else ''.
+
+    viperleed builds ref-calc from lib/lib.tleed* and the first src/ref-calc*
+    only, so it cannot build a ref-calc that needs the module files. Tier 2
+    runs ref-calc for every system, so none of it is possible then.
+    """
+    drivers = sorted((Path(tl_root) / "TensErLEED" / "src").glob("ref-calc*"))
+    if drivers and _USE_STATEMENT.search(drivers[0].read_text(errors="replace")):
+        return REFCALC_UNAVAILABLE
+    return ""
+
+
 def run_viperleed_calc(system_dir, tl_root, viperleed_cmd, workdir, parameters=None):
     """Copy the inputs to workdir, run viperleed calc, return parse_results().
 
