@@ -48,6 +48,7 @@ C  modules of the setup routines
       USE angular_coefficients, ONLY: composite_layer_coefficients,
      +                                  matrix_coefficients,
      +                                  lm_permutations
+      USE atomic_scattering, ONLY: legendre_product_integrals
 
 C  include parameter statements for dimensions etc
 
@@ -815,7 +816,7 @@ C  DEPENDENT PHASE SHIFTS, CPPP
       NN1=NN2+NN3-1
 
 
-      CALL  CPPP (PPP,NN1,NN2,NN3,NFAC,FAC)
+      CALL legendre_product_integrals(NN1,NN2,NN3,PPP,FAC(1:NFAC))
 
 C*************************************************************
 C  Loop over energies - calculate from initial to final energy

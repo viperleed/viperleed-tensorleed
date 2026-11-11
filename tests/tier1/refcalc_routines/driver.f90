@@ -17,6 +17,7 @@ program refcalc_routines_driver
   use, intrinsic :: iso_fortran_env, only: int32, int64
   use angular_coefficients, only: composite_layer_coefficients, lm_permutations, &
                                   matrix_coefficients
+  use atomic_scattering, only: legendre_product_integrals
   use kinds, only: sp, dp
   implicit none
 
@@ -115,7 +116,8 @@ contains
     real(dp), intent(inout) :: fac(:)
 
     ppp = 0.0_sp
-    call cppp(ppp, size(ppp, 1), size(ppp, 2), size(ppp, 3), size(fac), fac)
+    call legendre_product_integrals(size(ppp, 1), size(ppp, 2), size(ppp, 3), &
+                                    ppp, fac)
   end subroutine gaunt_table
 
   subroutine sublattice_case()
