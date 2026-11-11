@@ -15,7 +15,8 @@ module angular_coefficients
 
   private
 
-  public :: composite_layer_coefficients, matrix_coefficients
+  public :: composite_layer_coefficients, matrix_coefficients, &
+            lm_permutations
 
   !> The single-precision literal 3.14159265 as a double precision number,
   !! which is what the legacy REAL*8 variables PI of BLM and CELMG held.
@@ -414,5 +415,102 @@ contains
       end do
     end do
   end subroutine matrix_coefficients
+
+  !> Relationships between different orderings of the (l,m) pairs
+  !! (l <= lmax, |m| <= l) (legacy LXGENT).
+  !!
+  !! Three orderings are considered, the 'natural' one (N), the 'coplanar'
+  !! one (C) and the 'symmetrized' one (S). They are tabulated below for
+  !! lmax = 4.
+  !! \verbatim
+  !!  I=  0 0 0 0 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 2 2 2 2 2 2
+  !!      1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+  !!
+  !!  N  L=  0 1 1 1 2 2 2 2 2 3 3 3 3 3 3 3 4 4 4 4 4 4 4 4 4
+  !!     M=  0-1 0 1-2-1 0 1 2-3-2-1 0 1 2 3-4-3-2-1 0 1 2 3 4
+  !!
+  !!  C  L=  0 1 1 2 2 2 3 3 3 3 4 4 4 4 4 1 2 2 3 3 3 4 4 4 4
+  !!     M=  0-1 1-2 0 2-3-1 1 3-4-2 0 2 4 0-1 1-2 0 2-3-1 1 3
+  !!                   L+M=EVEN           *      L+M=ODD
+  !!
+  !!  S  L=  0 2 2 2 4 4 4 4 4 1 1 3 3 3 3 1 3 3 3 2 2 4 4 4 4
+  !!     M=  0-2 0 2-4-2 0 2 4-1 1-3-1 1 3 0-2 0 2-1 1-3-1 1 3
+  !!             L=EVEN       *  L=ODD    * L=ODD *  L=EVEN
+  !!             M=EVEN       *  M=ODD    * M=EVEN*   M=ODD
+  !! \endverbatim
+  !! To describe the relationships, a particular pair (l,m) in a particular
+  !! sequence is represented here by N(i), C(i) or S(i) (i = 1, lmmax), e.g.
+  !! N(10) = (3,-3). The relationships lx, lxi, lt, lxm generated here are
+  !! defined by
+  !! - lx:  N(lx(i)) = S(i).
+  !! - lxi: C(i) = S(lxi(i)) if i <= lev, and S(lxi(i) + lev) if i > lev.
+  !! - lt:  CSM(N(lt(i))) = S(i), where CSM means change the sign of m.
+  !! - lxm: N(i) = S(lxm(i)).
+  !!
+  !! All four arrays have lmmax = (lmax + 1)**2 elements.
+  subroutine lm_permutations(lmax, lx, lxi, lt, lxm)
+    integer, intent(in) :: lmax  !< largest angular momentum l
+    integer, intent(out) :: lx(:), lxi(:), lt(:), lxm(:)
+
+    integer :: lmmax, lev, lee, leo, loe, ll, l1, lt1, l, m, jlm, jlp
+
+    lmmax = (lmax + 1)**2
+    lev = (lmax + 1) * (lmax + 2) / 2
+    lee = (lmax / 2 + 1)**2
+    leo = ((lmax + 1) / 2 + 1) * ((lmax + 1) / 2) + lee
+    loe = ((lmax - 1) / 2 + 1)**2 + leo
+    ll = 0
+    l1 = 0
+    lt1 = 0
+    do l = 0, lmax
+      do m = -l, l
+        ll = ll + 1
+        if (mod(l + m, 2) /= 1) then
+          lt1 = lt1 + 1
+          lt(ll) = lt1
+          if (mod(l, 2) /= 1) then
+            l1 = l1 + 1
+            lx(l1) = ll
+          else
+            lee = lee + 1
+            lx(lee) = ll
+          end if
+        else
+          lev = lev + 1
+          lt(ll) = lev
+          if (mod(l, 2) /= 0) then
+            leo = leo + 1
+            lx(leo) = ll
+          else
+            loe = loe + 1
+            lx(loe) = ll
+          end if
+        end if
+      end do
+    end do
+
+    do l = 1, lmmax
+      l1 = lx(l)
+      lt1 = lt(l1)
+      lxi(lt1) = l
+    end do
+    do l = lee + 1, lmmax
+      lxi(l) = lxi(l) - lee
+    end do
+
+    jlm = 1
+    do l = 1, lmax + 1
+      ll = l + l - 1
+      do m = 1, ll
+        jlp = jlm + ll + 1 - 2 * m
+        do lt1 = 1, lmmax
+          if (jlm == lx(lt1)) exit
+        end do
+        lt(lt1) = jlp
+        lxm(jlm) = lt1
+        jlm = jlm + 1
+      end do
+    end do
+  end subroutine lm_permutations
 
 end module angular_coefficients

@@ -46,7 +46,8 @@ C  modules of the input reader
 C  modules of the setup routines
 
       USE angular_coefficients, ONLY: composite_layer_coefficients,
-     +                                  matrix_coefficients
+     +                                  matrix_coefficients,
+     +                                  lm_permutations
 
 C  include parameter statements for dimensions etc
 
@@ -803,7 +804,8 @@ C  compute CLEBSCH-GORDON COEFFICIENTS FOR MATRICES X AND TAU, CLM
 
 C  compute PERMUTATIONS OF (L,M)-SEQUENCE LX,LXI,LT,LXM
 
-      CALL LXGENT(LX,LXI,LT,LXM,LMAX,LMMAX)
+      CALL lm_permutations(LMAX,LX(1:LMMAX),LXI(1:LMMAX),
+     +                     LT(1:LMMAX),LXM(1:LMMAX))
 
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR COMPUTATION OF TEMPERATURE-
 C  DEPENDENT PHASE SHIFTS, CPPP

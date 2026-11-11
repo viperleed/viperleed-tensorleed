@@ -3,7 +3,7 @@
 !! from stdin and prints their results.
 !!
 !! Every group of routines is called from one wrapper below (caa_table,
-!! clm_table, lm_permutations, gaunt_table, sublattice_table), so that a
+!! clm_table, permutation_tables, gaunt_table, sublattice_table), so that a
 !! group can be switched to its module version without touching the others.
 !! Output, one block per array: a header line "name kind count", then the
 !! values: kind r4 / r8 as the hex digits of the bit patterns (8 / 16 per
@@ -15,7 +15,8 @@
 !! legacy routines of the baseline.
 program refcalc_routines_driver
   use, intrinsic :: iso_fortran_env, only: int32, int64
-  use angular_coefficients, only: composite_layer_coefficients, matrix_coefficients
+  use angular_coefficients, only: composite_layer_coefficients, lm_permutations, &
+                                  matrix_coefficients
   use kinds, only: sp, dp
   implicit none
 
@@ -64,7 +65,7 @@ contains
     call write_double('FAC_CELMG', fac)
 
     allocate(lx(lmmax), lxi(lmmax), lt(lmmax), lxm(lmmax))
-    call lm_permutations(lmax, lx, lxi, lt, lxm)
+    call permutation_tables(lmax, lx, lxi, lt, lxm)
     call write_int('LX', lx)
     call write_int('LXI', lxi)
     call write_int('LT', lt)
@@ -96,7 +97,7 @@ contains
   end subroutine clm_table
 
   !> LXGENT: permutations of the (L,M) sequence
-  subroutine lm_permutations(lmax, lx, lxi, lt, lxm)
+  subroutine permutation_tables(lmax, lx, lxi, lt, lxm)
     integer, intent(in) :: lmax
     integer, intent(out) :: lx(:), lxi(:), lt(:), lxm(:)
 
@@ -104,8 +105,8 @@ contains
     lxi = 0
     lt = 0
     lxm = 0
-    call lxgent(lx, lxi, lt, lxm, lmax, (lmax + 1)**2)
-  end subroutine lm_permutations
+    call lm_permutations(lmax, lx, lxi, lt, lxm)
+  end subroutine permutation_tables
 
   !> CPPP: Gaunt coefficients for the temperature-dependent phase shifts
   subroutine gaunt_table(lmax, ppp, fac)
