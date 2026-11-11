@@ -8,7 +8,9 @@ results to tier1/refcalc_routines/values.json, which
 tier1/test_refcalc_routines.py compares with tier1/refcalc_routines/driver.f90
 built against the tree under test. Covered: CAAA, CELMG, LXGENT and CPPP
 (arrays CAA, CLM, FAC, LX, LXI, LT, LXM, PPP) for every LMAX from 2 to 18,
-and SLIND (V, VL, JJS) for the lattices in LATTICES. Arrays are summarized
+and SLIND (V, VL, JJS) for the lattices in LATTICES, one of them with an
+IDEG inconsistent with the lattices, so that the no-match result
+JJS = NL + 1 is frozen. Arrays are summarized
 by their count, a SHA-256 of their bits and their first values
 (harness/routine_blocks.py).
 
@@ -70,6 +72,10 @@ LATTICES = [
      _HEX, ((3.834, 2.2136), (-3.834, 2.2136)), 3, 3, 1),
     ("hex_r3_ideg6", "hexagonal (sqrt3 x sqrt3) R30, IDEG 6",
      _HEX, ((3.834, 2.2136), (-3.834, 2.2136)), 6, 3, 1),
+    ("square_p2x2_ideg3", "p(2x2) square with IDEG 3, inconsistent with the "
+     "lattices: the 120-degree rotations of the sublattices other than the "
+     "first match none, so JJS = NL + 1 for them",
+     _SQ, ((5.76, 0.0), (0.0, 5.76)), 3, 2, 2),
 ]
 
 
