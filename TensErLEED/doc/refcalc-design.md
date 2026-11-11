@@ -92,7 +92,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `CA` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `composite_layer_coefficient`; default-`REAL` intermediates and the literal `12.56637` kept |
 | `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3, done | `composite_layer_coefficients` |
 | `BLM` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `harmonics_product_integral`; invalid-argument message on stderr, non-zero exit |
-| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3, done | `matrix_coefficients`; `YLMC`, `FAC1`, `FAC2` are local; `FAC` stays an argument for `CPPP` |
+| `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3, done | `matrix_coefficients`; `YLMC`, `FAC1`, `FAC2` are local; `FAC` stays a workspace argument, filled by `matrix_coefficients` and again by `legendre_product_integrals` |
 | `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3, done | `lm_permutations` |
 | `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3, done | `legendre_product_integrals`; used by `delta`: frozen copy stays |
 | `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays; message on stdout |

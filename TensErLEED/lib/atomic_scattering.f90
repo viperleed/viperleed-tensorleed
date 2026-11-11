@@ -24,13 +24,14 @@ contains
   !! Atomic Structure, vol. 1, 309, 310. They are used to compute
   !! temperature-dependent phase shifts. Author: Pendry.
   !!
-  !! The dummy ppp is explicitly shaped on purpose: ref-calc declares ppp
-  !! with its maximum size and the readers of the table take the first
-  !! n1 * n2 * n3 elements as an array of shape (n1, n2, n3).
-  !! The factorial table f is a work array, and the same as the one that
-  !! matrix_coefficients fills: f(n + 1) is set to n!, in double precision
-  !! (REAL*8 on purpose: it avoids a divergence of the sums to infinity).
-  !! The largest n1 + n2 + n3 - 1 = 4 * lmax + 2 needs size(f) >= 4 * lmax + 3.
+  !! The dummy ppp is explicitly shaped: its shape (n1, n2, n3) equals the
+  !! PARAM shape of the ref-calc actual, because the input reader requires
+  !! LMAX to equal MLMAX (sizing from LMAX comes later).
+  !! The factorial table f is workspace: the routine fills it before use and
+  !! no caller reads it afterwards. f(n + 1) is set to n!, in double
+  !! precision (REAL*8 on purpose: it avoids a divergence of the sums to
+  !! infinity). The largest n1 + n2 + n3 - 1 = 4 * lmax + 2 needs
+  !! size(f) >= 4 * lmax + 3.
   subroutine legendre_product_integrals(n1, n2, n3, ppp, f)
     integer, intent(in) :: n1, n2, n3
     real(sp), intent(out) :: ppp(n1, n2, n3)

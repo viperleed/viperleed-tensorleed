@@ -32,9 +32,10 @@ contains
   !!
   !! The substrate lattice vectors define the sublattices, the reciprocal
   !! vectors of the superlattice identify them. The arrays v, vl and jjs are
-  !! explicitly shaped on purpose: ref-calc declares them with maximum sizes,
-  !! and the lattice-sum routines take the first nl * 2 (nl * ideg) elements
-  !! as arrays of the shape (nl, 2) ((nl, ideg)).
+  !! explicitly shaped: their shapes (nl, 2) and (nl, ideg) equal the PARAM
+  !! shapes of the ref-calc actuals, because the input reader requires NL1,
+  !! NL2 and IDEG to equal their PARAM values (sizing from the input comes
+  !! later).
   subroutine sublattice_equivalences(lat, nl, v, vl, jjs)
     !> Lattices; uses substrate_vector, superlattice_reciprocal,
     !! symmetry_degree (ideg) and repetitions (nl1, nl2)
