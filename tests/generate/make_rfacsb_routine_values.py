@@ -21,26 +21,16 @@ __copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
 __created__ = '2026-10-22'
 __license__ = 'GPLv3+'
 
-import argparse
-import json
 import math
-import struct
 import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
-from generate.baseline_tree import GeneratorError, check_baseline_tree
+from generate.routine_values import hex32 as _hex
+from generate.routine_values import generate, main, run_driver
 
 TESTS_DIR = Path(__file__).parents[1]
 LEGACY_DRIVER = Path(__file__).with_name("rfacsb_routines_legacy_driver.f")
 VALUES = TESTS_DIR / "tier1" / "rfacsb_routines" / "values.json"
-FLAG_SETS = ("-O2", "-O0")
-
-
-def _hex(x):
-    """The 8 hex digits of x rounded to a 32-bit real."""
-    return struct.pack(">f", x).hex()
 
 
 def _curve(n, offset=0.0):
@@ -105,42 +95,14 @@ def _build(tl, workdir, flags):
 
 def _run(exe, stdin):
     """Run the driver on the stdin lines; return its output lines (lowercase hex)."""
-    out = subprocess.run([str(exe)], input="\n".join(stdin) + "\n", text=True,
-                         capture_output=True, check=True).stdout
-    return [line.strip().lower() for line in out.splitlines()]
+    return [line.strip().lower() for line in run_driver(exe, stdin).splitlines()]
 
 
-def main(argv=None):
+def _generate(argv=None):
     """Generate tier1/rfacsb_routines/values.json from the baseline."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--tl-root", required=True, type=Path,
-                        help="baseline TensErLEED tree")
-    parser.add_argument("--allow-non-baseline", action="store_true",
-                        help="accept a tree at another commit than the baseline")
-    args = parser.parse_args(argv)
-    tl = args.tl_root.resolve()
-    commit = check_baseline_tree(tl, allow_other_commit=args.allow_non_baseline)
-    with tempfile.TemporaryDirectory() as tmp:
-        exes = [_build(tl, Path(tmp), flags) for flags in FLAG_SETS]
-        cases = []
-        for case_id, what, stdin in CASES:
-            results = [_run(exe, stdin) for exe in exes]
-            if any(r != results[0] for r in results):
-                raise GeneratorError(f"{case_id}: legacy results depend on the flags "
-                                     f"{FLAG_SETS}: {results}")
-            cases.append({"id": case_id, "covers": what, "stdin": stdin,
-                          "expected": results[0]})
-    compiler = subprocess.run(["gfortran", "--version"], capture_output=True, text=True,
-                              check=True).stdout.splitlines()[0]
-    VALUES.write_text(json.dumps({
-        "source": f"legacy lib/rfacsb.f at {commit[:7]}, {compiler}, "
-                  f"flags {' and '.join(FLAG_SETS)} (identical)",
-        "cases": cases}, indent=1) + "\n")
-    print(f"wrote {len(cases)} cases to {VALUES}")
+    generate(argv, __doc__.splitlines()[0], _build, _run, CASES, VALUES,
+             "lib/rfacsb.f")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except GeneratorError as err:
-        sys.exit(f"error: {err}")
+    main(_generate)

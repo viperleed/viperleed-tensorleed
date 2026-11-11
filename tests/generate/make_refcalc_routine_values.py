@@ -28,22 +28,18 @@ __copyright__ = 'Copyright (c) 2026 ViPErLEED developers'
 __created__ = '2026-11-11'
 __license__ = 'GPLv3+'
 
-import argparse
-import json
 import subprocess
-import sys
-import tempfile
 from pathlib import Path
 
 import numpy as np
 
-from generate.baseline_tree import GeneratorError, check_baseline_tree
+from generate.routine_values import hex32 as _hex
+from generate.routine_values import generate, main, run_driver
 from harness.routine_blocks import summarize
 
 TESTS_DIR = Path(__file__).parents[1]
 LEGACY_DRIVER = Path(__file__).with_name("refcalc_routines_legacy_driver.f")
 VALUES = TESTS_DIR / "tier1" / "refcalc_routines" / "values.json"
-FLAG_SETS = ("-O2", "-O0")
 LINK = ["-llapack", "-lblas"]
 LMAX_RANGE = range(2, 19)  # the range of the DATA tables NCA and NLMS
 
@@ -75,11 +71,6 @@ LATTICES = [
     ("hex_r3_ideg6", "hexagonal (sqrt3 x sqrt3) R30, IDEG 6",
      _HEX, ((3.834, 2.2136), (-3.834, 2.2136)), 6, 3, 1),
 ]
-
-
-def _hex(x):
-    """The 8 hex digits of x rounded to a 32-bit real."""
-    return np.asarray(x, dtype=_F32).tobytes()[::-1].hex()
 
 
 def _reciprocal(a):
@@ -126,44 +117,14 @@ def _build(tl, workdir, flags):
 
 def _run(exe, stdin):
     """Run the driver on the stdin lines; return the summary of its output."""
-    out = subprocess.run([str(exe)], input="\n".join(stdin) + "\n", text=True,
-                         capture_output=True, check=True).stdout
-    return summarize(out)
+    return summarize(run_driver(exe, stdin))
 
 
-def main(argv=None):
+def _generate(argv=None):
     """Generate tier1/refcalc_routines/values.json from the baseline."""
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--tl-root", required=True, type=Path,
-                        help="baseline TensErLEED tree")
-    parser.add_argument("--allow-non-baseline", action="store_true",
-                        help="accept a tree at another commit than the baseline")
-    args = parser.parse_args(argv)
-    tl = args.tl_root.resolve()
-    commit = check_baseline_tree(tl, allow_other_commit=args.allow_non_baseline)
-    with tempfile.TemporaryDirectory() as tmp:
-        exes = [_build(tl, Path(tmp), flags) for flags in FLAG_SETS]
-        cases = []
-        for case_id, what, stdin in CASES:
-            results = [_run(exe, stdin) for exe in exes]
-            differing = [name for name in results[0]
-                         if any(r[name] != results[0][name] for r in results)]
-            if differing:
-                raise GeneratorError(f"{case_id}: legacy results depend on the flags "
-                                     f"{FLAG_SETS}: {differing}")
-            cases.append({"id": case_id, "covers": what, "stdin": stdin,
-                          "expected": results[0]})
-    compiler = subprocess.run(["gfortran", "--version"], capture_output=True, text=True,
-                              check=True).stdout.splitlines()[0]
-    VALUES.write_text(json.dumps({
-        "source": f"legacy lib/lib.tleed.f at {commit[:7]}, {compiler}, "
-                  f"flags {' and '.join(FLAG_SETS)} (identical)",
-        "cases": cases}, indent=1) + "\n")
-    print(f"wrote {len(cases)} cases to {VALUES}")
+    generate(argv, __doc__.splitlines()[0], _build, _run, CASES, VALUES,
+             "lib/lib.tleed.f")
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except GeneratorError as err:
-        sys.exit(f"error: {err}")
+    main(_generate)

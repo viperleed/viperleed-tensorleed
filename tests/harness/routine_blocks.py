@@ -1,4 +1,4 @@
-"""Summaries of the array blocks that the routine-value drivers print.
+"""Summaries of the array blocks that the ref-calc routine-check drivers print.
 
 A block is a header line "name kind count" followed by the values: kind r4
 and r8 as the hex digits of the bit patterns (8 and 16 per value), kind i4
