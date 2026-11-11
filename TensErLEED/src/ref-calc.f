@@ -49,6 +49,7 @@ C  modules of the setup routines
      +                                  matrix_coefficients,
      +                                  lm_permutations
       USE atomic_scattering, ONLY: legendre_product_integrals
+      USE bravais_layer, ONLY: sublattice_equivalences
 
 C  include parameter statements for dimensions etc
 
@@ -98,7 +99,7 @@ C  ASB  : convergence criterion - should be set .le. the smallest interlayer
 C         distance for which layer doubling is used (enters into TST)
 C  FR   : obsolete
 C  ASE  : distance between first layer coordinate and onset of inner potential
-C  V,VL,JJS : variables for subroutine SLIND
+C  V,VL,JJS : variables for sublattice_equivalences
 C  KNB  : number of beams in each beam set
 C  SPQF : lateral momentum of beams in units of reciprocal lattice vectors
 C  SPQ  : lateral momentum of beams in atomic units
@@ -688,10 +689,10 @@ C  copy the result into the variables used by the remaining routines
       ES = PHASE%energy
       PHSS = PHASE%value
 
-C  SLIND compares substrate lattice and superlattice (read via /SL/)
+C  sublattice_equivalences compares substrate lattice and superlattice
 C  for the benefit of FMAT
 
-      CALL SLIND(V,VL,JJS,NL,IDEG,2.0E-4)
+      CALL sublattice_equivalences(LAT,NL,V,VL,JJS)
 
 C  subroutine read_geometry reads structural information for the reference
 C  calculation (i.e. the vertical atomic arrangement within the

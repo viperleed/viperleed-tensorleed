@@ -35,7 +35,7 @@ B := $(BUILDDIR)
 
 REFCALC_F90 = lib/kinds.f90 lib/constants.f90 lib/leed_types.f90 \
               lib/leed_output.f90 lib/angular_coefficients.f90 \
-              lib/atomic_scattering.f90 \
+              lib/atomic_scattering.f90 lib/bravais_layer.f90 \
               lib/leed_input.f90
 REFCALC_SOURCES = $(REFCALC_F90) src/ref-calc.f lib/lib.tleed.f
 RFACTOR_F90 = lib/rfacsb.f90 src/rfactor.f90

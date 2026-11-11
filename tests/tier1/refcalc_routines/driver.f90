@@ -18,7 +18,9 @@ program refcalc_routines_driver
   use angular_coefficients, only: composite_layer_coefficients, lm_permutations, &
                                   matrix_coefficients
   use atomic_scattering, only: legendre_product_integrals
+  use bravais_layer, only: sublattice_equivalences
   use kinds, only: sp, dp
+  use leed_types, only: lattice
   implicit none
 
   ! dimensions of the legacy CAA and CLM as a function of LMAX
@@ -137,29 +139,27 @@ contains
     call write_int('JJS', reshape(jjs, [size(jjs)]))
   end subroutine sublattice_case
 
-  !> SLIND, with the lattice (br1, br2, ar1, ar2, rar1, rar2) in COMMON /SL/
+  !> SLIND: the lattice is filled from t (br1, br2, ar1, ar2, rar1, rar2)
   subroutine sublattice_table(ideg, nl1, nl2, t, v, vl, jjs)
     integer, intent(in) :: ideg, nl1, nl2
     real(sp), intent(in) :: t(12)
     real(sp), intent(out) :: v(:, :)
     complex(sp), intent(out) :: vl(:, :)
     integer, intent(out) :: jjs(:, :)
-    real(sp) :: br1(2), br2(2), ar1(2), ar2(2), rar1(2), rar2(2)
-    integer :: nl1_common, nl2_common
-    common /sl/ br1, br2, ar1, ar2, rar1, rar2, nl1_common, nl2_common
+    type(lattice) :: lat
 
-    br1 = t(1:2)
-    br2 = t(3:4)
-    ar1 = t(5:6)
-    ar2 = t(7:8)
-    rar1 = t(9:10)
-    rar2 = t(11:12)
-    nl1_common = nl1
-    nl2_common = nl2
+    lat%substrate_vector(:, 1) = t(1:2)
+    lat%substrate_vector(:, 2) = t(3:4)
+    lat%superlattice_vector(:, 1) = t(5:6)
+    lat%superlattice_vector(:, 2) = t(7:8)
+    lat%superlattice_reciprocal(:, 1) = t(9:10)
+    lat%superlattice_reciprocal(:, 2) = t(11:12)
+    lat%symmetry_degree = ideg
+    lat%repetitions = [nl1, nl2]
     v = 0.0_sp
     vl = (0.0_sp, 0.0_sp)
     jjs = 0
-    call slind(v, vl, jjs, nl1 * nl2, ideg, 2.0e-4_sp)
+    call sublattice_equivalences(lat, nl1 * nl2, v, vl, jjs)
   end subroutine sublattice_table
 
   subroutine read_reals(v)
