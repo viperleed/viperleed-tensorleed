@@ -15,6 +15,7 @@
 !! legacy routines of the baseline.
 program refcalc_routines_driver
   use, intrinsic :: iso_fortran_env, only: int32, int64
+  use angular_coefficients, only: composite_layer_coefficients
   use kinds, only: sp, dp
   implicit none
 
@@ -81,7 +82,7 @@ contains
     real(sp), intent(out) :: caa(:)
 
     caa = 0.0_sp
-    call caaa(caa, size(caa), (lmax + 1)**2)
+    call composite_layer_coefficients(lmax, caa)
   end subroutine caa_table
 
   !> CELMG: Clebsch-Gordan coefficients of the matrices X and TAU

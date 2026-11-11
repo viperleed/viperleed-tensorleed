@@ -618,87 +618,6 @@ C
       END
 
 C-----------------------------------------------------------------------
-C FUNCTION CA PERFORMS SAME PURPOSE FOR CAAA AS BLM DOES FOR CELMG
-      FUNCTION  CA (L1, MA1, L2, M2, L3, MA3)
-C      IMPLICIT REAL*8 (A-H,O-Z)
-C      REAL CA,FACT
-      DOUBLE PRECISION FACT, PREF, PREFA, PREFB, PREFT
-      M1 =  - MA1
-      M3 =  - MA3
-      IF ((IABS(M1) .GT. L1) .OR. (IABS(M2) .GT. L2) .OR. (IABS(M3) .GT.
-     1 L3))  GO TO 1570
-      IF ((M1+M2) .NE. (-M3))  GO TO 1570
-      IF ( .NOT. ((L3 .GE. IABS(L1-L2)) .AND. (L3 .LE. (L1+L2))))  GO
-     1TO 1570
-      IF (MOD(L1+L2+L3,2) .NE. 0)  GO TO 1570
-      IF ((L1 .EQ. 0) .OR. (L2 .EQ. 0) .OR. (L3 .EQ. 0))  GO TO 1580
-      DELT = FACT(L1 + L2 - L3) * FACT(L2 + L3 - L1) * FACT(L3 + L1 -
-     1L2)/FACT(L1 + L2 + L3 + 1) * (( - 1)**(L1 - L2 - M3 + ((L1 + L2 +
-     2L3)/2)))
-      PREF = FACT(L1 + M1) * FACT(L1 - M1) * FACT(L2 + M2) * FACT(L2 -
-     1M2) * FACT(L3 - M3) * FACT(L3 + M3)
-      PREFA = SQRT(PREF) * (10.D0**(L1 + L2 + L3))
-      PREFB = FACT((L1 + L2 + L3)/2)/(FACT((L1 + L2 - L3)/2) * FACT((L2
-     1+ L3 - L1)/2) * FACT((L3 + L1 - L2)/2)) * (0.1)
-      PREFT = DELT * PREFA * PREFB
-      IGT = MIN0(L2 + M2,L1 - M1,L1 + L2 - L3)
-      ILST = MAX0(L1 + M2 - L3, - M1 + L2 - L3,0)
-      NUM = IGT - ILST + 1
-      SUM = 0.0
-      DO 1560 IT = 1, NUM
-      ITA = ILST + IT - 1
-      SUM = SUM + (( - 1.0)**ITA)/(FACT(ITA) * FACT(L3 - L2 + ITA + M1)
-     1* FACT(L3 - L1 + ITA - M2) * FACT(L1 + L2 - L3 - ITA) * FACT(L1 -
-     2ITA - M1) * FACT(L2 - ITA + M2)) * (10.D0**( - L1 - L2 - L3))
- 1560 CONTINUE
-      YINT = ((2.0 * FLOAT(L1) + 1.0) * (2.0 * FLOAT(L2) + 1.0) * (2.0 *
-     1 FLOAT(L3) + 1.0)/(12.56637))**(0.5) * PREFT * SUM
-      GO TO 1590
- 1570 YINT = 0.0
-      GO TO 1590
- 1580 YINT = ((2.0 * FLOAT(L1) + 1.0) * (2.0 * FLOAT(L2) + 1.0) * (2.0 *
-     1 FLOAT(L3) + 1.0)/(12.56637))**(0.5) * ( - 1.0)**((IABS(M1) +
-     2IABS(M2) + IABS(M3))/2)/(FLOAT(IABS(L1) + IABS(L2) + IABS(L3)) +
-     31.0)
- 1590 CA = (( - 1.0)**(MA1 + MA3)) * YINT
-      RETURN
-      END
-C---------------------------------------------------------------------
-C  SUBROUTINE CAAA COMPUTES CLEBSCH-GORDON COEFFICIENTS FOR USE BY
-C  SUBROUTINE GHD IN THE SAME ORDER AS GHD USES THEM
-      SUBROUTINE  CAAA (CAA,NCAA,LMMAX)
-      DIMENSION  CAA(NCAA)
-      II = 1
-      DO 60 I = 1, LMMAX
-      L1 = INT(SQRT(FLOAT(I - 1)+0.00001))                              261179
-      M1 = I - L1 - L1 * L1 - 1
-      DO 50 J = 1, LMMAX
-      L2 = INT(SQRT(FLOAT(J - 1)+0.00001))                              261179
-      M2 = J - L2 - L2 * L2 - 1
-      M3 = M2 - M1
-      IL = IABS(L1 - L2)
-      IM = IABS(M3)
-      LMIN = MAX0(IL,IM + MOD(IL + IM,2))
-      LMAX = L1 + L2
-      LMIN = LMIN + 1
-      LMAX = LMAX + 1
-      IF (I-J) 20,10,20
-   10 IF (M1) 30,30,50
-   20 IF (L1.LT.L2.OR.(L1.EQ.L2.AND.(IABS(M1).LT.IABS(M2))))
-     1GO TO 50
-   30 DO 40 ILA = LMIN, LMAX, 2
-      LA = ILA - 1
-      CAA(II) = CA(L1,M1,L2,M2,LA,M3)
-   40 II = II + 1
-   50 CONTINUE
-   60 CONTINUE
-      II=II-1
-C     WRITE(6,70)II
-   70 FORMAT(27H NO. OF ELEMENTS IN CAAA   ,I5)
-      RETURN
-      END
-
-C-----------------------------------------------------------------------
 COMMENT ROUTINE TO TABULATE THE CLEBSCH-GORDON TYPE COEFFICIENTS
 C       CLM AND ELM, FOR USE WITH SUBROUTINES XM AND XMT.
 C       THE NON-ZERO VALUES ARE TABULATED FIRST FOR (L2+M2) AND
@@ -1539,27 +1458,6 @@ C
            WRITE (IFILE,10) -1
    10 FORMAT (I5) ! changed to I5 in v1.71
       ENDIF
-      RETURN
-      END
-
-C-----------------------------------------------------------------------
-C  FUNCTION FACT COMPUTES FACTORIAL(L)/10**L, USING AN ASYMPTOTIC
-C  EXPANSION FOR L.GT.4. USED IN CA.
-C  expansion works extremely well, much higher than L=15
-      DOUBLE PRECISION FUNCTION  FACT (L)
-      IMPLICIT DOUBLE PRECISION (A-H,P-Z)
-      IF (L .GT. 4)  GO TO 1600
-      IF (L .EQ. 0)  FACT = 1.0
-      IF (L .EQ. 1)  FACT = 0.1
-      IF (L .EQ. 2)  FACT = 0.02
-      IF (L .EQ. 3)  FACT = 6.0 * 0.001
-      IF (L .EQ. 4)  FACT = 24.0 * 0.0001
-      RETURN
- 1600 X = L + 1
-      FACT = DEXP( - X) * (10.0D0**((X - 0.5D0) * DLOG10(X) - (X - 1.
-     10D0))) * (DSQRT(6.283185307179586D0)) * (1.0 + (1.0/(12.0 * X)) +
-     2(1.0/(288.0D0 * (X**2))) - (139.0D0/(51840.0D0 * (X**3))) - (571.
-     30D0/(2488320.0D0 * (X**4))))
       RETURN
       END
 

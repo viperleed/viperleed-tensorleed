@@ -43,6 +43,10 @@ C  modules of the input reader
      +                      beam_list, phase_shifts
       USE leed_input, ONLY: read_input, read_geometry
 
+C  modules of the setup routines
+
+      USE angular_coefficients, ONLY: composite_layer_coefficients
+
 C  include parameter statements for dimensions etc
 
       INCLUDE "PARAM"
@@ -791,7 +795,7 @@ C  counters, variable array dimensions etc.
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR COMPOSITE LAYER, CAA
 
       NCAA=NCA(LMAX)
-      CALL CAAA(CAA,NCAA,LMMAX)
+      CALL composite_layer_coefficients(LMAX,CAA(1:NCAA))
 
 C  compute CLEBSCH-GORDON COEFFICIENTS FOR MATRICES X AND TAU, CLM
 
