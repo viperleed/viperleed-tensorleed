@@ -18,7 +18,7 @@ __license__ = 'GPLv3+'
 
 import pytest
 
-from harness.build import build_program
+from harness.build import DEBUG, RELEASE, build_program
 from harness.cases import RUN_TIMEOUT_S, iter_runs
 from harness.fin_convert import convert_fin, reads_converted_fin
 from harness.param_size import read_param
@@ -175,6 +175,21 @@ def test_refcalc_rejects_invalid_input(fin, param, message, tl_root, build_flags
     Failing means an invalid input is no longer rejected, or is rejected
     with another message or on another channel."""
     _assert_rejected(RUN.param, fin(), param, message, tl_root, build_flags, tmp_path)
+
+
+@pytest.mark.tier1
+@pytest.mark.parametrize("flags", [RELEASE, DEBUG], ids=lambda f: f.name)
+def test_refcalc_rejects_ideg_that_fits_no_sublattice(flags, tl_root, tmp_path):
+    """IDEG = 3 (in FIN and PARAM) on the p(2x1) lattice of Ir(100)-O is rejected.
+
+    The 120-degree rotation maps the second sublattice onto none, where the
+    legacy code indexed past FLMS in FMAT (a trap in debug builds, changed
+    output in release builds). Both builds are run because only the debug
+    build of the legacy code stops at all. Failing means the check of
+    SLIND is gone, or reports on another channel."""
+    _assert_rejected(RUN.param, _record("IDEG NL1 NL2", 3, 0),
+                     lambda: _param("MIDEG=2", "MIDEG=3"),
+                     "IDEG = 3 does not fit", tl_root, flags, tmp_path)
 
 
 @pytest.mark.tier1

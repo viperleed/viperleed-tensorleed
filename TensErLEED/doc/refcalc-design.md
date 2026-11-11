@@ -87,7 +87,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `LEED` (program) | `ref-calc.f` | driver | every stage; free form in 8 | holds all COMMON blocks; opens `fd.out` (unit 7), `amp.out` (unit 8) |
 | `READIN` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout; `SLIND` is called after the reader |
 | `READGEO` | `lib.tleed.f` | `leed_input` | 2 | I/O: stdin, echo to stdout |
-| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3, done | `sublattice_equivalences`; takes the `lattice` type instead of `/SL/`; when no equivalent sublattice matches, `JJS` gets `NL + 1` as in the legacy code |
+| `SLIND` | `lib.tleed.f` | `bravais_layer` | 3, done | `sublattice_equivalences`; takes the `lattice` type instead of `/SL/`; when a rotation through `360/IDEG` degrees maps a sublattice onto none (`NL > 1`, `IDEG` inconsistent with the lattices), it stops with an error (section 6) naming `IDEG`, the sublattice and the rotation; the legacy code set `JJS` to `NL + 1` there, which `FMAT` uses as an index past `FLMS` |
 | `FACT` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `scaled_factorial`; single-precision literals kept |
 | `CA` | `lib.tleed.f` | `angular_coefficients` | 3, done | function `composite_layer_coefficient`; default-`REAL` intermediates and the literal `12.56637` kept |
 | `CAAA` | `lib.tleed.f` | `angular_coefficients` | 3, done | `composite_layer_coefficients` |
@@ -357,8 +357,8 @@ Choices made here:
 1. `SLIND` in stage 3 (energy-independent set-up) although `READIN`
    (stage 2) called it; the driver calls the port after the ported reader
    with the reader's `lattice` and still copies the lattice into `/SL/`
-   for `FMAT`, `GHD`, `GHMAT` and `TAUMAT` (`SLIND` writes nothing, so the
-   stdout order is unchanged).
+   for `FMAT`, `GHD`, `GHMAT` and `TAUMAT` (`SLIND` writes nothing on stdout,
+   so the stdout order is unchanged).
 2. `BEAMS` in stage 4 (first stage running the per-energy computation);
    `DECIDE` in stage 7 with the exit-beam loop of the tensor output.
 3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,
