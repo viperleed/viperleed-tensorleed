@@ -2,9 +2,6 @@
 !! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc on the inputs read
 !! from stdin and prints their results.
 !!
-!! Every group of routines is called from one wrapper below (caa_table,
-!! clm_table, permutation_tables, gaunt_table, sublattice_table), so that a
-!! group can be switched to its module version without touching the others.
 !! Output, one block per array: a header line "name kind count", then the
 !! values: kind r4 / r8 as the hex digits of the bit patterns (8 / 16 per
 !! value), kind i4 in decimal. stdin:
@@ -57,97 +54,48 @@ contains
     read(5, *) lmax
     lmmax = (lmax + 1)**2
 
+    ! CAAA: Clebsch-Gordan coefficients of the composite layer
     allocate(caa(nca(lmax)))
-    call caa_table(lmax, caa)
+    call composite_layer_coefficients(lmax, caa)
     call write_real('CAA', caa)
 
+    ! CELMG: Clebsch-Gordan coefficients of the matrices X and TAU; it sets
+    ! only fac(1:4*lmax+2), the rest of the printed fac stays zero
     allocate(clm(nlms(lmax)))
     fac = 0.0_dp
-    call clm_table(lmax, clm, fac)
+    call matrix_coefficients(lmax, clm, fac)
     call write_real('CLM', clm)
     call write_double('FAC_CELMG', fac)
 
+    ! LXGENT: permutations of the (L,M) sequence
     allocate(lx(lmmax), lxi(lmmax), lt(lmmax), lxm(lmmax))
-    call permutation_tables(lmax, lx, lxi, lt, lxm)
+    call lm_permutations(lmax, lx, lxi, lt, lxm)
     call write_int('LX', lx)
     call write_int('LXI', lxi)
     call write_int('LT', lt)
     call write_int('LXM', lxm)
 
+    ! CPPP: Gaunt coefficients for the temperature-dependent phase shifts
     allocate(ppp(2 * lmax + 1, lmax + 1, lmax + 1))
-    call gaunt_table(lmax, ppp, fac)
+    call legendre_product_integrals(size(ppp, 1), size(ppp, 2), size(ppp, 3), &
+                                    ppp, fac)
     call write_real('PPP', reshape(ppp, [size(ppp)]))
     call write_double('FAC_CPPP', fac)
   end subroutine angular_coefficients_case
 
-  !> CAAA: Clebsch-Gordan coefficients of the composite layer
-  subroutine caa_table(lmax, caa)
-    integer, intent(in) :: lmax
-    real(sp), intent(out) :: caa(:)
-
-    caa = 0.0_sp
-    call composite_layer_coefficients(lmax, caa)
-  end subroutine caa_table
-
-  !> CELMG: Clebsch-Gordan coefficients of the matrices X and TAU
-  subroutine clm_table(lmax, clm, fac)
-    integer, intent(in) :: lmax
-    real(sp), intent(out) :: clm(:)
-    real(dp), intent(inout) :: fac(:)
-
-    clm = 0.0_sp
-    call matrix_coefficients(lmax, clm, fac)
-  end subroutine clm_table
-
-  !> LXGENT: permutations of the (L,M) sequence
-  subroutine permutation_tables(lmax, lx, lxi, lt, lxm)
-    integer, intent(in) :: lmax
-    integer, intent(out) :: lx(:), lxi(:), lt(:), lxm(:)
-
-    lx = 0
-    lxi = 0
-    lt = 0
-    lxm = 0
-    call lm_permutations(lmax, lx, lxi, lt, lxm)
-  end subroutine permutation_tables
-
-  !> CPPP: Gaunt coefficients for the temperature-dependent phase shifts
-  subroutine gaunt_table(lmax, ppp, fac)
-    integer, intent(in) :: lmax
-    real(sp), intent(out) :: ppp(:, :, :)
-    real(dp), intent(inout) :: fac(:)
-
-    ppp = 0.0_sp
-    call legendre_product_integrals(size(ppp, 1), size(ppp, 2), size(ppp, 3), &
-                                    ppp, fac)
-  end subroutine gaunt_table
-
+  !> SLIND: the lattice is filled from the stdin values br1, br2, ar1, ar2,
+  !! rar1, rar2
   subroutine sublattice_case()
     integer :: ideg, nl1, nl2, nl
     real(sp) :: t(12)
     real(sp), allocatable :: v(:, :)
     complex(sp), allocatable :: vl(:, :)
     integer, allocatable :: jjs(:, :)
+    type(lattice) :: lat
 
     read(5, *) ideg, nl1, nl2
     call read_reals(t)
     nl = nl1 * nl2
-    allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg))
-    call sublattice_table(ideg, nl1, nl2, t, v, vl, jjs)
-    call write_real('V', reshape(v, [size(v)]))
-    call write_real('VL', transfer(vl, [0.0_sp]))
-    call write_int('JJS', reshape(jjs, [size(jjs)]))
-  end subroutine sublattice_case
-
-  !> SLIND: the lattice is filled from t (br1, br2, ar1, ar2, rar1, rar2)
-  subroutine sublattice_table(ideg, nl1, nl2, t, v, vl, jjs)
-    integer, intent(in) :: ideg, nl1, nl2
-    real(sp), intent(in) :: t(12)
-    real(sp), intent(out) :: v(:, :)
-    complex(sp), intent(out) :: vl(:, :)
-    integer, intent(out) :: jjs(:, :)
-    type(lattice) :: lat
-
     lat%substrate_vector(:, 1) = t(1:2)
     lat%substrate_vector(:, 2) = t(3:4)
     lat%superlattice_vector(:, 1) = t(5:6)
@@ -156,11 +104,12 @@ contains
     lat%superlattice_reciprocal(:, 2) = t(11:12)
     lat%symmetry_degree = ideg
     lat%repetitions = [nl1, nl2]
-    v = 0.0_sp
-    vl = (0.0_sp, 0.0_sp)
-    jjs = 0
-    call sublattice_equivalences(lat, nl1 * nl2, v, vl, jjs)
-  end subroutine sublattice_table
+    allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg))
+    call sublattice_equivalences(lat, nl, v, vl, jjs)
+    call write_real('V', reshape(v, [size(v)]))
+    call write_real('VL', transfer(vl, [0.0_sp]))
+    call write_int('JJS', reshape(jjs, [size(jjs)]))
+  end subroutine sublattice_case
 
   subroutine read_reals(v)
     real(sp), intent(out) :: v(:)
