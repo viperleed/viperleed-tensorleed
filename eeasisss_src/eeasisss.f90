@@ -1136,7 +1136,7 @@ if(baseuc/=0.d0)then
 endif
 return
 209   format(/'type',i3,', ',i3,' distance vs type neighbor shells, '&
-            &,i3' neighbors')
+            &,i3,' neighbors')
 210   format('dist.(AA)',f7.4,10f8.4)
 211   format('number   ',i4,3x,10(i5,3x))
 212   format('type     ',i4,3x,10(i5,3x))

@@ -20,7 +20,7 @@ endif
 
 
 EEASISS_IMPORTED_ROUTINES_SHA256 := a3de67cdad38a5ed5980aa4be5f2d86a8362f2e5d1b68c12524eb26cd89926a5
-EEASISS_SHA256 := 919ebb06e72dff8f914b392d66fec6ffc2413b8f0f714db4b6682a7562784e3e
+EEASISS_SHA256 := f1740205de5e4afc5199179514744782b9babe616344f79f7a82e7aeb8696527
 
 
 intel: eeasisss_src/imported_routines.f90 eeasisss_src/eeasisss.f90 correct_sha256
