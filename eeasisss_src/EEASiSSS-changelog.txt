@@ -22,7 +22,7 @@ line 852 (new, original after line 845): inserted assignment for nxt for default
 ### imported_routines.f90:
 - made sure all DO loops end with a continue statement to get rid of warning for removed feature
 
-16.11.2026 (EEASiSSS v1.02, release v2.1.1):
+16.11.2026 (EEASiSSS v1.0.2):
 ### eeasisss.f90
 - subroutine neighbor_shells, format 209 (line 1139 in this version): added the missing comma between i3 and ' neighbors'. gfortran 15 only warns at compile time ("Legacy Extension: Missing comma in FORMAT string") but the run aborts at the first write with this format ("Missing comma between descriptors") unless compiled with -std=legacy. Output is unchanged.
 
