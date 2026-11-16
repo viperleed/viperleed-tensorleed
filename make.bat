@@ -11,7 +11,7 @@ set "GCC_FFLAGS=-O3 -fno-finite-math-only"
 
 
 :: SHA256 for Fortran sources to be compiled (with \r terminating chars!)
-set "EEASISS_IMPORTED_ROUTINES_SHA256=74ed6b893ac9c6f6125f475ddcca135edb8ddec7373463da44dbcc2afe5f8e35"
+set "EEASISS_IMPORTED_ROUTINES_SHA256=dacc06689a78440adb9c807718c559c3bd12c008a571d38c0d7d51223b833cae"
 set "EEASISS_SHA256=f1740205de5e4afc5199179514744782b9babe616344f79f7a82e7aeb8696527"
 set "CHECKSUM_VALIDATED=False"
 
