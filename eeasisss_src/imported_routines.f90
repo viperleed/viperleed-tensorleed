@@ -591,10 +591,10 @@ subroutine step(x,y,f,neqn,h,eps,wt,start,hold,k,kold,crash,phi,p,yp,&
 !on third failure, set order to one.  thereafter, use optimal step size.
   320 ifail = ifail + 1
       temp2 = 0.5d0
-      if(ifail - 3 .gt. 0) then
+      if(ifail .gt. 3) then
         if(p5eps .lt. 0.25d0*erk) temp2 = dsqrt(p5eps/erk)
       end if
-      if(ifail - 3 .ge. 0) then
+      if(ifail .ge. 3) then
         knew = 1
       end if
       h = temp2*h
