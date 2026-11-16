@@ -22,10 +22,9 @@ line 852 (new, original after line 845): inserted assignment for nxt for default
 ### imported_routines.f90:
 - made sure all DO loops end with a continue statement to get rid of warning for removed feature
 
-13.11.2026 (TensErLEED v2.1.1):
+16.11.2026 (EEASiSSS v1.02, release v2.1.1):
 ### eeasisss.f90
 - subroutine neighbor_shells, format 209 (line 1139 in this version): added the missing comma between i3 and ' neighbors'. gfortran 15 only warns at compile time ("Legacy Extension: Missing comma in FORMAT string") but the run aborts at the first write with this format ("Missing comma between descriptors") unless compiled with -std=legacy. Output is unchanged.
 
-16.11.2026 (TensErLEED v2.1.1):
 ### imported_routines.f90
 - subroutine step (Shampine-Gordon ODE step): replaced the four arithmetic IFs (on km2 and on ifail - 3) by block IFs, and the DO loop ending on the action statement labelled 265 by DO ... END DO; the now unused labels 255-290, 299 and 325-335 are removed. Same statements in the same order; this only removes the gfortran warnings for these deleted features. Output is unchanged.
