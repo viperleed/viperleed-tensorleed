@@ -214,6 +214,9 @@ contains
     call read_array(spq)
     call read_array(spqf)
     read(5, *) ne
+    ! npuc is not reset between energies, as in ref-calc: the routine must
+    ! overwrite every entry it reports
+    npuc = -7
     do ie = 1, ne
       e = read_real()
       ak2 = read_real()
@@ -221,7 +224,6 @@ contains
       nb = 0
       pq = 0.0_sp
       pqf = 0.0_sp
-      npuc = 0
       call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, &
                         nb, pq, pqf, npuc, mpu, nt, np)
       call write_int(numbered('NB', ie), nb)
@@ -360,7 +362,7 @@ contains
     pq = 0.0_sp
     pqf = 0.0_sp
     nb = 0
-    npuc = 0
+    npuc = -7
     call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, &
                       nb, pq, pqf, npuc, mpu, nt, np)
     dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))

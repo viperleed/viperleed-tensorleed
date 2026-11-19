@@ -127,7 +127,10 @@ _HARTREE = _F32(27.211396)
 _INNER_EV = 10.0
 _VPI = -_F32(4.5) / _HARTREE
 _TST = _F32((np.log(_F32(0.001)) / (_F32(2.0365) / _BOHR))**2)
-_SWEEP_EV = (10.0, 20.0, 35.0, 60.0, 100.0, 150.0, 250.0)
+# up and down again: NPUC is not reset between the energies, so a beam to be
+# output that propagates on the way up and not on the way down must read zero
+_SWEEP_EV = (10.0, 20.0, 35.0, 60.0, 100.0, 150.0, 250.0,
+             150.0, 100.0, 60.0, 35.0, 20.0, 10.0)
 
 
 def _read_fin(case, run):
@@ -345,8 +348,8 @@ CASES = [
      _tscatf_stdin(_TABLE, lmax, nel, energy, site))
     for ident, what, lmax, nel, energy, site in _TSCATF_CASES
 ] + [
-    (f"beams_{ident}", f"BEAMS, {what}, at {len(_SWEEP_EV)} energies from "
-     f"{_SWEEP_EV[0]:g} to {_SWEEP_EV[-1]:g} eV",
+    (f"beams_{ident}", f"BEAMS, {what}, at {len(_SWEEP_EV)} energies, "
+     f"{_SWEEP_EV[0]:g} eV up to {max(_SWEEP_EV):g} eV and down again, NPUC not reset",
      _beams_stdin(fin, *angles, _SWEEP_EV))
     for ident, what, fin, angles in _BEAM_CASES
 ] + [

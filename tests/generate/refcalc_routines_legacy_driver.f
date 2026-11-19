@@ -309,6 +309,8 @@ C  BEAMS at several energies on one beam list
       CALL RDR(SPQ, 2*KNT)
       CALL RDR(SPQF, 2*KNT)
       READ(5,*) NE
+C  NPUC is not reset between energies, as in ref-calc
+      NPUC = -7
       DO IE = 1, NE
         E = RDR1()
         AK2 = RDR1()
@@ -316,7 +318,6 @@ C  BEAMS at several energies on one beam list
         NB = 0
         PQ = 0.
         PQF = 0.
-        NPUC = 0
         CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +             PQF,NPUC,MPU,NT,NP)
         CALL NUMBERED('NB', IE, LABEL)
@@ -491,7 +492,7 @@ C  offset of the set in the beam list, all sublattices)
       PQ = 0.
       PQF = 0.
       NB = 0
-      NPUC = 0
+      NPUC = -7
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)
       DCUT = - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
