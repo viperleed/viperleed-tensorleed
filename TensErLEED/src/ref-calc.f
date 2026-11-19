@@ -48,7 +48,9 @@ C  modules of the setup routines
       USE angular_coefficients, ONLY: composite_layer_coefficients,
      +                                  matrix_coefficients,
      +                                  lm_permutations
-      USE atomic_scattering, ONLY: legendre_product_integrals
+      USE atomic_scattering, ONLY: legendre_product_integrals,
+     +                             atomic_tmatrix,
+     +                             accumulate_atomic_tmatrix
       USE bravais_layer, ONLY: sublattice_equivalences
 
 C  include parameter statements for dimensions etc
@@ -910,13 +912,12 @@ C*************************************************************
             DRPER = VIB(ISITE,IEL)
             DRPAR = VIB(ISITE,IEL)
 
-            CALL TSCATF(IEL,L1,ES,PHSS,NPSI,E,VSITE,PPP,NN1,NN2,NN3,
-     +                  DR0,DRPER,DRPAR,T0,T,AF,CAF,NEL,LMAX1,PHS,DEL,
+            CALL atomic_tmatrix(IEL,L1,NPSI,NEL,NN1,NN2,NN3,ES,PHSS,E,
+     +                  VSITE,PPP,DR0,DRPER,DRPAR,T0,T,AF,CAF,PHS,DEL,
      +                  CTAB,SUM,BJ)
 
-            DO IL = 1,L1
-              TMAT(ISITE,IL) = TMAT(ISITE,IL)+CONC(ISITE,IEL)*CAF(IL)
-            ENDDO
+            CALL accumulate_atomic_tmatrix(CONC(ISITE,IEL),CAF(1:L1),
+     +                                     TMAT(ISITE,1:L1))
 
           END IF
 

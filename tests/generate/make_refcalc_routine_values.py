@@ -198,7 +198,8 @@ def _beams_stdin(fin, theta, phi, energies):
 
 def _tscatf_stdin(table, lmax, nel, energy, site):
     """TSCATF input: the phase shift table cut to lmax and nel elements, the
-    energy (Hartree), and the site as [(iel, concentration, vibration)]."""
+    energy (Hartree), and the site as [(iel, concentration, vibration)] or
+    [(iel, concentration, vibration perpendicular, vibration parallel)]."""
     es = table["es"]
     phss = [[[table["phases"][ie][iel][l] for l in range(lmax + 1)]
              for iel in range(nel)] for ie in range(len(es))]
@@ -206,8 +207,8 @@ def _tscatf_stdin(table, lmax, nel, energy, site):
             for ie in range(len(es))]
     lines = ["TSCATF", f"{lmax} {nel} {len(es)}", *_lines_of(es), *_lines_of(flat),
              _hex(energy), str(len(site))]
-    for iel, conc, vib in site:
-        lines += [str(iel), _hex(conc), _hex(vib)]
+    for iel, conc, vib, *parallel in site:
+        lines += [str(iel), _hex(conc), _hex(vib), _hex(*parallel or [vib])]
     return lines
 
 
@@ -277,6 +278,9 @@ _TSCATF_CASES = [
      2, 2, _E_TABLE, [(2, _F32(1), _VIB)]),
     ("extrapolation", "an energy above the table of phase shifts",
      8, 2, _E_ABOVE, [(1, _F32(1), _VIB)]),
+    ("anisotropic", "different vibration amplitudes perpendicular and parallel "
+     "to the surface (averaged to DR)",
+     8, 2, _E_TABLE, [(1, _F32(1), _VIB, _F32(1.7) * _VIB)]),
     ("ata_mix", "a mixed site: Ag 0.7, Pd 0.3 with other vibration amplitudes, "
      "and an element of concentration 0 that is skipped",
      8, 2, _E_TABLE, [(1, _F32(0.7), _VIB), (2, _F32(0.3), _F32(1.2) * _VIB),

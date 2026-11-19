@@ -4,7 +4,8 @@
 !! (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the inputs read from
 !! stdin and prints their results. The routines still in lib.tleed.f are
 !! called through their legacy interface, with the blank COMMON and /SL/
-!! and /MS/ filled as ref-calc.f does.
+!! and /MS/ filled as ref-calc.f does. TSCATF and the average of its results
+!! are the module routines of the tree.
 !!
 !! Output, one block per array: a header line "name kind count", then the
 !! values: kind r4 / r8 as the hex digits of the bit patterns (8 / 16 per
@@ -14,7 +15,8 @@
 !!            rar1(2) rar2(2) as hex bit patterns, one per line
 !!   TSCATF:  name, lmax nel npsi, es(npsi), phss(npsi, nel, lmax + 1), the
 !!            energy, the number of calls, then for each call the element,
-!!            its concentration and vibration amplitude (the site of
+!!            its concentration and vibration amplitudes perpendicular and
+!!            parallel to the surface (the site of
 !!            ref-calc.f: calls with concentration > 0, averaged by it)
 !!   BEAMS:   name, knbs, the set sizes, npun, npu, tst, spq(2, knt),
 !!            spqf(2, knt), the number of energies, then for each energy
@@ -35,7 +37,8 @@ program refcalc_routines_driver
   use, intrinsic :: iso_fortran_env, only: int32, int64
   use angular_coefficients, only: composite_layer_coefficients, lm_permutations, &
                                   matrix_coefficients
-  use atomic_scattering, only: legendre_product_integrals
+  use atomic_scattering, only: legendre_product_integrals, atomic_tmatrix, &
+                               accumulate_atomic_tmatrix
   use bravais_layer, only: sublattice_equivalences
   use kinds, only: sp, dp
   use leed_types, only: lattice
@@ -55,7 +58,7 @@ program refcalc_routines_driver
   character(len=16) :: name
 
   ! legacy routines of lib.tleed.f that the tree has not ported yet
-  external :: tscatf, beams, sphrm_mod, fmat, rsmf_simple
+  external :: beams, sphrm_mod, fmat, rsmf_simple
 
   read(5, '(A)') name
   select case (trim(name))
@@ -177,19 +180,17 @@ contains
       read(5, *) iel
       conc = read_real()
       vib = read_real()
+      drpar = read_real()
       if (conc > 0.0_sp) then
         drper = vib
-        drpar = vib
-        call tscatf(iel, l1, es, phss, npsi, eb, vsite, ppp, nn1, nn2, nn3, &
-                    dr0, drper, drpar, t0, t, af, caf, nel, l1, phs, del, &
-                    ctab, sum_, bj)
+        call atomic_tmatrix(iel, l1, npsi, nel, nn1, nn2, nn3, es, phss, eb, vsite, &
+                            ppp, dr0, drper, drpar, t0, t, af, caf, phs, del, &
+                            ctab, sum_, bj)
         call write_real(numbered('PHS', k), phs)
         call write_complex(numbered('AF', k), af)
         call write_complex(numbered('DEL', k), del)
         call write_complex(numbered('CAF', k), caf)
-        do il = 1, l1
-          tmat(il) = tmat(il) + conc * caf(il)
-        end do
+        call accumulate_atomic_tmatrix(conc, caf, tmat)
       end if
     end do
     call write_complex('TMAT', tmat)

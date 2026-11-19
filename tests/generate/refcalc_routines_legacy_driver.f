@@ -265,9 +265,9 @@ C  average); T0 = T = 100, DR0 = 0, VSITE = 0
         READ(5,*) IEL
         CONC = RDR1()
         VIB = RDR1()
+        DRPAR = RDR1()
         IF (CONC.GT.0.) THEN
           DRPER = VIB
-          DRPAR = VIB
           CALL TSCATF(IEL,L1,ES,PHSS,NPSI,EB,VSITE,PPP,NN1,NN2,NN3,
      +                DR0,DRPER,DRPAR,T0,T,AF,CAF,NEL,L1,PHS,DEL,
      +                CTAB,SUM,BJ)

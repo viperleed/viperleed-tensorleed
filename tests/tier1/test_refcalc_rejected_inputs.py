@@ -164,6 +164,9 @@ REJECTED = [
     pytest.param(lambda: _fin("IFORM", 4, offset=2), None,
                  "NEL from phaseshift file not consistent with MNEL",
                  id="nel-psformat1"),
+    # an energy range below the first tabulated phase-shift energy
+    pytest.param(lambda: _line("EI,EF,DE", "     0.10     0.11     1.00   EI,EF,DE"), None,
+                 "TOO LOW ENERGY FOR AVAILABLE PHASE SHIFTS", id="energy-below-phase-shifts"),
     ]
 
 
