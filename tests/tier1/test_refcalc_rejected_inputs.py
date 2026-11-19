@@ -4,9 +4,10 @@ The inputs are the converted FINs (TL >= 3.0.0 layout) of the cases; the
 tests skip for a tree whose ref-calc does not read that layout.
 Each test corrupts one value of the input of ir100_2x1_o/E050_L06 (or of
 ag100_psformat2/E045_L06 for the checks of phase-shift format 2), or one size
-in its PARAM, so that exactly one check of the reader fires,
-runs refcalc and checks that it stops with a non-zero exit code and the
-check's message on stderr, and that the message is not on stdout.
+in its PARAM, so that exactly one check fires (all in the reader, except the
+energy range, which is checked in the energy loop), runs refcalc and checks
+that it stops with a non-zero exit code and the check's message on stderr,
+and that the message is not on stdout.
 """
 
 __authors__ = (
@@ -164,6 +165,9 @@ REJECTED = [
     pytest.param(lambda: _fin("IFORM", 4, offset=2), None,
                  "NEL from phaseshift file not consistent with MNEL",
                  id="nel-psformat1"),
+    # the one check that is not in the reader: it fires in the energy loop
+    pytest.param(lambda: _line("EI,EF,DE", "     0.10     0.11     1.00   EI,EF,DE"), None,
+                 "TOO LOW ENERGY FOR AVAILABLE PHASE SHIFTS", id="energy-below-phase-shifts"),
     ]
 
 

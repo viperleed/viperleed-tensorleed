@@ -40,7 +40,7 @@ C
 C  modules of the input reader
 
       USE leed_types, ONLY: geometry, lattice, control, inner_potential,
-     +                      beam_list, phase_shifts
+     +                      beam_list, phase_shifts, energy_point
       USE leed_input, ONLY: read_input, read_geometry
 
 C  modules of the setup routines
@@ -48,8 +48,12 @@ C  modules of the setup routines
       USE angular_coefficients, ONLY: composite_layer_coefficients,
      +                                  matrix_coefficients,
      +                                  lm_permutations
-      USE atomic_scattering, ONLY: legendre_product_integrals
-      USE bravais_layer, ONLY: sublattice_equivalences
+      USE atomic_scattering, ONLY: legendre_product_integrals,
+     +                             atomic_tmatrix,
+     +                             accumulate_atomic_tmatrix
+      USE beam_selection, ONLY: select_beams
+      USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
+     +                         bravais_layer_matrices
 
 C  include parameter statements for dimensions etc
 
@@ -203,6 +207,7 @@ C  TENS  : tensor output for layer ISTACK desired?
       TYPE(inner_potential) POT
       TYPE(beam_list) BMSET
       TYPE(phase_shifts) PHASE
+      TYPE(energy_point) EPT
       INTEGER IGL,IGS,IGP
       REAL ASA
       DIMENSION ASA(3)
@@ -274,7 +279,7 @@ C  variables used in energy loop
 
 C  E    : current energy
 C  EEV  : vacuum energy in eV (for output purposes)
-C  DCUTS,DCUTO: limiting radii for lattice sums in FMAT -
+C  DCUTS,DCUTO: limiting radii for lattice sums in lattice_sums -
 C               DCUTS, DCUTO identical here.
 C  KSQ : total squared momentum of beams outside the crystal
 C  AK   : lateral momentum of incident beam
@@ -360,23 +365,22 @@ C  NP   : maximum number of beams in a single beamset at current E (used as a di
       DIMENSION NPUC(MNPUN)
       INTEGER MPU,NT,NP
 
-C  subroutine fmat
+C  subroutine lattice_sums
 
-C  NLS  : number of sublattices to be treated in FMAT (either 1 or NL, use NL!)
-C  FLMS : output lattice sums F_s(l,m) from fmat
-C  SCC,SA: working spaces for FMAT - see there!
+C  NLS  : number of sublattices to be treated in lattice_sums (either 1 or NL, use NL!)
+C  FLMS : output lattice sums F_s(l,m) from lattice_sums
 
       INTEGER NLS
-      COMPLEX FLMS,SCC,SA
-      DIMENSION FLMS(MNL,MKLM),SCC(MIDEG,4*MLMAX+1),SA(2*MLMAX*MIDEG)
+      COMPLEX FLMS
+      DIMENSION FLMS(MNL,MKLM)
 
-C  subroutine rsmf (and rtinv)
+C  subroutine bravais_layer_matrices (and rtinv)
 
 C  IT   : leave set to zero
 C  ID   : compute scattering matrices for registries 1, ..., ID - currently
 C         not enabled. Might be useful for substrate type layer in subref, hcp stacking
 C  LAY  : substrate (1) or overlayer (2) type layer - LAY = LATT(ILTYPE)
-C  NLL  : number of sublattices for rsmf (NL for substrate, 1 for overlayer)
+C  NLL  : number of sublattices for bravais_layer_matrices (NL for substrate, 1 for overlayer)
 C  NA   : offset in beam list PQ for subsequent rsmf (to treat beam sets separately)
 C  NS   : offset in scattering matrices for subsequent rsmf (to treat beam sets separately)
 C  NM   : internal layer diffraction matrix dimension for rsmf
@@ -690,7 +694,7 @@ C  copy the result into the variables used by the remaining routines
       PHSS = PHASE%value
 
 C  sublattice_equivalences compares substrate lattice and superlattice
-C  for the benefit of FMAT
+C  for the benefit of lattice_sums
 
       CALL sublattice_equivalences(LAT,NL,V,VL,JJS)
 
@@ -864,7 +868,7 @@ c  shift scattering energy by inner potential value VV
 
 C  SET LIMITING RADII ON LATTICE SUMS, POSSIBLY DIFFERENT FOR SUBSTRATE
 C  (DCUTS) AND OVERLAYER (DCUTO) (currently DCUTO = DCUTS)
-C  used in FMAT ...
+C  used in lattice_sums ...
 
       DCUTS =  - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
       DCUTO =  - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
@@ -910,13 +914,12 @@ C*************************************************************
             DRPER = VIB(ISITE,IEL)
             DRPAR = VIB(ISITE,IEL)
 
-            CALL TSCATF(IEL,L1,ES,PHSS,NPSI,E,VSITE,PPP,NN1,NN2,NN3,
-     +                  DR0,DRPER,DRPAR,T0,T,AF,CAF,NEL,LMAX1,PHS,DEL,
+            CALL atomic_tmatrix(IEL,L1,NPSI,NEL,NN1,NN2,NN3,ES,PHSS,E,
+     +                  VSITE,PPP,DR0,DRPER,DRPAR,T0,T,AF,CAF,PHS,DEL,
      +                  CTAB,SUM,BJ)
 
-            DO IL = 1,L1
-              TMAT(ISITE,IL) = TMAT(ISITE,IL)+CONC(ISITE,IEL)*CAF(IL)
-            ENDDO
+            CALL accumulate_atomic_tmatrix(CONC(ISITE,IEL),CAF(1:L1),
+     +                                     TMAT(ISITE,1:L1))
 
           END IF
 
@@ -961,17 +964,21 @@ C*************************************************************
       write(6,*) "Compute layer diffraction matrices, NEXIT =", NEXIT
 
 C  choose appropriate beams
-      CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK21,AK31,E,TST,       ! MRiva 2021-09-10: remove symmetry codes
-     &           NB,PQ,PQF,NPUC,MPU,NT,NP)
+      CALL SELECT_BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK21,AK31,E,TST,
+     &                  NB,PQ,PQF,NPUC,MPU,NT,NP)
 
 C  compute lattice sums
 C  (NLS = NL is necessary, cf. appendix B of Van Hove / Tong 1979)
 
       NLS = NL
 !     While the next call seems not to depend on the beams, it
-!     actually does via the unnamed COMMON block "E,AK21,VPI,..."
+!     actually does via EPT (energy, k-parallel, imaginary potential),
 !     since AK21 is changed within DECIDE right above
-      CALL  FMAT (FLMS,V,JJS,NL,NLS,DCUTS,IDEG,LMAX,KLM,SCC,SA)
+      EPT%energy = E
+      EPT%k_parallel(1) = AK21
+      EPT%k_parallel(2) = AK31
+      EPT%imaginary_potential = VPI
+      CALL  lattice_sums (FLMS,V,JJS,NL,NLS,DCUTS,LAT,LMAX,KLM,EPT)
 
 C*************************************************************
 C  compute (plane-wave) scattering matrices for each layer type
@@ -1004,7 +1011,7 @@ C  initialize storage
 
         IF (NSUB(ILTYPE).eq.1) THEN  ! Bravais layer
 
-C          use rsmf() to compute scattering matrices for a bravais layer
+C          use bravais_layer_matrices to compute scattering matrices for a bravais layer
 
 C  set default values for temp-treatment - obsolete
 C  DRPER,DRPAR,DR0 not used - leave IT = 0 !
@@ -1033,11 +1040,11 @@ C  START WITH OVERLAYER (LAY == 1)
             NA  = 0
             NAA = NT
 
-            CALL RSMF_SIMPLE(ROP,TOP,NAA,AMULT,
+            CALL bravais_layer_matrices(ROP,TOP,NAA,AMULT,
      +                       CYLM,PQ,NT,FLMS,FLM,V,NL,NA,
-     +                       NLL,AF,CAF,L1,LX,LXI,LMMAX,KLM,XEV,XOD,
+     +                       NLL,AF,CAF,LMAX,LX,LXI,LMMAX,KLM,XEV,XOD,
      +                       LEV,LOD,YLM,YLME,YLMO,IPLE,IPLO,CLM,NLM,
-     +                       XEVST,XODST)
+     +                       XEVST,XODST,EPT,TV)
 
 C THEN BULK (LAY == 2)
 
@@ -1051,11 +1058,11 @@ C THEN BULK (LAY == 2)
 
               NAA = NB(IBS)
 
-              CALL RSMF_SIMPLE(ROP,TOP,NAA,AMULT,
+              CALL bravais_layer_matrices(ROP,TOP,NAA,AMULT,
      +                         CYLM,PQ,NT,FLMS,FLM,V,NL,NA,
-     +                         NLL,AF,CAF,L1,LX,LXI,LMMAX,KLM,XEV,XOD,
+     +                         NLL,AF,CAF,LMAX,LX,LXI,LMMAX,KLM,XEV,XOD,
      +                         LEV,LOD,YLM,YLME,YLMO,IPLE,IPLO,CLM,NLM,
-     +                         XEVST,XODST)
+     +                         XEVST,XODST,EPT,TV)
 
               NA  = NA + NB(IBS)
 
