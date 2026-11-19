@@ -8,4 +8,4 @@ blas/lapack:
   libblas.so (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libblas.so
 compile flags: -O2
 link flags: -llapack -lpthread -lblas -fbacktrace
-date: 2026-10-13
+date: 2026-11-19
