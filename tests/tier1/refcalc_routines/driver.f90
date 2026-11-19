@@ -1,6 +1,10 @@
 !> Calls the routines that set up the angular coefficients (CAAA, CELMG,
-!! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc on the inputs read
-!! from stdin and prints their results.
+!! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc, and those of its
+!! energy loop up to the layer diffraction matrices of a Bravais layer
+!! (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the inputs read from
+!! stdin and prints their results. The routines still in lib.tleed.f are
+!! called through their legacy interface, with the blank COMMON and /SL/
+!! and /MS/ filled as ref-calc.f does.
 !!
 !! Output, one block per array: a header line "name kind count", then the
 !! values: kind r4 / r8 as the hex digits of the bit patterns (8 / 16 per
@@ -8,6 +12,23 @@
 !!   ANGULAR: name, lmax
 !!   SLIND:   name, ideg nl1 nl2, then br1(2) br2(2) ar1(2) ar2(2)
 !!            rar1(2) rar2(2) as hex bit patterns, one per line
+!!   TSCATF:  name, lmax nel npsi, es(npsi), phss(npsi, nel, lmax + 1), the
+!!            energy, the number of calls, then for each call the element,
+!!            its concentration and vibration amplitude (the site of
+!!            ref-calc.f: calls with concentration > 0, averaged by it)
+!!   BEAMS:   name, knbs, the set sizes, npun, npu, tst, spq(2, knt),
+!!            spqf(2, knt), the number of energies, then for each energy
+!!            e, ak2, ak3
+!!   SPHRM:   name, number of points, ct, st, cf of all points (real and
+!!            imaginary part of each); runs LMAX = 2 to 18
+!!   FMAT:    name, the lattice as for SLIND, lmax, the number of energies,
+!!            then for each e, vpi, ak2, ak3
+!!   RSMF:    name, the lattice as for SLIND, lmax, e, vpi, ak2, ak3, tv,
+!!            mode (O: overlayer layer, one call, one sublattice; B:
+!!            substrate layer, one call per beam set, all sublattices),
+!!            the atomic t-matrix (lmax + 1 complex values), then the beam
+!!            list as for BEAMS (npun = 1, npu = 1, one energy): knbs,
+!!            set sizes, tst, spq, spqf
 !! generate/refcalc_routines_legacy_driver.f is the same driver for the
 !! legacy routines of the baseline.
 program refcalc_routines_driver
@@ -33,12 +54,25 @@ program refcalc_routines_driver
 
   character(len=16) :: name
 
+  ! legacy routines of lib.tleed.f that the tree has not ported yet
+  external :: tscatf, beams, sphrm_mod, fmat, rsmf_simple
+
   read(5, '(A)') name
   select case (trim(name))
   case ('ANGULAR')
     call angular_coefficients_case()
   case ('SLIND')
     call sublattice_case()
+  case ('TSCATF')
+    call atomic_tmatrix_case()
+  case ('BEAMS')
+    call beam_selection_case()
+  case ('SPHRM')
+    call spherical_harmonics_case()
+  case ('FMAT')
+    call lattice_sums_case()
+  case ('RSMF')
+    call bravais_layer_case()
   case default
     error stop 'unknown routine'
   end select
@@ -110,6 +144,356 @@ contains
     call write_real('VL', transfer(vl, [0.0_sp]))
     call write_int('JJS', reshape(jjs, [size(jjs)]))
   end subroutine sublattice_case
+
+  !> TSCATF for the elements of one site, and their concentration-weighted
+  !! sum (the ATA average of the atomic t-matrix), as the energy loop of
+  !! ref-calc.f does it: T0 = T = 100, DR0 = VSITE = 0.
+  subroutine atomic_tmatrix_case()
+    integer :: lmax, l1, nel, npsi, nn1, nn2, nn3, ncall, k, iel, il
+    real(sp) :: eb, dr0, vsite, t0, t, drper, drpar, conc, vib
+    real(sp), allocatable :: es(:), phss(:, :, :), phs(:), ppp(:, :, :)
+    complex(sp), allocatable :: af(:), caf(:), del(:), ctab(:), sum_(:), tmat(:)
+    complex(dp), allocatable :: bj(:)
+
+    read(5, *) lmax, nel, npsi
+    l1 = lmax + 1
+    nn3 = l1
+    nn2 = l1
+    nn1 = nn2 + nn3 - 1
+    allocate(es(npsi), phss(npsi, nel, l1), phs(l1), ppp(nn1, nn2, nn3))
+    allocate(af(l1), caf(l1), del(l1), ctab(nn3), sum_(nn2), tmat(l1))
+    allocate(bj(nn1))
+    call read_reals(es)
+    call read_array(phss)
+    eb = read_real()
+    call gaunt_table(lmax, ppp)
+    dr0 = 0.0_sp
+    vsite = 0.0_sp
+    t0 = 100.0_sp
+    t = 100.0_sp
+    tmat = (0.0_sp, 0.0_sp)
+    read(5, *) ncall
+    do k = 1, ncall
+      read(5, *) iel
+      conc = read_real()
+      vib = read_real()
+      if (conc > 0.0_sp) then
+        drper = vib
+        drpar = vib
+        call tscatf(iel, l1, es, phss, npsi, eb, vsite, ppp, nn1, nn2, nn3, &
+                    dr0, drper, drpar, t0, t, af, caf, nel, l1, phs, del, &
+                    ctab, sum_, bj)
+        call write_real(numbered('PHS', k), phs)
+        call write_complex(numbered('AF', k), af)
+        call write_complex(numbered('DEL', k), del)
+        call write_complex(numbered('CAF', k), caf)
+        do il = 1, l1
+          tmat(il) = tmat(il) + conc * caf(il)
+        end do
+      end if
+    end do
+    call write_complex('TMAT', tmat)
+  end subroutine atomic_tmatrix_case
+
+  !> BEAMS on one beam list at several energies.
+  subroutine beam_selection_case()
+    integer :: knbs, knt, npun, ne, ie, nt, np, mpu
+    integer, allocatable :: knb(:), npu(:), nb(:), npuc(:)
+    real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
+    real(sp) :: tst, e, ak2, ak3
+
+    read(5, *) knbs
+    allocate(knb(knbs), nb(knbs))
+    read(5, *) knb
+    knt = sum(knb)
+    read(5, *) npun
+    allocate(npu(npun), npuc(npun))
+    read(5, *) npu
+    tst = read_real()
+    allocate(spq(2, knt), spqf(2, knt), pq(2, knt), pqf(2, knt))
+    call read_array(spq)
+    call read_array(spqf)
+    read(5, *) ne
+    do ie = 1, ne
+      e = read_real()
+      ak2 = read_real()
+      ak3 = read_real()
+      nb = 0
+      pq = 0.0_sp
+      pqf = 0.0_sp
+      npuc = 0
+      call beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, nb, &
+                 pq, pqf, npuc, mpu, nt, np)
+      call write_int(numbered('NB', ie), nb)
+      call write_int(numbered('NT_NP_MPU', ie), [nt, np, mpu])
+      call write_int(numbered('NPUC', ie), npuc)
+      call write_real(numbered('PQ', ie), reshape(pq(:, 1:nt), [2 * nt]))
+      call write_real(numbered('PQF', ie), reshape(pqf(:, 1:nt), [2 * nt]))
+    end do
+  end subroutine beam_selection_case
+
+  !> SPHRM_MOD on a grid of CT, ST, CF for every LMAX from 2 to 18.
+  subroutine spherical_harmonics_case()
+    integer :: npts, lmax, lmmax, i
+    complex(sp), allocatable :: ct(:), st(:), cf(:), ylm(:), all_ylm(:)
+
+    read(5, *) npts
+    allocate(ct(npts), st(npts), cf(npts))
+    call read_complexes(ct)
+    call read_complexes(st)
+    call read_complexes(cf)
+    do lmax = 2, 18
+      lmmax = (lmax + 1)**2
+      allocate(ylm(lmmax), all_ylm(lmmax * npts))
+      do i = 1, npts
+        ylm = (0.0_sp, 0.0_sp)
+        call sphrm_mod(lmax, ylm, lmmax, ct(i), st(i), cf(i))
+        all_ylm((i - 1) * lmmax + 1:i * lmmax) = ylm
+      end do
+      call write_complex(numbered('YLM_L', lmax), all_ylm)
+      deallocate(ylm, all_ylm)
+    end do
+  end subroutine spherical_harmonics_case
+
+  !> Read a lattice as for SLIND, fill /SL/ with it, and return ideg, nl1, nl2.
+  subroutine read_lattice(lat, nl)
+    type(lattice), intent(out) :: lat
+    integer, intent(out) :: nl
+    real(sp) :: t(12)
+    ! /SL/ as the legacy routines of lib.tleed.f read it; FMAT uses AR1, AR2
+    real(sp) :: br1(2), br2(2), ar1(2), ar2(2), rar1(2), rar2(2)
+    integer :: nl1x, nl2x
+    common /sl/ br1, br2, ar1, ar2, rar1, rar2, nl1x, nl2x
+
+    read(5, *) lat%symmetry_degree, lat%repetitions
+    call read_reals(t)
+    lat%substrate_vector(:, 1) = t(1:2)
+    lat%substrate_vector(:, 2) = t(3:4)
+    lat%superlattice_vector(:, 1) = t(5:6)
+    lat%superlattice_vector(:, 2) = t(7:8)
+    lat%superlattice_reciprocal(:, 1) = t(9:10)
+    lat%superlattice_reciprocal(:, 2) = t(11:12)
+    br1 = t(1:2)
+    br2 = t(3:4)
+    ar1 = t(5:6)
+    ar2 = t(7:8)
+    rar1 = t(9:10)
+    rar2 = t(11:12)
+    nl1x = lat%repetitions(1)
+    nl2x = lat%repetitions(2)
+    nl = nl1x * nl2x
+  end subroutine read_lattice
+
+  !> FMAT on the sublattices of the lattice at several (E, VPI, k-parallel).
+  subroutine lattice_sums_case()
+    type(lattice) :: lat
+    integer :: nl, ideg, lmax, klm, ne, ie
+    real(sp) :: e, ak2, ak3, vpi, tv, emach, dcut
+    common e, ak2, ak3, vpi, tv, emach
+    real(sp), allocatable :: v(:, :)
+    complex(sp), allocatable :: vl(:, :), flms(:, :), scc(:, :), sa(:)
+    integer, allocatable :: jjs(:, :)
+
+    call read_lattice(lat, nl)
+    ideg = lat%symmetry_degree
+    read(5, *) lmax
+    klm = (2 * lmax + 1) * (2 * lmax + 2) / 2
+    allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg), flms(nl, klm))
+    allocate(scc(ideg, 4 * lmax + 1), sa(2 * lmax * ideg))
+    call sublattice_equivalences(lat, nl, v, vl, jjs)
+    tv = 0.0_sp
+    emach = 1.0e-6_sp
+    read(5, *) ne
+    do ie = 1, ne
+      e = read_real()
+      vpi = read_real()
+      ak2 = read_real()
+      ak3 = read_real()
+      dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))
+      flms = (0.0_sp, 0.0_sp)
+      call fmat(flms, v, jjs, nl, nl, dcut, ideg, lmax, klm, scc, sa)
+      call write_complex(numbered('FLMS', ie), reshape(flms, [nl * klm]))
+    end do
+  end subroutine lattice_sums_case
+
+  !> BEAMS, FMAT and RSMF_SIMPLE chained as the energy loop of ref-calc.f
+  !! does: for an overlayer-type layer (mode O: one call for all beams, one
+  !! sublattice) or a substrate-type layer (mode B: one call per beam set
+  !! with its offset in the beam list, all sublattices).
+  subroutine bravais_layer_case()
+    type(lattice) :: lat
+    integer :: nl, ideg, lmax, l1, lmmax, klm, lev, lod, nlm
+    integer :: knbs, knt, npun, nt, np, mpu, ibs, na, naa, nll
+    real(sp) :: e, ak2, ak3, vpi, tv, emach, dcut, tst, eps
+    common e, ak2, ak3, vpi, tv, emach
+    integer :: lmaxc, liter
+    common /ms/ lmaxc, eps, liter
+    character(len=1) :: mode
+    integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
+    integer, allocatable :: lx(:), lxi(:), iple(:), iplo(:)
+    real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
+    real(sp), allocatable :: v(:, :), clm(:)
+    complex(sp), allocatable :: vl(:, :), flms(:, :), scc(:, :), sa(:)
+    complex(sp), allocatable :: tmat(:), ra(:, :), ta(:, :), amult(:)
+    complex(sp), allocatable :: cylm(:, :), flm(:), xev(:, :), xod(:, :)
+    complex(sp), allocatable :: ylm(:), ylme(:), ylmo(:)
+    complex(sp), allocatable :: xevst(:, :), xodst(:, :)
+
+    call read_lattice(lat, nl)
+    ideg = lat%symmetry_degree
+    read(5, *) lmax
+    l1 = lmax + 1
+    lmmax = l1 * l1
+    klm = (2 * lmax + 1) * (2 * lmax + 2) / 2
+    lev = l1 * (l1 + 1) / 2
+    lod = lmmax - lev
+    nlm = nlms(lmax)
+    lmaxc = lmax
+    eps = 0.001_sp
+    liter = 10
+    e = read_real()
+    vpi = read_real()
+    ak2 = read_real()
+    ak3 = read_real()
+    tv = read_real()
+    emach = 1.0e-6_sp
+    read(5, *) mode
+    allocate(tmat(l1))
+    call read_complexes(tmat)
+    read(5, *) knbs
+    allocate(knb(knbs), nb(knbs))
+    read(5, *) knb
+    knt = sum(knb)
+    npun = 1
+    allocate(npu(npun), npuc(npun))
+    npu = 1
+    tst = read_real()
+    allocate(spq(2, knt), spqf(2, knt), pq(2, knt), pqf(2, knt))
+    call read_array(spq)
+    call read_array(spqf)
+
+    allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg), flms(nl, klm))
+    allocate(scc(ideg, 4 * lmax + 1), sa(2 * lmax * ideg))
+    call sublattice_equivalences(lat, nl, v, vl, jjs)
+    allocate(clm(nlm), lx(lmmax), lxi(lmmax))
+    call x_tables(lmax, clm, lx, lxi)
+
+    pq = 0.0_sp
+    pqf = 0.0_sp
+    nb = 0
+    npuc = 0
+    call beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, nb, &
+               pq, pqf, npuc, mpu, nt, np)
+    dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))
+    flms = (0.0_sp, 0.0_sp)
+    call fmat(flms, v, jjs, nl, nl, dcut, ideg, lmax, klm, scc, sa)
+
+    allocate(ra(nt, nt), ta(nt, nt), amult(nt), cylm(nt, lmmax))
+    allocate(flm(klm), xev(lev, lev), xod(lod, lod), ylm(lmmax))
+    allocate(ylme(lev), ylmo(lod), iple(lev), iplo(lod))
+    allocate(xevst(lev, lev), xodst(lod, lod))
+    ra = (0.0_sp, 0.0_sp)
+    ta = (0.0_sp, 0.0_sp)
+    amult = (0.0_sp, 0.0_sp)
+    cylm = (0.0_sp, 0.0_sp)
+    xevst = (0.0_sp, 0.0_sp)
+    xodst = (0.0_sp, 0.0_sp)
+    if (mode == 'O') then
+      nll = 1
+      naa = nt
+      call rsmf_simple(ra, ta, naa, amult, cylm, pq, nt, flms, flm, v, nl, 0, &
+                       nll, tmat, tmat, l1, lx, lxi, lmmax, klm, xev, xod, &
+                       lev, lod, ylm, ylme, ylmo, iple, iplo, clm, nlm, &
+                       xevst, xodst)
+    else
+      nll = nl
+      na = 0
+      do ibs = 1, knbs
+        naa = nb(ibs)
+        call rsmf_simple(ra, ta, naa, amult, cylm, pq, nt, flms, flm, v, nl, na, &
+                         nll, tmat, tmat, l1, lx, lxi, lmmax, klm, xev, xod, &
+                         lev, lod, ylm, ylme, ylmo, iple, iplo, clm, nlm, &
+                         xevst, xodst)
+        na = na + nb(ibs)
+      end do
+    end if
+    call write_int('NB', nb)
+    call write_complex('RA', reshape(ra, [nt * nt]))
+    call write_complex('TA', reshape(ta, [nt * nt]))
+    call write_complex('AMULT', amult)
+    call write_complex('CYLM', reshape(cylm, [nt * lmmax]))
+    call write_complex('XEVST', reshape(xevst, [lev * lev]))
+    call write_complex('XODST', reshape(xodst, [lod * lod]))
+  end subroutine bravais_layer_case
+
+  !> The Gaunt coefficients PPP as ref-calc.f computes them.
+  subroutine gaunt_table(lmax, ppp)
+    integer, intent(in) :: lmax
+    real(sp), intent(out) :: ppp(:, :, :)
+    real(sp) :: clm(nlms(lmax))
+    real(dp) :: fac(nfac)
+    fac = 0.0_dp
+    call matrix_coefficients(lmax, clm, fac)
+    call legendre_product_integrals(size(ppp, 1), size(ppp, 2), size(ppp, 3), &
+                                    ppp, fac)
+  end subroutine gaunt_table
+
+  !> CLM and the (L,M) permutations LX and LXI as ref-calc.f computes them.
+  subroutine x_tables(lmax, clm, lx, lxi)
+    integer, intent(in) :: lmax
+    real(sp), intent(out) :: clm(:)
+    integer, intent(out) :: lx(:), lxi(:)
+    real(dp) :: fac(nfac)
+    integer :: lt(size(lx)), lxm(size(lx))
+    fac = 0.0_dp
+    clm = 0.0_sp
+    call matrix_coefficients(lmax, clm, fac)
+    call lm_permutations(lmax, lx, lxi, lt, lxm)
+  end subroutine x_tables
+
+  !> label with the two-digit number k appended after an underscore
+  function numbered(label, k) result(text)
+    character(len=*), intent(in) :: label
+    integer, intent(in) :: k
+    character(len=16) :: text
+    write(text, '(A,A,I2.2)') label, '_', k
+  end function numbered
+
+  function read_real() result(x)
+    real(sp) :: x
+    real(sp) :: buffer(1)
+    call read_reals(buffer)
+    x = buffer(1)
+  end function read_real
+
+  !> Read the values of a (rank 2 or 3) real array in storage order.
+  subroutine read_array(a)
+    real(sp), intent(out) :: a(..)
+    real(sp), allocatable :: buffer(:)
+    select rank (a)
+    rank (2)
+      allocate(buffer(size(a)))
+      call read_reals(buffer)
+      a = reshape(buffer, shape(a))
+    rank (3)
+      allocate(buffer(size(a)))
+      call read_reals(buffer)
+      a = reshape(buffer, shape(a))
+    end select
+  end subroutine read_array
+
+  subroutine read_complexes(c)
+    complex(sp), intent(out) :: c(:)
+    real(sp) :: t(2 * size(c))
+    call read_reals(t)
+    c = cmplx(t(1::2), t(2::2), kind=sp)
+  end subroutine read_complexes
+
+  subroutine write_complex(label, c)
+    character(len=*), intent(in) :: label
+    complex(sp), intent(in) :: c(:)
+    call write_real(label, transfer(c, [0.0_sp]))
+  end subroutine write_complex
 
   subroutine read_reals(v)
     real(sp), intent(out) :: v(:)
