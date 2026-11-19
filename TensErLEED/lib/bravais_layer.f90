@@ -440,8 +440,10 @@ contains
   !! elements of the (larger) arrays of the caller; the dummies are
   !! explicit-shape for that reason. The rows of amult and cylm are indexed
   !! by the beam within its set, without n_offset. With several beam sets
-  !! each call therefore overwrites the rows of the previous one, and amult
-  !! and cylm hold the values of the last beam set on return.
+  !! each call therefore overwrites rows 1 ... n of the previous one. After
+  !! the call, amult and rows 1 ... n of cylm hold the values of this beam
+  !! set; rows n + 1 ... nt of cylm keep what they held on entry (values of
+  !! an earlier, larger beam set or layer, which later readers rely on).
   !!
   !! LAPACK status flags are not checked.
   subroutine bravais_layer_matrices(ra, ta, n, amult, cylm, pq, nt, flms, &
@@ -494,8 +496,8 @@ contains
     !> Prefactors of the matrix elements of the beams of the set
     complex(sp), intent(out) :: amult(n)
     !> Spherical harmonics of the beams of the set, (beam within its set,
-    !! (L, M))
-    complex(sp), intent(out) :: cylm(nt, lmmax)
+    !! (L, M)); rows 1 ... n are set, the others are kept
+    complex(sp), intent(inout) :: cylm(nt, lmmax)
     !> Matrices 1 - X for the L + M even and odd blocks, with the sign
     !! reversed (stored for perturbative LEED)
     complex(sp), intent(out) :: xevst(lev, lev), xodst(lod, lod)
