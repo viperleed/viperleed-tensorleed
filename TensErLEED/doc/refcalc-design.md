@@ -54,7 +54,7 @@ private helpers). The new type `energy_point` (energy, k-parallel,
 imaginary potential) in `leed_types` replaces the blank COMMON of the
 routines of this stage; `TV` and `LMAX` stay plain arguments. The routines
 keep the precision and packed buffers of the legacy ones (section 4.2) and
-reproduce their results bit for bit (`tests/unit` routine-value test).
+reproduce their results bit for bit (`tests/tier1/test_refcalc_routines.py`).
 
 ## 2. Target files and modules
 
@@ -113,7 +113,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `DEBWAL` | `lib.tleed.f` | none | removed 8 | unused |
 | `BEAMS` | `lib.tleed.f` | `beam_selection` | 4, done | `select_beams`; sets `NT`, the number of beams in use |
 | `FMAT` | `lib.tleed.f` | `bravais_layer` | 4, done | `lattice_sums`; takes the `lattice` type and an `energy_point` instead of `/SL/` and the blank COMMON (`AK(2)`) |
-| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `bravais_layer_matrices`; `TV` and `LMAX` are arguments; matrices stay packed with leading dimension `NT` |
+| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `bravais_layer_matrices`; `TV` and `LMAX` are arguments; `ROP`/`TOP` and `cylm(nt,lmmax)` stay packed with leading dimension `NT` |
 | `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `matrix_elements` (private) |
 | `XM` | `lib.tleed.f` | `bravais_layer` | 4, done | `intralayer_matrix` (private) |
 | `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4, done | `spherical_harmonics`; the error message goes to stderr. A legacy copy stays in `lib.tleed.f` for `RTINV_SIMPLE` (and the composite layer) and is removed when that is ported |

@@ -114,11 +114,6 @@ def _lattice_lines(substrate, superlattice, ideg, nl1, nl2):
     return [f"{ideg} {nl1} {nl2}", *map(_hex, values)]
 
 
-def _sublattice_stdin(substrate, superlattice, ideg, nl1, nl2):
-    """The stdin lines of an SLIND case."""
-    return ["SLIND", *_lattice_lines(substrate, superlattice, ideg, nl1, nl2)]
-
-
 CASES_DIR = TESTS_DIR / "cases" / "refcalc"
 _HARTREE = _F32(27.211396)
 # the energy offset inside the crystal (eV) and the imaginary part of the
@@ -175,10 +170,6 @@ def _k_parallel(ev, theta, phi):
     return k * np.cos(_F32(np.radians(phi))), k * np.sin(_F32(np.radians(phi)))
 
 
-def _lines_of(values):
-    return [_hex(v) for v in values]
-
-
 def _beam_lines(fin):
     """knbs, set sizes, then the momenta (substrate reciprocal vectors) and
     index pairs of all beams as the driver's BEAMS and RSMF inputs have them."""
@@ -192,10 +183,10 @@ def _beam_lines(fin):
 def _beams_stdin(fin, theta, phi, energies):
     head, spq, spqf = _beam_lines(fin)
     lines = ["BEAMS", head[0], head[1], "4", "2 6 10 14", _hex(_TST),
-             *_lines_of(spq), *_lines_of(spqf), str(len(energies))]
+             *map(_hex, spq), *map(_hex, spqf), str(len(energies))]
     for ev in energies:
         ak2, ak3 = _k_parallel(ev, theta, phi)
-        lines += _lines_of([_crystal_energy(ev), ak2, ak3])
+        lines += map(_hex, [_crystal_energy(ev), ak2, ak3])
     return lines
 
 
@@ -208,7 +199,7 @@ def _tscatf_stdin(table, lmax, nel, energy, site):
              for iel in range(nel)] for ie in range(len(es))]
     flat = [phss[ie][iel][l] for l in range(lmax + 1) for iel in range(nel)
             for ie in range(len(es))]
-    lines = ["TSCATF", f"{lmax} {nel} {len(es)}", *_lines_of(es), *_lines_of(flat),
+    lines = ["TSCATF", f"{lmax} {nel} {len(es)}", *map(_hex, es), *map(_hex, flat),
              _hex(energy), str(len(site))]
     for iel, conc, vib, *parallel in site:
         lines += [str(iel), _hex(conc), _hex(vib), _hex(*parallel or [vib])]
@@ -228,7 +219,7 @@ def _sphrm_stdin():
         ct = (0.0, _F32(sinh))
         points.append((ct, (_F32(np.sqrt(1 + sinh**2)), 0.0), (np.cos(f), np.sin(f))))
     values = [v for k in range(3) for p in points for v in p[k]]
-    return ["SPHRM", str(len(points)), *_lines_of(values)]
+    return ["SPHRM", str(len(points)), *map(_hex, values)]
 
 
 def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
@@ -239,7 +230,7 @@ def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
              str(lmax), str(len(incidences))]
     for ev, angles in incidences:
         ak2, ak3 = _k_parallel(ev, *angles)
-        lines += _lines_of([_crystal_energy(ev), _VPI, ak2, ak3])
+        lines += map(_hex, [_crystal_energy(ev), _VPI, ak2, ak3])
     return lines
 
 
@@ -257,8 +248,8 @@ def _rsmf_stdin(fin, ideg, nl1, nl2, lmax, ev, angles, mode):
     head, spq, spqf = _beam_lines(fin)
     return ["RSMF", *_lattice_lines(fin["cells"][:2], fin["cells"][2:], ideg, nl1, nl2),
             str(lmax),
-            *_lines_of([_crystal_energy(ev), _VPI, ak2, ak3, tv]), mode,
-            *_lines_of(tmat), *head, _hex(_TST), *_lines_of(spq), *_lines_of(spqf)]
+            *map(_hex, [_crystal_energy(ev), _VPI, ak2, ak3, tv]), mode,
+            *map(_hex, tmat), *head, _hex(_TST), *map(_hex, spq), *map(_hex, spqf)]
 
 
 _AG = _read_fin("ag100_mix", "E141_L08")
@@ -362,7 +353,7 @@ CASES = [
     for lmax in LMAX_RANGE
 ] + [
     (f"slind_{ident}", f"SLIND, {what}, NL1 x NL2 = {nl1} x {nl2}",
-     _sublattice_stdin(substrate, superlattice, ideg, nl1, nl2))
+     ["SLIND", *_lattice_lines(substrate, superlattice, ideg, nl1, nl2)])
     for ident, what, substrate, superlattice, ideg, nl1, nl2 in LATTICES
 ] + [
     (f"tscatf_{ident}", f"TSCATF, {what}",

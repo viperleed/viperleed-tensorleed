@@ -972,7 +972,7 @@ C  (NLS = NL is necessary, cf. appendix B of Van Hove / Tong 1979)
 
       NLS = NL
 !     While the next call seems not to depend on the beams, it
-!     actually does via the unnamed COMMON block "E,AK21,VPI,..."
+!     actually does via EPT (energy, k-parallel, imaginary potential),
 !     since AK21 is changed within DECIDE right above
       EPT%energy = E
       EPT%k_parallel(1) = AK21

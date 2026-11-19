@@ -4,7 +4,70 @@ C  and those of the energy loop up to the layer diffraction matrices of
 C  a Bravais layer (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the
 C  inputs read from stdin and prints their results. Same protocol as
 C  tier1/refcalc_routines/driver.f90 (see there).
+      MODULE LEGHLP
+      IMPLICIT NONE
+      CONTAINS
+
+      SUBROUTINE RDBEAMS(KNBS, KNB, KNT, TST, SPQ, SPQF, NPU)
+C  The beam list as for BEAMS: set count and sizes, the incident-beam
+C  index sets (only if NPU is present), the criterion TST, and the beam
+C  momenta and index pairs
+      INTEGER KNBS, KNT
+      INTEGER, ALLOCATABLE :: KNB(:)
+      REAL TST, RDR1
+      REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:)
+      INTEGER, ALLOCATABLE, OPTIONAL :: NPU(:)
+      INTEGER NPUN
+
+      READ(5,*) KNBS
+      ALLOCATE(KNB(KNBS))
+      READ(5,*) KNB
+      KNT = SUM(KNB)
+      IF (PRESENT(NPU)) THEN
+        READ(5,*) NPUN
+        ALLOCATE(NPU(NPUN))
+        READ(5,*) NPU
+      ENDIF
+      TST = RDR1()
+      ALLOCATE(SPQ(2,KNT), SPQF(2,KNT))
+      CALL RDR(SPQ, 2*KNT)
+      CALL RDR(SPQF, 2*KNT)
+      END SUBROUTINE
+
+      SUBROUTINE SETLAT(IDEG, NL, LMAX, KLM, V, JJS, FLMS, SCC, SA)
+C  The lattice of an SLIND case into /SL/, LMAX, and the sublattices
+      INTEGER IDEG, NL, LMAX, KLM, NL1, NL2
+      REAL, ALLOCATABLE :: V(:,:)
+      INTEGER, ALLOCATABLE :: JJS(:,:)
+      COMPLEX, ALLOCATABLE :: FLMS(:,:), SCC(:,:), SA(:), VL(:,:)
+
+      CALL RDLAT(IDEG, NL1, NL2)
+      NL = NL1*NL2
+      READ(5,*) LMAX
+      KLM = (2*LMAX+1)*(2*LMAX+2)/2
+      ALLOCATE(V(NL,2), VL(NL,2), JJS(NL,IDEG), FLMS(NL,KLM))
+      ALLOCATE(SCC(IDEG,4*LMAX+1), SA(2*LMAX*IDEG))
+      V = 0.
+      VL = (0., 0.)
+      JJS = 0
+      CALL SLIND(V, VL, JJS, NL, IDEG, 2.0E-4)
+      END SUBROUTINE
+
+      SUBROUTINE RUNFMAT(E, VPI, V, JJS, NL, IDEG, LMAX, KLM, FLMS,
+     +                   SCC, SA)
+C  FMAT with the cutoff distance of ref-calc.f
+      INTEGER NL, IDEG, LMAX, KLM, JJS(NL,IDEG)
+      REAL E, VPI, V(NL,2), DCUT
+      COMPLEX FLMS(NL,KLM), SCC(IDEG,4*LMAX+1), SA(2*LMAX*IDEG)
+
+      DCUT = - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
+      FLMS = (0., 0.)
+      CALL FMAT(FLMS, V, JJS, NL, NL, DCUT, IDEG, LMAX, KLM, SCC, SA)
+      END SUBROUTINE
+      END MODULE
+
       PROGRAM LEGDRV
+      USE LEGHLP
       IMPLICIT NONE
       CHARACTER*16 NAME
 
@@ -89,23 +152,12 @@ C  the sizes of ref-calc.f for MLMAX = 18
 C  SLIND on the lattice read from stdin (substrate and superlattice
 C  vectors, reciprocal superlattice vectors), EPSD as in ref-calc.f
       IMPLICIT NONE
-      INTEGER IDEG, NL, I, NL1, NL2
-      REAL BR1(2), BR2(2), AR1(2), AR2(2), RAR1(2), RAR2(2), T(12)
-      COMMON /SL/BR1, BR2, AR1, AR2, RAR1, RAR2, NL1, NL2
+      INTEGER IDEG, NL, NL1, NL2
       REAL, ALLOCATABLE :: V(:,:), VLR(:)
       COMPLEX, ALLOCATABLE :: VL(:,:)
       INTEGER, ALLOCATABLE :: JJS(:,:)
 
-      READ(5,*) IDEG, NL1, NL2
-      CALL RDR(T, 12)
-      DO I = 1,2
-        BR1(I) = T(I)
-        BR2(I) = T(2+I)
-        AR1(I) = T(4+I)
-        AR2(I) = T(6+I)
-        RAR1(I) = T(8+I)
-        RAR2(I) = T(10+I)
-      ENDDO
+      CALL RDLAT(IDEG, NL1, NL2)
       NL = NL1*NL2
       ALLOCATE(V(NL,2), VL(NL,2), VLR(4*NL), JJS(NL,IDEG))
       V = 0.
@@ -235,7 +287,6 @@ C  average); T0 = T = 100, DR0 = 0, VSITE = 0
       IMPLICIT NONE
       REAL RDR1
       INTEGER LMAX, L1, NEL, NPSI, NN1, NN2, NN3, NCALL, K, IEL, IL
-      INTEGER I, J
       REAL EB, DR0, VSITE, T0, T, DRPER, DRPAR, CONC, VIB
       REAL, ALLOCATABLE :: ES(:), PHSS(:,:,:), PHS(:), PPP(:,:,:)
       COMPLEX, ALLOCATABLE :: AF(:), CAF(:), DEL(:), CTAB(:), SUM(:)
@@ -289,25 +340,18 @@ C  average); T0 = T = 100, DR0 = 0, VSITE = 0
 
       SUBROUTINE BMDRV
 C  BEAMS at several energies on one beam list
+      USE LEGHLP
       IMPLICIT NONE
       REAL RDR1
-      INTEGER KNBS, KNT, NPUN, NE, IE, NT, NP, MPU, J
+      INTEGER KNBS, KNT, NPUN, NE, IE, NT, NP, MPU
       INTEGER, ALLOCATABLE :: KNB(:), NPU(:), NB(:), NPUC(:)
       REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:), PQ(:,:), PQF(:,:)
       REAL TST, E, AK2, AK3
       CHARACTER*16 LABEL
 
-      READ(5,*) KNBS
-      ALLOCATE(KNB(KNBS), NB(KNBS))
-      READ(5,*) KNB
-      KNT = SUM(KNB)
-      READ(5,*) NPUN
-      ALLOCATE(NPU(NPUN), NPUC(NPUN))
-      READ(5,*) NPU
-      TST = RDR1()
-      ALLOCATE(SPQ(2,KNT), SPQF(2,KNT), PQ(2,KNT), PQF(2,KNT))
-      CALL RDR(SPQ, 2*KNT)
-      CALL RDR(SPQF, 2*KNT)
+      CALL RDBEAMS(KNBS, KNB, KNT, TST, SPQ, SPQF, NPU)
+      NPUN = SIZE(NPU)
+      ALLOCATE(NB(KNBS), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
       READ(5,*) NE
 C  NPUC is not reset between energies, as in ref-calc
       NPUC = -7
@@ -383,26 +427,18 @@ C  The lattice of an SLIND case into /SL/
 
       SUBROUTINE FMDRV
 C  FMAT on the sublattices of SLIND at several (E, VPI, k-parallel)
+      USE LEGHLP
       IMPLICIT NONE
       REAL RDR1
-      INTEGER IDEG, NL1, NL2, NL, LMAX, KLM, NE, IE
-      REAL E, AK2, AK3, VPI, TV, EMACH, DCUT
+      INTEGER IDEG, NL, LMAX, KLM, NE, IE
+      REAL E, AK2, AK3, VPI, TV, EMACH
       COMMON E, AK2, AK3, VPI, TV, EMACH
       REAL, ALLOCATABLE :: V(:,:)
-      COMPLEX, ALLOCATABLE :: VL(:,:), FLMS(:,:), SCC(:,:), SA(:)
+      COMPLEX, ALLOCATABLE :: FLMS(:,:), SCC(:,:), SA(:)
       INTEGER, ALLOCATABLE :: JJS(:,:)
       CHARACTER*16 LABEL
 
-      CALL RDLAT(IDEG, NL1, NL2)
-      READ(5,*) LMAX
-      NL = NL1*NL2
-      KLM = (2*LMAX+1)*(2*LMAX+2)/2
-      ALLOCATE(V(NL,2), VL(NL,2), JJS(NL,IDEG), FLMS(NL,KLM))
-      ALLOCATE(SCC(IDEG,4*LMAX+1), SA(2*LMAX*IDEG))
-      V = 0.
-      VL = (0., 0.)
-      JJS = 0
-      CALL SLIND(V, VL, JJS, NL, IDEG, 2.0E-4)
+      CALL SETLAT(IDEG, NL, LMAX, KLM, V, JJS, FLMS, SCC, SA)
       TV = 0.
       EMACH = 1.0E-6
       READ(5,*) NE
@@ -411,9 +447,7 @@ C  FMAT on the sublattices of SLIND at several (E, VPI, k-parallel)
         VPI = RDR1()
         AK2 = RDR1()
         AK3 = RDR1()
-        DCUT = - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
-        FLMS = (0., 0.)
-        CALL FMAT(FLMS, V, JJS, NL, NL, DCUT, IDEG, LMAX, KLM, SCC, SA)
+        CALL RUNFMAT(E, VPI, V, JJS, NL, IDEG, LMAX, KLM, FLMS, SCC, SA)
         CALL NUMBERED('FLMS', IE, LABEL)
         CALL WRC(LABEL, FLMS, NL*KLM)
       ENDDO
@@ -424,12 +458,13 @@ C  BEAMS, FMAT and RSMF_SIMPLE chained as in ref-calc.f: for the layer
 C  of the overlayer type (mode O: one call for all beams, one sublattice)
 C  or of the substrate type (mode B: one call per beam set with the
 C  offset of the set in the beam list, all sublattices)
+      USE LEGHLP
       IMPLICIT NONE
       REAL RDR1
-      INTEGER IDEG, NL1, NL2, NL, LMAX, L1, LMMAX, KLM, LEV, LOD, NLM
-      INTEGER KNBS, KNT, NPUN, NT, NP, MPU, IBS, NA, NAA, NLL, J
+      INTEGER IDEG, NL, LMAX, L1, LMMAX, KLM, LEV, LOD, NLM
+      INTEGER KNBS, KNT, NPUN, NT, NP, MPU, IBS, NA, NAA, NLL
       INTEGER NLMS(18)
-      REAL E, AK2, AK3, VPI, TV, EMACH, DCUT, TST
+      REAL E, AK2, AK3, VPI, TV, EMACH, TST
       COMMON E, AK2, AK3, VPI, TV, EMACH
       INTEGER LMAXC, LITER
       REAL EPS
@@ -439,7 +474,7 @@ C  offset of the set in the beam list, all sublattices)
       INTEGER, ALLOCATABLE :: JJS(:,:), LX(:), LXI(:), IPLE(:), IPLO(:)
       REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:), PQ(:,:), PQF(:,:)
       REAL, ALLOCATABLE :: V(:,:), CLM(:)
-      COMPLEX, ALLOCATABLE :: VL(:,:), FLMS(:,:), SCC(:,:), SA(:)
+      COMPLEX, ALLOCATABLE :: FLMS(:,:), SCC(:,:), SA(:)
       COMPLEX, ALLOCATABLE :: TMAT(:), RA(:,:), TA(:,:), AMULT(:)
       COMPLEX, ALLOCATABLE :: CYLM(:,:), FLM(:), XEV(:,:), XOD(:,:)
       COMPLEX, ALLOCATABLE :: YLM(:), YLME(:), YLMO(:)
@@ -447,12 +482,9 @@ C  offset of the set in the beam list, all sublattices)
       DATA NLMS/0,76,284,809,1925,4032,7680,13593,22693,36124,55276,
      +     81809,117677,165152,226848,305745,405213,529036/
 
-      CALL RDLAT(IDEG, NL1, NL2)
-      NL = NL1*NL2
-      READ(5,*) LMAX
+      CALL SETLAT(IDEG, NL, LMAX, KLM, V, JJS, FLMS, SCC, SA)
       L1 = LMAX + 1
       LMMAX = L1*L1
-      KLM = (2*LMAX+1)*(2*LMAX+2)/2
       LEV = L1*(L1+1)/2
       LOD = LMMAX - LEV
       NLM = NLMS(LMAX)
@@ -468,24 +500,11 @@ C  offset of the set in the beam list, all sublattices)
       READ(5,*) MODE
       ALLOCATE(TMAT(L1))
       CALL RDC(TMAT, L1)
-      READ(5,*) KNBS
-      ALLOCATE(KNB(KNBS), NB(KNBS))
-      READ(5,*) KNB
-      KNT = SUM(KNB)
+      CALL RDBEAMS(KNBS, KNB, KNT, TST, SPQ, SPQF)
       NPUN = 1
-      ALLOCATE(NPU(NPUN), NPUC(NPUN))
+      ALLOCATE(NB(KNBS), NPU(NPUN), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
       NPU = 1
-      TST = RDR1()
-      ALLOCATE(SPQ(2,KNT), SPQF(2,KNT), PQ(2,KNT), PQF(2,KNT))
-      CALL RDR(SPQ, 2*KNT)
-      CALL RDR(SPQF, 2*KNT)
 
-      ALLOCATE(V(NL,2), VL(NL,2), JJS(NL,IDEG), FLMS(NL,KLM))
-      ALLOCATE(SCC(IDEG,4*LMAX+1), SA(2*LMAX*IDEG))
-      V = 0.
-      VL = (0., 0.)
-      JJS = 0
-      CALL SLIND(V, VL, JJS, NL, IDEG, 2.0E-4)
       ALLOCATE(CLM(NLM), LX(LMMAX), LXI(LMMAX))
       CALL XTABLES(LMAX, CLM, NLM, LX, LXI, LMMAX)
 
@@ -495,9 +514,7 @@ C  offset of the set in the beam list, all sublattices)
       NPUC = -7
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)
-      DCUT = - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
-      FLMS = (0., 0.)
-      CALL FMAT(FLMS, V, JJS, NL, NL, DCUT, IDEG, LMAX, KLM, SCC, SA)
+      CALL RUNFMAT(E, VPI, V, JJS, NL, IDEG, LMAX, KLM, FLMS, SCC, SA)
 
       ALLOCATE(RA(NT,NT), TA(NT,NT), AMULT(NT), CYLM(NT,LMMAX))
       ALLOCATE(FLM(KLM), XEV(LEV,LEV), XOD(LOD,LOD), YLM(LMMAX))

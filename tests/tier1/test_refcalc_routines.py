@@ -10,9 +10,9 @@ every LMAX from 2 to 18, and the sublattice tables V, VL and JJS of SLIND
 for several lattices; TSCATF (with PSTEMP and BESSEL) and the average of its
 results over the elements of a site; BEAMS; SPHRM_MOD; FMAT; and BEAMS, FMAT
 and RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc. Large
-arrays are compared by a digest of their bits and their leading values. For the cases in STOPS the routines stop with an
-error instead; their values in values.json record what the legacy routines
-gave.
+arrays are compared by a digest of their bits and their leading values.
+For the cases in STOPS the routines stop with an error instead; their
+values in values.json record what the legacy routines gave.
 """
 
 __authors__ = (
