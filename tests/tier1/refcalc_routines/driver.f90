@@ -40,7 +40,7 @@ program refcalc_routines_driver
   use atomic_scattering, only: legendre_product_integrals, atomic_tmatrix, &
                                accumulate_atomic_tmatrix
   use beam_selection, only: select_beams
-  use bravais_layer, only: sublattice_equivalences
+  use bravais_layer, only: sublattice_equivalences, spherical_harmonics
   use kinds, only: sp, dp
   use leed_types, only: lattice
   implicit none
@@ -59,7 +59,7 @@ program refcalc_routines_driver
   character(len=16) :: name
 
   ! legacy routines of lib.tleed.f that the tree has not ported yet
-  external :: sphrm_mod, fmat, rsmf_simple
+  external :: fmat, rsmf_simple
 
   read(5, '(A)') name
   select case (trim(name))
@@ -249,7 +249,7 @@ contains
       allocate(ylm(lmmax), all_ylm(lmmax * npts))
       do i = 1, npts
         ylm = (0.0_sp, 0.0_sp)
-        call sphrm_mod(lmax, ylm, lmmax, ct(i), st(i), cf(i))
+        call spherical_harmonics(lmax, ylm, lmmax, ct(i), st(i), cf(i))
         all_ylm((i - 1) * lmmax + 1:i * lmmax) = ylm
       end do
       call write_complex(numbered('YLM_L', lmax), all_ylm)

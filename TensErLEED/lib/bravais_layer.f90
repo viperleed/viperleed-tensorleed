@@ -1,11 +1,12 @@
 !> \file bravais_layer.f90
-!! \brief Lattice sums and scattering of Bravais layers: sublattice setup.
+!! \brief Lattice sums and scattering of Bravais layers: sublattice setup,
+!! spherical harmonics.
 !!
 !! Each routine keeps the precision of every quantity of the legacy routine
 !! it follows, and its results are bit-for-bit those of the legacy code
 !! (tests/tier1/test_refcalc_routines.py).
 
-!> Setup for the lattice sums of Bravais layers.
+!> Setup for the lattice sums of Bravais layers, and spherical harmonics.
 module bravais_layer
   use constants, only: pi
   use kinds, only: sp
@@ -15,7 +16,7 @@ module bravais_layer
 
   private
 
-  public :: sublattice_equivalences
+  public :: sublattice_equivalences, spherical_harmonics
 
   !> Small number to compare the phase factors of sublattice vectors
   !! (the legacy argument EPSD).
@@ -121,4 +122,95 @@ contains
       end do
     end do
   end subroutine sublattice_equivalences
+
+  !> Computes the complex spherical harmonics up to angular momentum lmax for
+  !! one direction (legacy SPHRM_MOD). Author: Pendry.
+  !!
+  !! ylm((l + 1)**2 - l + m) is Y(l, m); lmmax = (lmax + 1)**2. The
+  !! argument of the harmonics is given by ct = cos(theta), st = sin(theta)
+  !! and cf = exp(i * phi), all complex.
+  !!
+  !! The legacy copy in lib.tleed.f is still used by RTINV_SIMPLE, which
+  !! cannot use this module; this routine is a temporary duplicate of it.
+  subroutine spherical_harmonics(lmax, ylm, lmmax, ct, st, cf)
+    !> Largest angular momentum.
+    integer, intent(in) :: lmax
+    !> Number of harmonics, (lmax + 1)**2.
+    integer, intent(in) :: lmmax
+    !> Spherical harmonics.
+    complex(sp), intent(out) :: ylm(lmmax)
+    !> cos(theta), sin(theta) and exp(i * phi).
+    complex(sp), intent(in) :: ct, st, cf
+
+    ! The auxiliary arrays have fixed sizes: 21 = lmax + 1 and
+    ! 441 = (lmax + 1)**2 for lmax = 20.
+    integer, parameter :: max_lmax = 20
+    real(sp) :: fac1(max_lmax + 1), fac3(max_lmax + 1)
+    real(sp) :: fac2((max_lmax + 1)**2)
+    complex(sp) :: sf, sa
+    real(sp) :: cl, a, b, asg, cm
+    integer :: l, ll, lm, lm2, lm3, ln, lo, lp, lq, m
+
+    ! Not reachable from ref-calc: its input check keeps lmax at or below 18
+    if (lmax > max_lmax) then
+      call stop_with_error('spherical_harmonics: the auxiliary arrays are too ' &
+                           // 'small for lmax > 20')
+    end if
+
+    lm = 0
+    cl = 0.0_sp
+    a = 1.0_sp
+    b = 1.0_sp
+    asg = 1.0_sp
+    ll = lmax + 1
+    do l = 1, ll
+      fac1(l) = asg * sqrt((2.0_sp * cl + 1.0_sp) * a / (4.0_sp * pi * b * b))
+      fac3(l) = sqrt(2.0_sp * cl)
+      cm = -cl
+      ln = l + l - 1
+      do m = 1, ln
+        lo = lm + m
+        fac2(lo) = sqrt((cl + 1.0_sp + cm) * (cl + 1.0_sp - cm) &
+                        / ((2.0_sp * cl + 3.0_sp) * (2.0_sp * cl + 1.0_sp)))
+        cm = cm + 1.0_sp
+      end do
+      cl = cl + 1.0_sp
+      a = a * 2.0_sp * cl * (2.0_sp * cl - 1.0_sp) / 4.0_sp
+      b = b * cl
+      asg = -asg
+      lm = lm + ln
+    end do
+
+    lm = 1
+    asg = -1.0_sp
+    sf = cf
+    sa = cmplx(1.0_sp, 0.0_sp, sp)
+    ylm(1) = cmplx(fac1(1), 0.0_sp, sp)
+    do l = 1, lmax
+      ln = lm + l + l + 1
+      ylm(ln) = fac1(l + 1) * sa * sf * st
+      ylm(lm + 1) = asg * fac1(l + 1) * sa * st / sf
+      ylm(ln - 1) = -fac3(l + 1) * fac1(l + 1) * sa * sf * ct / cf
+      ylm(lm + 2) = asg * fac3(l + 1) * fac1(l + 1) * sa * ct * cf / sf
+      sa = st * sa
+      sf = sf * cf
+      asg = -asg
+      lm = ln
+    end do
+
+    lm = 1
+    ll = lmax - 1
+    do l = 1, ll
+      ln = l + l - 1
+      lm2 = lm + ln + 4
+      lm3 = lm - ln
+      do m = 1, ln
+        lo = lm2 + m
+        lp = lm3 + m
+        lq = lm + m + 1
+        ylm(lo) = -(fac2(lp) * ylm(lp) - ct * ylm(lq)) / fac2(lq)
+      end do
+      lm = lm + l + l + 1
+    end do
+  end subroutine spherical_harmonics
 end module bravais_layer
