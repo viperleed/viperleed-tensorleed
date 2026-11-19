@@ -5,7 +5,7 @@
 #     the test fails ("DID NOT RAISE") and this list must be updated;
 # (2) the same run to finish cleanly with all checks except bounds
 #     (-fcheck=all,no-bounds), so new FP traps etc. in these paths are caught.
-# Line numbers refer to baseline v2.1.0.
+# Line numbers refer to baseline v2.1.1.
 # What qualifies for this list and how to add or remove an entry:
 # tests/README.md, 'Rules'.
 
@@ -13,7 +13,7 @@
 case = "ir100_2x1_o"
 run = "E050_L06"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003, called from ref-calc.f:1294): index 46 > 37"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003, called from ref-calc.f:1300): index 46 > 37"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 
 [[failure]]
