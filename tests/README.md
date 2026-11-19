@@ -2,7 +2,7 @@
 
 Regression tests for the TensErLEED programs `ref-calc` and `rfactor`, built for the F77 → modern Fortran refactor. They check correctness (outputs compared with a frozen baseline within calibrated tolerances), clean termination under a debug build, CPU time and peak memory (A/B against the baseline), and end-to-end behaviour through viperleed (R factors and error curves).
 
-Baseline (ground truth): TensErLEED v2.1.0 (`22e3998`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9); details in `cases/BASELINE.txt`.
+Baseline (ground truth): TensErLEED v2.1.1 (`2760478`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9) and the `CYLM` fix in `FINAL1` (tensors of a Bravais layer above a bulk with several beam sets); details in `cases/BASELINE.txt`.
 
 ## Quick start
 
@@ -85,7 +85,7 @@ pytest tests -m perf --baseline-tl-root=../tl-baseline         # if performance 
 
 `--tl-root` defaults to the clone itself. The perf A/B runs against this pre-fix tree, so create it before the PR re-pins (below): afterwards `cases/BASELINE.txt` names the fix, and an A/B against that tree compares the fix with itself. On a PR that has already re-pinned, the pre-fix pin is the one at the merge base with master: `git show "$(git merge-base HEAD origin/master)":tests/cases/BASELINE.txt`.
 
-If the fix changes outputs on purpose (see [Rules](#rules-tolerances-reference-data-known-debug-failures)), commit the fix and pin it as the new baseline (`BASELINE_COMMIT` in `generate/baseline_tree.py`; the generators refuse other commits). The inputs are frozen, so regenerate only the expected outputs, on the committed inputs (commands under [Regenerating](#regenerating-cases-and-expected-outputs)): `python -m generate.make_expected`, and for tier 2 `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed, with a `tests/local.toml` (`baseline_tl_root` here a checkout of the fix with `eeasisss` built, not the pre-fix tree used for perf; `generate_workroot`). Then `git status` and `git diff --stat` must show only `generate/baseline_tree.py`, `cases/BASELINE.txt`, `expected/` files of the affected runs and `tier2/systems/*/expected.toml`; the PR states why each output changed. Any other change (inputs, `tolerances.toml`, `known_debug_failures.toml`) needs its own justification under the Rules. A rebase gives the fix a new hash: pin and regenerate again. Merge the PR with a merge commit, not squashed: CI checks out the pinned commit from `cases/BASELINE.txt`, and a squashed fix commit is no longer reachable once the PR branch is deleted.
+If the fix changes outputs on purpose (see [Rules](#rules-tolerances-reference-data-known-debug-failures)), commit the fix and pin it as the new baseline (`BASELINE_COMMIT` in `generate/baseline_tree.py`; the generators refuse other commits). The inputs are frozen, so regenerate only the expected outputs, on the committed inputs (commands under [Regenerating](#regenerating-cases-and-expected-outputs)): `python -m generate.make_expected`, and for tier 2 `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed, with a `tests/local.toml` (`baseline_tl_root` here a checkout of the fix with `eeasisss` built, not the pre-fix tree used for perf; `generate_workroot`; and `viperleed_examples`, which `make_tier2_expected` needs even with `--skip-freeze`; each key can also be set by its environment variable, e.g. `TL_TEST_VIPERLEED_EXAMPLES`, see Quick start). Then `git status` and `git diff --stat` must show only `generate/baseline_tree.py`, `cases/BASELINE.txt`, `expected/` files of the affected runs and `tier2/systems/*/expected.toml`; the PR states why each output changed. Any other change (inputs, `tolerances.toml`, `known_debug_failures.toml`) needs its own justification under the Rules. A rebase gives the fix a new hash: pin and regenerate again. Merge the PR with a merge commit, not squashed: CI checks out the pinned commit from `cases/BASELINE.txt`, and a squashed fix commit is no longer reachable once the PR branch is deleted.
 
 CI (`.github/workflows/tests.yml`) runs unit + tier 1 and debug on pushes to `master` and `refactor/f90`, on pull requests and when started manually (Ubuntu 26.04, gfortran 15, reference BLAS/LAPACK). Tier 2, perf and benchmark do not run in CI; run them locally where they apply and report the result in the PR.
 
@@ -157,6 +157,7 @@ The viperleed generators keep their work directories in `generate_workroot` and 
 | `ir100_2x1_o` | composite layers (NSUB > 1), 2 beam sets, 2 elements, LMAX 6–8 |
 | `ir100_2x1_o_thick` | Ir(100)-(2×1)-O with other layer cuts: O alone, then one layer of two Ir planes (4 sublayers with pairwise equal interplanar vectors: `NGEQ` copy in `SRTLAY`/`GHMAT`), and a bulk layer of two Ir planes (composite layer with bulk periodicity under a (2×1) overlayer: `ref-calc.f` `LAY = 2` branch, `RTINV_SIMPLE` substrate lattice sums) |
 | `ir100_2x1_o_unsorted` | `ir100_2x1_o` with the sublayers of the composite top layer listed as Ir, Ir, O instead of O, Ir, Ir (out of order along +x: `SRTLAY` re-sorting, `NORD` mapping back to the input order for the tensor files); derived by `make_hand_cases.py`, 3 runs: E118 and E110-122 as listed, whose outputs equal those of `ir100_2x1_o` except the title line, and E118_three_heights with the Ir N=2 sublayer moved deeper, to x = 1.2004 (x grows into the crystal), and the sublayers listed as Ir N=2, O, Ir N=3 (three distinct heights, deepest first), which has its own outputs |
+| `ir100_2x1_o_thick_oblique` | `ir100_2x1_o_thick` at oblique incidence (`THETA FI` = 12, 33 as `ag100_oblique`): Bravais tensor layer (O) above a bulk with several beam sets (`KNBS > 1`) with more than one layer computation per energy (`DECIDE` recomputes the layer matrices for later exit beams), so the `CYLM` passed to `FINAL1` must be complete after each of them; derived by `make_hand_cases.py`, 2 runs (E050, E110-122 as listed for the source case) with their own expected outputs |
 | `ag100_psformat2` | `ag100` with the phase shifts in the alternative format (`PSFORMAT = 2`, `READIN`: one line per element and energy, energies in eV divided by `HARTREE`; header `EM = 0` and `C1`–`C4` of `ag100`, so the inner potential is the same); derived by `make_hand_cases.py`, 2 runs (E045, E141). The energies are rounded to 0.001 eV, so `fd.out` equals that of `ag100` and `amp.out` is within its tolerance, while the `T_*` files differ by up to 2e-5 of their maximum (beyond tolerance) |
 | `cu111` | Cu(111)-(1×1), hexagonal cell, ABC stacking, LMAX 5–7, 50–140 eV: the bulk repeat vector has a lateral shift whose mirror image is the other hollow, so in-plane sign errors (e.g. in `DBLGAS`) are not equivalent as on fcc(100). Defined in `generate/systems.py` (no viperleed example), beams from an `IVBEAMS` file |
 
@@ -166,7 +167,7 @@ rfactor cases (from the `ag100` data): `ag100_rfactor` — `pendry`, `r2`, `zj`,
 
 Generator runs use `N_CORES = 2` (with 1 core viperleed uses a single LMAX).
 
-Total size of the committed files in `tests/cases` + `tests/tier2`: 12.0 MB (all of `tests/`: 12.2 MB).
+Total size of the committed files in `tests/cases` + `tests/tier2`: 12.8 MB (all of `tests/`: 13.1 MB).
 
 ## Runtimes (8 cores, 15 GB, WSL2)
 
@@ -174,11 +175,11 @@ Measured 2026-10-07 (8 cores, WSL2, warm build cache, wall clock including `cond
 
 ## Known baseline issues
 
-Baseline = TensErLEED v2.1.0 (`22e3998`, with the ADREF2T, YSMOOTH and DER fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
+Baseline = TensErLEED v2.1.1 (`2760478`, with the ADREF2T, YSMOOTH, DER and `CYLM` fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
 
 ### ref-calc
 
-- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Ten tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
+- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Twelve tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_thick_oblique` 2, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
 
 ### rfactor
 
@@ -224,11 +225,11 @@ When a tolerance may be loosened: [Rules](#rules-tolerances-reference-data-known
 
 ## Known coverage gaps
 
-Line coverage of all tier-1 runs on the baseline (`python -m generate.coverage_report --missed 2`, gcov, 2026-10-06): `ref-calc.f` 96.3 %, `lib.tleed.f` 90.5 %, `rfactor.f` 90.3 %, `rfacsb.f` 83.6 % of executable lines. Never executed (percentages measured at `3419e83`; line numbers refer to v2.1.0):
+Line coverage of all tier-1 runs on the baseline (`python -m generate.coverage_report --missed 2`, gcov, 2026-10-06): `ref-calc.f` 96.3 %, `lib.tleed.f` 90.5 %, `rfactor.f` 90.3 %, `rfacsb.f` 83.6 % of executable lines. Never executed (percentages measured at `3419e83`; line numbers refer to v2.1.1):
 
 - **Dead code** (cannot be reached by any input): `GHMAT` 2191-2200 and `SRTLAY` 4618-4640, the reuse of interplanar propagators of an *earlier* call (`NGOL`), because `NEW` is always 1 (`ref-calc.f:997`); hence a deliberately injected bug in that copy cannot be detected. `ZSU`, `DEBWAL`/`Debwal` (unused).
 - **Not produced by viperleed inputs:** unformatted tensor output in `OPENOUT`, `OUTAMP`, `OUTXIST` and `DELIMIT` (`IFORM = 0`; viperleed always writes `IFORM = 1`). The other paths of this kind in the measurement (`SRTLAY` 4561-4578, `READIN` `PSFORMAT = 2`, `READT`, `COLUMN` with `NORM = 2`) are now covered by hand-made cases (below; for `SRTLAY` only in part).
-- **Numerical branches not hit by the test systems:** pivot row swaps in `ZGE` (5473-5475) and `CXMTXT` (933-958); single-beam path of `SUBRAS_BLAS` (4741-4747); zero vibration in `PSTEMP`; `GHD` 2026-2027, `TSCATF` 5287-5288, `sphrm` 4437-4440; `ref-calc.f` 738-742 (alternative energy-dependent inner potential) and 1145-1147.
+- **Numerical branches not hit by the test systems:** pivot row swaps in `ZGE` (5473-5475) and `CXMTXT` (933-958); single-beam path of `SUBRAS_BLAS` (4741-4747); zero vibration in `PSTEMP`; `GHD` 2026-2027, `TSCATF` 5287-5288, `sphrm` 4437-4440; `ref-calc.f` 738-742 (alternative energy-dependent inner potential) and 1151-1153.
 - **rfactor:** smoothing with gaps (`rfactor.f` 560-591), a gap fully outside the range (665-670) or at the ends of the common interval (937-969), no overlap of theory and experiment (981-985), skipped experimental beam (`IBP = 0`, 905-907); `RINTAV` weights 3, 6, 12 (988-992); `DER` for NE < 23 (`rfacsb.f` 361-377; N = 1 branch added by the DER fix, not measured); `XNTRP2`; `YPEND` negative intensity; `EXPAV` 566-568, `GAPIN` 600-605, `GRID` 636-638, `INTPOL` 692-694.
 - **Error exits** (`WRITE … STOP` on invalid input or failed convergence): most of the remaining short blocks, e.g. in `READGEO`, `READIN`, `SUBRAS_BLAS` 4764-4768, `rfactor.f` 452-453 and 769-772.
 
@@ -246,7 +247,7 @@ Known baseline failures are listed in `tests/known_debug_failures.toml`. For eac
 1. the debug build to fail with exactly the known error (regex `match` on the message with the stderr tail). When the refactor fixes it, the test fails ("DID NOT RAISE") and the list has to be updated deliberately;
 2. the same run to finish cleanly with all checks except bounds (`-fcheck=all,no-bounds -ffpe-trap=…`). So new FP traps or other check failures in these paths are still caught: an injected division by zero in `GAPIN` fails this check (a plain `xfail` would pass it).
 
-Baseline status: 35 clean, 15 known failures. These are 10 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 15 run clean without bounds checks. The 10 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
+Baseline status: 35 clean, 17 known failures. These are 12 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_thick_oblique` 2, `ir100_2x1_o_unsorted` 3, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 17 run clean without bounds checks. The 12 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
 
 ## Performance (A/B)
 
@@ -276,7 +277,7 @@ Sensitivity (manual, not committed): a 2 MB static array touched once fails the 
 | `ag100_mix` | occupation of `Ag_surf`: Ag 0.5→0.9, Pd 0.5→0.1 (step 0.1) |
 | `ir100_2x1_o` | z of `O_ads`, z of `Ir_surf` (±0.06 Å, step 0.02); vibration `O_ads` (±0.02 Å, step 0.01) |
 
-Inputs are frozen after viperleed's initialization (annotated POSCAR, PHASESHIFTS, IVBEAMS, VIBROCC), so the tree under test needs no eeasisss. Regenerate the expected values with `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed (see [Rules](#rules-tolerances-reference-data-known-debug-failures)). The expected values, first generated at `3419e83`, are unchanged at v2.1.0: no tier-2 curve has N ≤ 22 (smallest N = 129), so the `DER` fix does not act on them.
+Inputs are frozen after viperleed's initialization (annotated POSCAR, PHASESHIFTS, IVBEAMS, VIBROCC), so the tree under test needs no eeasisss. Regenerate the expected values with `python -m generate.make_tier2_expected --skip-freeze` in an environment with viperleed installed (see [Rules](#rules-tolerances-reference-data-known-debug-failures)). The expected values, first generated at `3419e83`, are unchanged at v2.1.0: no tier-2 curve has N ≤ 22 (smallest N = 129), so the `DER` fix does not act on them. They are also unchanged at v2.1.1: no tier-2 system has a Bravais tensor layer above a bulk with several beam sets, so the `CYLM` fix does not act on them.
 
 Tolerances (`[tier2]` in `tolerances.toml`): R values `r_atol = 1.5e-4` (one unit in the 4th decimal), displacements/V0 exact. Calibration (`python -m generate.make_tier2_expected --calibrate`): `FORTRAN_COMP = 'gfortran -O0'` identical to `-O2` for all systems; `-O2 -march=native` changes one R value of `ir100_2x1_o` by 1e-4.
 
