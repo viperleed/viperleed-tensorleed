@@ -52,7 +52,8 @@ C  modules of the setup routines
      +                             atomic_tmatrix,
      +                             accumulate_atomic_tmatrix
       USE beam_selection, ONLY: select_beams
-      USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums
+      USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
+     +                         bravais_layer_matrices
 
 C  include parameter statements for dimensions etc
 
@@ -373,13 +374,13 @@ C  FLMS : output lattice sums F_s(l,m) from lattice_sums
       COMPLEX FLMS
       DIMENSION FLMS(MNL,MKLM)
 
-C  subroutine rsmf (and rtinv)
+C  subroutine bravais_layer_matrices (and rtinv)
 
 C  IT   : leave set to zero
 C  ID   : compute scattering matrices for registries 1, ..., ID - currently
 C         not enabled. Might be useful for substrate type layer in subref, hcp stacking
 C  LAY  : substrate (1) or overlayer (2) type layer - LAY = LATT(ILTYPE)
-C  NLL  : number of sublattices for rsmf (NL for substrate, 1 for overlayer)
+C  NLL  : number of sublattices for bravais_layer_matrices (NL for substrate, 1 for overlayer)
 C  NA   : offset in beam list PQ for subsequent rsmf (to treat beam sets separately)
 C  NS   : offset in scattering matrices for subsequent rsmf (to treat beam sets separately)
 C  NM   : internal layer diffraction matrix dimension for rsmf
@@ -1010,7 +1011,7 @@ C  initialize storage
 
         IF (NSUB(ILTYPE).eq.1) THEN  ! Bravais layer
 
-C          use rsmf() to compute scattering matrices for a bravais layer
+C          use bravais_layer_matrices to compute scattering matrices for a bravais layer
 
 C  set default values for temp-treatment - obsolete
 C  DRPER,DRPAR,DR0 not used - leave IT = 0 !
@@ -1039,11 +1040,11 @@ C  START WITH OVERLAYER (LAY == 1)
             NA  = 0
             NAA = NT
 
-            CALL RSMF_SIMPLE(ROP,TOP,NAA,AMULT,
+            CALL bravais_layer_matrices(ROP,TOP,NAA,AMULT,
      +                       CYLM,PQ,NT,FLMS,FLM,V,NL,NA,
-     +                       NLL,AF,CAF,L1,LX,LXI,LMMAX,KLM,XEV,XOD,
+     +                       NLL,AF,CAF,LMAX,LX,LXI,LMMAX,KLM,XEV,XOD,
      +                       LEV,LOD,YLM,YLME,YLMO,IPLE,IPLO,CLM,NLM,
-     +                       XEVST,XODST)
+     +                       XEVST,XODST,EPT,TV)
 
 C THEN BULK (LAY == 2)
 
@@ -1057,11 +1058,11 @@ C THEN BULK (LAY == 2)
 
               NAA = NB(IBS)
 
-              CALL RSMF_SIMPLE(ROP,TOP,NAA,AMULT,
+              CALL bravais_layer_matrices(ROP,TOP,NAA,AMULT,
      +                         CYLM,PQ,NT,FLMS,FLM,V,NL,NA,
-     +                         NLL,AF,CAF,L1,LX,LXI,LMMAX,KLM,XEV,XOD,
+     +                         NLL,AF,CAF,LMAX,LX,LXI,LMMAX,KLM,XEV,XOD,
      +                         LEV,LOD,YLM,YLME,YLMO,IPLE,IPLO,CLM,NLM,
-     +                         XEVST,XODST)
+     +                         XEVST,XODST,EPT,TV)
 
               NA  = NA + NB(IBS)
 

@@ -41,7 +41,7 @@ program refcalc_routines_driver
                                accumulate_atomic_tmatrix
   use beam_selection, only: select_beams
   use bravais_layer, only: sublattice_equivalences, lattice_sums, &
-                           spherical_harmonics
+                           spherical_harmonics, bravais_layer_matrices
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -58,9 +58,6 @@ program refcalc_routines_driver
   integer, parameter :: nfac = 4 * 18 + 3
 
   character(len=16) :: name
-
-  ! legacy routines of lib.tleed.f that the tree has not ported yet
-  external :: rsmf_simple
 
   read(5, '(A)') name
   select case (trim(name))
@@ -314,10 +311,7 @@ contains
     type(energy_point) :: point
     integer :: nl, ideg, lmax, l1, lmmax, klm, lev, lod, nlm
     integer :: knbs, knt, npun, nt, np, mpu, ibs, na, naa, nll
-    real(sp) :: e, ak2, ak3, vpi, tv, emach, dcut, tst, eps
-    common e, ak2, ak3, vpi, tv, emach
-    integer :: lmaxc, liter
-    common /ms/ lmaxc, eps, liter
+    real(sp) :: e, ak2, ak3, vpi, tv, dcut, tst
     character(len=1) :: mode
     integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
     integer, allocatable :: lx(:), lxi(:), iple(:), iplo(:)
@@ -338,15 +332,11 @@ contains
     lev = l1 * (l1 + 1) / 2
     lod = lmmax - lev
     nlm = nlms(lmax)
-    lmaxc = lmax
-    eps = 0.001_sp
-    liter = 10
     e = read_real()
     vpi = read_real()
     ak2 = read_real()
     ak3 = read_real()
     tv = read_real()
-    emach = 1.0e-6_sp
     read(5, *) mode
     allocate(tmat(l1))
     call read_complexes(tmat)
@@ -391,19 +381,21 @@ contains
     if (mode == 'O') then
       nll = 1
       naa = nt
-      call rsmf_simple(ra, ta, naa, amult, cylm, pq, nt, flms, flm, v, nl, 0, &
-                       nll, tmat, tmat, l1, lx, lxi, lmmax, klm, xev, xod, &
-                       lev, lod, ylm, ylme, ylmo, iple, iplo, clm, nlm, &
-                       xevst, xodst)
+      call bravais_layer_matrices(ra, ta, naa, amult, cylm, pq, nt, flms, flm, &
+                                  v, nl, 0, nll, tmat, tmat, lmax, lx, lxi, &
+                                  lmmax, klm, xev, xod, lev, lod, ylm, ylme, &
+                                  ylmo, iple, iplo, clm, nlm, xevst, xodst, &
+                                  point, tv)
     else
       nll = nl
       na = 0
       do ibs = 1, knbs
         naa = nb(ibs)
-        call rsmf_simple(ra, ta, naa, amult, cylm, pq, nt, flms, flm, v, nl, na, &
-                         nll, tmat, tmat, l1, lx, lxi, lmmax, klm, xev, xod, &
-                         lev, lod, ylm, ylme, ylmo, iple, iplo, clm, nlm, &
-                         xevst, xodst)
+        call bravais_layer_matrices(ra, ta, naa, amult, cylm, pq, nt, flms, &
+                                    flm, v, nl, na, nll, tmat, tmat, lmax, lx, &
+                                    lxi, lmmax, klm, xev, xod, lev, lod, ylm, &
+                                    ylme, ylmo, iple, iplo, clm, nlm, xevst, &
+                                    xodst, point, tv)
         na = na + nb(ibs)
       end do
     end if
