@@ -231,11 +231,13 @@ def _sphrm_stdin():
     return ["SPHRM", str(len(points)), *_lines_of(values)]
 
 
-def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax):
-    """FMAT input: normal incidence at 50 eV and oblique incidence at 120 eV."""
+def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
+                incidences=((50.0, (0.0, 0.0)), (120.0, (15.0, 25.0)))):
+    """FMAT input: the incidences (energy in eV, angles) in turn; by default
+    normal incidence at 50 eV and oblique incidence at 120 eV."""
     lines = ["FMAT", *_lattice_lines(substrate, superlattice, ideg, nl1, nl2),
-             str(lmax), "2"]
-    for ev, angles in ((50.0, (0.0, 0.0)), (120.0, (15.0, 25.0))):
+             str(lmax), str(len(incidences))]
+    for ev, angles in incidences:
         ak2, ak3 = _k_parallel(ev, *angles)
         lines += _lines_of([_crystal_energy(ev), _VPI, ak2, ak3])
     return lines
@@ -318,8 +320,27 @@ _FMAT_LATTICES = [row for row in LATTICES if row[0] != "square_p2x2_ideg3"] + [
     ("square_1x20", "p(1x20) square, sublattices along the second vector", _SQ,
      ((2.88, 0.0), (0.0, _SQ_20)), 2, 1, 20),
 ]
+# FMAT at small parallel wave vector (the thresholds on its length in the
+# lattice sums and in the beam matrices), and with a superlattice vector 0.08 %
+# longer than the substrate vector: the second sublattice vector, equal to the
+# substrate vector, is at 0.9992 of it, beyond the 0.999 of the folding into
+# the superlattice cell (IDEG 1: the rotation matches the vector with itself)
+_SMALL_THETA = (0.05, 1.0)
+_FMAT_SMALL_K = [
+    (f"ag100_theta{str(theta).replace('.', 'p')}",
+     f"p(1x1) square at {theta:g} degrees", _SQ, _SQ, 4, 1, 1,
+     ((45.0, (theta, 30.0)), (120.0, (theta, 200.0))))
+    for theta in _SMALL_THETA
+] + [
+    ("square_fold", "square lattice with a first superlattice vector 0.08 % "
+     "longer than the substrate vector", _SQ, ((2.8823, 0.0), (0.0, 2.88)), 1, 2, 1,
+     ((50.0, (0.0, 0.0)), (120.0, (15.0, 25.0)))),
+]
 # (id, what, input data, IDEG, NL1, NL2, LMAX, energy (eV), angles, mode)
 _RSMF_CASES = [
+    *[(f"ag100_theta{str(theta).replace('.', 'p')}_overlayer",
+       f"one beam set, {theta:g} degrees, overlayer-type layer",
+       _AG_OBL, 4, 1, 1, 6, 45.0, (theta, 30.0), "O") for theta in _SMALL_THETA],
     ("ag100_normal_overlayer", "one beam set, normal incidence, overlayer-type layer",
      _AG, 4, 1, 1, 6, 100.0, (0.0, 0.0), "O"),
     ("ag100_oblique_overlayer", "one beam set, oblique incidence, overlayer-type layer",
@@ -360,6 +381,13 @@ CASES = [
      "LMAX = 4, normal incidence at 50 eV and oblique at 120 eV",
      _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, 4))
     for ident, what, substrate, superlattice, ideg, nl1, nl2 in _FMAT_LATTICES
+] + [
+    (f"fmat_{ident}", f"FMAT, {what}, NL1 x NL2 = {nl1} x {nl2}, IDEG {ideg}, "
+     "LMAX = 4, " + " and ".join(f"{ev:g} eV, {angles[0]:g} degrees"
+                                 for ev, angles in incidences),
+     _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, 4, incidences))
+    for ident, what, substrate, superlattice, ideg, nl1, nl2, incidences
+    in _FMAT_SMALL_K
 ] + [
     (f"rsmf_{ident}", f"BEAMS, FMAT and RSMF_SIMPLE, {what}, LMAX = {lmax}, "
      f"{energy:g} eV", _rsmf_stdin(fin, ideg, nl1, nl2, lmax, energy, angles, mode))
