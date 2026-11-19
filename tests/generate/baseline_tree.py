@@ -14,7 +14,7 @@ __license__ = 'GPLv3+'
 import subprocess
 from pathlib import Path
 
-BASELINE_COMMIT = "e90a918"
+BASELINE_COMMIT = "2760478"
 
 
 class GeneratorError(RuntimeError):
