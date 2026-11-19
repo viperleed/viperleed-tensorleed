@@ -157,6 +157,7 @@ The viperleed generators keep their work directories in `generate_workroot` and 
 | `ir100_2x1_o` | composite layers (NSUB > 1), 2 beam sets, 2 elements, LMAX 6–8 |
 | `ir100_2x1_o_thick` | Ir(100)-(2×1)-O with other layer cuts: O alone, then one layer of two Ir planes (4 sublayers with pairwise equal interplanar vectors: `NGEQ` copy in `SRTLAY`/`GHMAT`), and a bulk layer of two Ir planes (composite layer with bulk periodicity under a (2×1) overlayer: `ref-calc.f` `LAY = 2` branch, `RTINV_SIMPLE` substrate lattice sums) |
 | `ir100_2x1_o_unsorted` | `ir100_2x1_o` with the sublayers of the composite top layer listed as Ir, Ir, O instead of O, Ir, Ir (out of order along +x: `SRTLAY` re-sorting, `NORD` mapping back to the input order for the tensor files); derived by `make_hand_cases.py`, 3 runs: E118 and E110-122 as listed, whose outputs equal those of `ir100_2x1_o` except the title line, and E118_three_heights with the Ir N=2 sublayer moved deeper, to x = 1.2004 (x grows into the crystal), and the sublayers listed as Ir N=2, O, Ir N=3 (three distinct heights, deepest first), which has its own outputs |
+| `ir100_2x1_o_thick_oblique` | `ir100_2x1_o_thick` at oblique incidence (`THETA FI` = 12, 33 as `ag100_oblique`): Bravais tensor layer (O) above a bulk with several beam sets (`KNBS > 1`) with more than one layer computation per energy (`DECIDE` recomputes the layer matrices for later exit beams), so the `CYLM` passed to `FINAL1` must be complete after each of them; derived by `make_hand_cases.py`, 2 runs (E050, E110-122 as listed for the source case) with their own expected outputs |
 | `ag100_psformat2` | `ag100` with the phase shifts in the alternative format (`PSFORMAT = 2`, `READIN`: one line per element and energy, energies in eV divided by `HARTREE`; header `EM = 0` and `C1`–`C4` of `ag100`, so the inner potential is the same); derived by `make_hand_cases.py`, 2 runs (E045, E141). The energies are rounded to 0.001 eV, so `fd.out` equals that of `ag100` and `amp.out` is within its tolerance, while the `T_*` files differ by up to 2e-5 of their maximum (beyond tolerance) |
 | `cu111` | Cu(111)-(1×1), hexagonal cell, ABC stacking, LMAX 5–7, 50–140 eV: the bulk repeat vector has a lateral shift whose mirror image is the other hollow, so in-plane sign errors (e.g. in `DBLGAS`) are not equivalent as on fcc(100). Defined in `generate/systems.py` (no viperleed example), beams from an `IVBEAMS` file |
 
@@ -178,7 +179,7 @@ Baseline = TensErLEED v2.1.1 (`e90a918`, with the ADREF2T, YSMOOTH, DER and `CYL
 
 ### ref-calc
 
-- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Ten tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
+- **`OUTXIST`, debug build (bounds check).** `OUTXIST` declares `SPQF(2,NT)` but indexes it up to `KNT` (`lib.tleed.f:3003`). Twelve tier-1 runs (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_thick_oblique` 2, `ir100_2x1_o_unsorted` 3, `cu111` 1) fail `-fcheck=bounds` there. Declaration artefact; the runs are clean without bounds checks.
 
 ### rfactor
 
@@ -246,7 +247,7 @@ Known baseline failures are listed in `tests/known_debug_failures.toml`. For eac
 1. the debug build to fail with exactly the known error (regex `match` on the message with the stderr tail). When the refactor fixes it, the test fails ("DID NOT RAISE") and the list has to be updated deliberately;
 2. the same run to finish cleanly with all checks except bounds (`-fcheck=all,no-bounds -ffpe-trap=…`). So new FP traps or other check failures in these paths are still caught: an injected division by zero in `GAPIN` fails this check (a plain `xfail` would pass it).
 
-Baseline status: 35 clean, 15 known failures. These are 10 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_unsorted` 3, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 15 run clean without bounds checks. The 10 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
+Baseline status: 35 clean, 17 known failures. These are 12 × `OUTXIST` SPQF bounds (`ir100_2x1_o` 3, `ir100_2x1_o_thick` 3, `ir100_2x1_o_thick_oblique` 2, `ir100_2x1_o_unsorted` 3, `cu111` 1), the ZJ `SUM`, 3 × `GAPIN` and `GRID`, all bounds-only declaration artefacts (see Known baseline issues); all 17 run clean without bounds checks. The 12 `SPQF` entries stay until a change corrects the declaration (see [Rules](#rules-tolerances-reference-data-known-debug-failures)).
 
 ## Performance (A/B)
 
