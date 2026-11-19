@@ -33,7 +33,7 @@ below and switches the driver's calls over to them.
 | 8 | Remove the remaining COMMON blocks and `PARAM`; arrays sized from the input, per energy where it saves memory (number of beams in use, LMAX); driver in free form |
 | 9 | viperleed: for TensErLEED >= 3.0.0, no `PARAM` and no run-time compilation of `ref-calc`; writes the input-only sizes of section 5 into the input |
 
-Stages 1 to 3 are done: `READIN` and `READGEO` live in `leed_input` as
+Stages 1 to 4 are done: `READIN` and `READGEO` live in `leed_input` as
 `read_input` and `read_geometry`, their stdout echo in `leed_output`, and
 the driver copies what they return into its COMMON blocks and
 `PARAM`-sized arrays for the routines still in `lib.tleed.f`. The
@@ -43,6 +43,18 @@ energy-independent setup runs in `angular_coefficients` (`CAA`, `CLM`, the
 `PARAM`-sized arrays for the legacy consumers and passes them to the
 ported routines. The constants of `src/GLOBAL` and `pi` live in
 `constants`; the fixed-form sources still include `GLOBAL`.
+
+Stage 4 adds the atomic t-matrices to `atomic_scattering`
+(`atomic_tmatrix`, with `thermal_phase_shifts` and `spherical_bessel` as
+private helpers, and `accumulate_atomic_tmatrix` for the sum over
+elements), the beam selection `select_beams` in `beam_selection`, and in
+`bravais_layer` `lattice_sums`, `spherical_harmonics` and
+`bravais_layer_matrices` (with `intralayer_matrix` and `matrix_elements` as
+private helpers). The new type `energy_point` (energy, k-parallel,
+imaginary potential) in `leed_types` replaces the blank COMMON of the
+routines of this stage; `TV` and `LMAX` stay plain arguments. The routines
+keep the precision and packed buffers of the legacy ones (section 4.2) and
+reproduce their results bit for bit (`tests/unit` routine-value test).
 
 ## 2. Target files and modules
 
@@ -57,9 +69,9 @@ Makefile in dependency order (modules first).
 | `lib/leed_input.f90` | `leed_input` | reader: parses the input on stdin into `leed_types` | 2 |
 | `lib/leed_output.f90` | `leed_output` | writer: stdout log, `fd.out`, `amp.out`, tensor files | created 2 (input echo), files 7 |
 | `lib/angular_coefficients.f90` | `angular_coefficients` | Clebsch-Gordan/Gaunt coefficients, factorials, index tables | 3 |
-| `lib/atomic_scattering.f90` | `atomic_scattering` | phase shifts to temperature-dependent atomic t-matrices | 3 (`CPPP`), 4 |
-| `lib/beam_selection.f90` | `beam_selection` | beams in use at an energy; exit-beam bookkeeping of the tensor loop | 4 (`BEAMS`), 7 (`DECIDE`) |
-| `lib/bravais_layer.f90` | `bravais_layer` | lattice sums and reflection/transmission of Bravais layers | 3 (`SLIND`), 4 |
+| `lib/atomic_scattering.f90` | `atomic_scattering` | phase shifts to temperature-dependent atomic t-matrices | 3 (`CPPP`), 4, done |
+| `lib/beam_selection.f90` | `beam_selection` | beams in use at an energy; exit-beam bookkeeping of the tensor loop | 4, done (`select_beams`), 7 (`DECIDE`) |
+| `lib/bravais_layer.f90` | `bravais_layer` | lattice sums and reflection/transmission of Bravais layers | 3 (`SLIND`), 4, done |
 | `lib/composite_layer.f90` | `composite_layer` | Beeby inversion for composite layers, interlayer propagators, tensor storage | 5 |
 | `lib/layer_stacking.f90` | `layer_stacking` | layer doubling for the bulk, stacking of the layers above it | 6 |
 | `lib/surface_amplitudes.f90` | `surface_amplitudes` | top layer, outgoing amplitudes, intensities, tensor amplitudes | 7 |
@@ -95,16 +107,16 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `CELMG` | `lib.tleed.f` | `angular_coefficients` | 3, done | `matrix_coefficients`; `YLMC`, `FAC1`, `FAC2` are local; `FAC` stays a workspace argument, filled by `matrix_coefficients` and again by `legendre_product_integrals` |
 | `LXGENT` | `lib.tleed.f` | `angular_coefficients` | 3, done | `lm_permutations` |
 | `CPPP` | `lib.tleed.f` | `atomic_scattering` | 3, done | `legendre_product_integrals`; used by `delta`: frozen copy stays |
-| `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays; message on stdout |
-| `PSTEMP` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
-| `BESSEL` | `lib.tleed.f` | `atomic_scattering` | 4 | used by `delta`: frozen copy stays |
+| `TSCATF` | `lib.tleed.f` | `atomic_scattering` | 4, done | `atomic_tmatrix`; used by `delta`: frozen copy stays; the low-energy stop message goes to stderr; the sum over elements into the atomic t-matrix is `accumulate_atomic_tmatrix` |
+| `PSTEMP` | `lib.tleed.f` | `atomic_scattering` | 4, done | `thermal_phase_shifts` (private); used by `delta`: frozen copy stays |
+| `BESSEL` | `lib.tleed.f` | `atomic_scattering` | 4, done | `spherical_bessel` (private); used by `delta`: frozen copy stays |
 | `DEBWAL` | `lib.tleed.f` | none | removed 8 | unused |
-| `BEAMS` | `lib.tleed.f` | `beam_selection` | 4 | sets `NT`, the number of beams in use |
-| `FMAT` | `lib.tleed.f` | `bravais_layer` | 4 | blank COMMON as `AK(2)`; `/SL/` renamed |
-| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4 | |
-| `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4 | |
-| `XM` | `lib.tleed.f` | `bravais_layer` | 4 | |
-| `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4 | also used by `RTINV_SIMPLE`; message on stdout |
+| `BEAMS` | `lib.tleed.f` | `beam_selection` | 4, done | `select_beams`; sets `NT`, the number of beams in use |
+| `FMAT` | `lib.tleed.f` | `bravais_layer` | 4, done | `lattice_sums`; takes the `lattice` type and an `energy_point` instead of `/SL/` and the blank COMMON (`AK(2)`) |
+| `RSMF_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `bravais_layer_matrices`; `TV` and `LMAX` are arguments; matrices stay packed with leading dimension `NT` |
+| `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `matrix_elements` (private) |
+| `XM` | `lib.tleed.f` | `bravais_layer` | 4, done | `intralayer_matrix` (private) |
+| `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4, done | `spherical_harmonics`; the error message goes to stderr. A legacy copy stays in `lib.tleed.f` for `RTINV_SIMPLE` (and the composite layer) and is removed when that is ported |
 | `COPYPOS` | `lib.tleed.f` | `composite_layer` | 5 | |
 | `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | `/MPT/`, `/MFB/`; writes tensors to `TSTORE` |
 | `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | reads `/MFB/` |
@@ -359,11 +371,18 @@ Choices made here:
    with the reader's `lattice` and still copies the lattice into `/SL/`
    for `FMAT`, `GHD`, `GHMAT` and `TAUMAT` (`SLIND` writes nothing on stdout,
    so the stdout order is unchanged).
-2. `BEAMS` in stage 4 (first stage running the per-energy computation);
-   `DECIDE` in stage 7 with the exit-beam loop of the tensor output.
+2. `BEAMS` in stage 4 (first stage running the per-energy computation),
+   as `select_beams` in `beam_selection`; `DECIDE` in stage 7 with the
+   exit-beam loop of the tensor output. Settled for stage 4: `BEAMS` does
+   not call `DECIDE`, and `select_beams` is self-contained. Open for stage
+   7: `DECIDE` joins `beam_selection` and then sets the k-parallel of an
+   `energy_point` instead of blank COMMON.
 3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,
    `PSTEMP`, `BESSEL` in stage 4.
-4. `SPHRM_MOD` in `bravais_layer` (stage 4), shared with `composite_layer`.
+4. `SPHRM_MOD` in `bravais_layer` (stage 4). `RTINV_SIMPLE` still calls the
+   legacy routine in `lib.tleed.f`, so the routine exists twice until stage
+   5; `composite_layer` then uses `spherical_harmonics` and the legacy copy
+   goes.
 5. `leed_output` created in stage 2 for the input echo on stdout of
    `READIN`/`READGEO`; the output files in stage 7.
 6. The driver stays fixed-form `src/ref-calc.f` until stage 8, which
