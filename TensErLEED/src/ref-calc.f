@@ -1099,6 +1099,12 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
 
       ENDDO  ! ILTYPE, loop through layers to construct R,T matrices
 
+C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, RSMF_SIMPLE
+C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
+C  (without the offset NA), so compute all NT rows here.
+
+      CALL FULLCYLM(CYLM,PQ,NT,YLM,LMAX,LMMAX)
+
 C*************************************************************
 C  next, compute intra-crystal scattering matrices up to
 C  second layer in plane wave representation
@@ -1350,6 +1356,7 @@ C  produce ALM and output if desired
               ENDDO
             ENDDO
 
+C  CYLM holds all NT beams (FULLCYLM after the ILTYPE loop)
             CALL FINAL1(ALM,A0LM,APLUS,AMINUS,CYLM,XODST,XEVST,
      +                  IPLO,IPLE,LMAX,LMMAX,LOD,LEV,NT,LX,AEV,
      +                  AOD,EMACH)
@@ -1428,5 +1435,47 @@ C*************************************************************
 C  that's all, folks!
 C*************************************************************
 
+      END
+
+C*************************************************************
+C  SUBROUTINE FULLCYLM computes the spherical harmonics CYLM of all
+C  NT beams of the current beam set PQ at the current energy, with
+C  the same arithmetic as RSMF_SIMPLE uses for the beams of one beam
+C  set. CYLM(IG,K) is the K-th spherical harmonic of the propagation
+C  direction of beam IG inside the crystal; it is used by FINAL1.
+C  YLM is a work array.
+C*************************************************************
+
+      SUBROUTINE FULLCYLM(CYLM,PQ,NT,YLM,LMAX,LMMAX)
+
+      INTEGER NT,LMAX,LMMAX
+      COMPLEX CYLM,YLM,XA,YA,ST,CF,CT,RU
+      DIMENSION CYLM(NT,LMMAX),PQ(2,NT),YLM(LMMAX)
+      COMMON E,AK2,AK3,VPI
+
+      RU = CMPLX(1.0,0.0)
+      YA = CMPLX(2.0 * E, - 2.0 * VPI + 0.000001)
+      YA = SQRT(YA)
+      DO IG = 1, NT
+        BK2 = PQ(1, IG) + AK2
+        BK3 = PQ(2, IG) + AK3
+        C = BK2 * BK2 + BK3 * BK3
+        XA = CMPLX(2.0 * E - C, - 2.0 * VPI + 0.000001)
+        XA = SQRT(XA)
+        B = 0.0
+        CF = RU
+        IF (C.GT.1.0E-7) THEN ! off-normal beam
+          B = SQRT(C)
+          CF = CMPLX(BK2/B, BK3/B)
+        ENDIF
+        CT = XA/YA
+        ST = B/YA
+        CALL SPHRM_MOD(LMAX, YLM, LMMAX, CT, ST, CF)
+        DO K = 1, LMMAX
+          CYLM(IG, K) = YLM(K)
+        ENDDO
+      ENDDO
+
+      RETURN
       END
 
