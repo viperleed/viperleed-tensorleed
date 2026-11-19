@@ -1356,7 +1356,6 @@ C  produce ALM and output if desired
               ENDDO
             ENDDO
 
-C  CYLM holds all NT beams (FULLCYLM after the ILTYPE loop)
             CALL FINAL1(ALM,A0LM,APLUS,AMINUS,CYLM,XODST,XEVST,
      +                  IPLO,IPLE,LMAX,LMMAX,LOD,LEV,NT,LX,AEV,
      +                  AOD,EMACH)
@@ -1439,10 +1438,10 @@ C*************************************************************
 
 C*************************************************************
 C  SUBROUTINE FULLCYLM computes the spherical harmonics CYLM of all
-C  NT beams of the current beam set PQ at the current energy, with
-C  the same arithmetic as RSMF_SIMPLE uses for the beams of one beam
-C  set. CYLM(IG,K) is the K-th spherical harmonic of the propagation
-C  direction of beam IG inside the crystal; it is used by FINAL1.
+C  NT beams in PQ at the current energy, with the same arithmetic as
+C  RSMF_SIMPLE uses for the beams of one beam set. CYLM(IG,K) is
+C  the K-th spherical harmonic of the propagation direction of beam
+C  IG inside the crystal; it is used by FINAL1.
 C  YLM is a work array.
 C*************************************************************
 
