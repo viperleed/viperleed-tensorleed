@@ -1,22 +1,22 @@
 !> \file bravais_layer.f90
 !! \brief Lattice sums and scattering of Bravais layers: sublattice setup,
-!! spherical harmonics.
+!! lattice sums, spherical harmonics.
 !!
 !! Each routine keeps the precision of every quantity of the legacy routine
 !! it follows, and its results are bit-for-bit those of the legacy code
 !! (tests/tier1/test_refcalc_routines.py).
 
-!> Setup for the lattice sums of Bravais layers, and spherical harmonics.
+!> Setup and lattice sums of Bravais layers, and spherical harmonics.
 module bravais_layer
   use constants, only: pi
   use kinds, only: sp
   use leed_output, only: stop_with_error
-  use leed_types, only: lattice
+  use leed_types, only: lattice, energy_point
   implicit none
 
   private
 
-  public :: sublattice_equivalences, spherical_harmonics
+  public :: sublattice_equivalences, lattice_sums, spherical_harmonics
 
   !> Small number to compare the phase factors of sublattice vectors
   !! (the legacy argument EPSD).
@@ -122,6 +122,217 @@ contains
       end do
     end do
   end subroutine sublattice_equivalences
+
+  !> Lattice sums over each sublattice of the superlattice (legacy FMAT).
+  !! Author: Pendry.
+  !!
+  !! flms(js, lm) is the sum over the lattice points of sublattice js, with
+  !! lm = (0,0), (1,-1), (1,1), (2,-2), (2,0), (2,2), ...; it is zero for
+  !! odd l + m. The sum is split into one over a single sector of the
+  !! lattice and the other ideg - 1 sectors, which are related by symmetry
+  !! except for factors that depend on the direction of the lattice vector.
+  !! ideg is limited to 6 (arrays anc, ans). Do not use ideg = 1; ideg = 3
+  !! is preferable over ideg = 6.
+  !!
+  !! The arrays flms, v and jjs are explicitly shaped; the driver passes the
+  !! contiguous leading part of its larger arrays (its nl equals the leading
+  !! extent, see sublattice_equivalences). The work arrays scc and sa are
+  !! small (ideg <= 6) and automatic.
+  subroutine lattice_sums(flms, v, jjs, nl, nls, dcut, lat, lmax, klm, point)
+    !> Number of sublattices.
+    integer, intent(in) :: nl
+    !> Number of sublattice sums desired (1 or nl).
+    integer, intent(in) :: nls
+    !> Largest angular momentum.
+    integer, intent(in) :: lmax
+    !> (2 * lmax + 1) * (2 * lmax + 2) / 2.
+    integer, intent(in) :: klm
+    !> Lattice sums. Set to zero before the sum.
+    complex(sp), intent(out) :: flms(nl, klm)
+    !> Lattice; uses superlattice_vector (AR1, AR2) and symmetry_degree
+    !! (ideg)
+    type(lattice), intent(in) :: lat
+    !> Sublattice vectors in polar coordinates, from
+    !! sublattice_equivalences.
+    real(sp), intent(in) :: v(nl, 2)
+    !> Relationship of the sublattices under rotation, from
+    !! sublattice_equivalences.
+    integer, intent(in) :: jjs(nl, lat%symmetry_degree)
+    !> Cutoff distance of the lattice sum.
+    real(sp), intent(in) :: dcut
+    !> Energy, parallel momentum and imaginary potential; uses all three.
+    type(energy_point), intent(in) :: point
+
+    integer :: ideg
+    integer :: asst  ! Flag: when ideg <= 2, the sum is run twice
+    complex(sp) :: scc(lat%symmetry_degree, 4 * lmax + 1)
+    complex(sp) :: sa(2 * lmax * lat%symmetry_degree)
+    complex(sp) :: rtab(4), czero, ci, kappa, sc, sd, se, z, acs, acc, rf
+    real(sp) :: anc(6), ans(6), r(2), ak(2)
+    real(sp) :: ang, d, ag, dcut2, det, add, ant, ast, adr1, adr2
+    real(sp) :: b1, b2, bp1, bp2, an1, an2, ar, abc, abb, ad, al
+    real(sp) :: ar1(2), ar2(2), e, vpi
+    integer :: l2max, lim, liml, li1, li2, i1, i2, j, m, js, jsp
+    integer :: mj, mp, mm, jf, jl, jm, km
+
+    ar1 = lat%superlattice_vector(:, 1)
+    ar2 = lat%superlattice_vector(:, 2)
+    ideg = lat%symmetry_degree
+    e = point%energy
+    ak = point%k_parallel
+    vpi = point%imaginary_potential
+
+    czero = cmplx(0.0_sp, 0.0_sp, sp)
+    ci = cmplx(0.0_sp, 1.0_sp, sp)
+    kappa = cmplx(2.0_sp * e, -2.0_sp * vpi + 0.000001_sp, sp)
+    kappa = sqrt(kappa)
+    ag = sqrt(ak(1) * ak(1) + ak(2) * ak(2))
+
+    ! anc, ans and sa are prepared to be used in the sum over symmetrically
+    ! related sectors of the lattice
+    l2max = lmax + lmax
+    lim = l2max * ideg
+    liml = l2max + 1
+    ang = 2.0_sp * pi / real(ideg, sp)
+    d = 1.0_sp
+    do j = 1, ideg
+      anc(j) = cos(d * ang)
+      ans(j) = sin(d * ang)
+      d = d + 1.0_sp
+    end do
+    d = 1.0_sp
+    do j = 1, lim
+      sa(j) = exp(-ci * d * ang)
+      d = d + 1.0_sp
+    end do
+
+    flms = czero
+
+    ! The range of summation is limited by dcut
+    d = sqrt(ar1(1) * ar1(1) + ar1(2) * ar1(2))
+    li1 = int(dcut / d) + 2
+    d = sqrt(ar2(1) * ar2(1) + ar2(2) * ar2(2))
+    li2 = int(dcut / d) + 2
+    dcut2 = dcut * dcut
+    det = ar1(1) * ar2(2) - ar1(2) * ar2(1)
+
+    ! One sublattice at a time is treated in the first sector
+    do js = 1, nls
+      asst = 0
+      add = 1.0_sp
+      ant = -1.0_sp
+      adr1 = v(js, 1) * cos(v(js, 2))
+      adr2 = v(js, 1) * sin(v(js, 2))
+      ! Shift point adr1,2 by multiples of ar1 and ar2 into the superlattice
+      ! unit cell near the origin, defined by the limits (-0.001 to
+      ! 0.999) * ar1 and (0.001 to 1.001) * ar2
+      b1 = (adr1 * ar2(2) - adr2 * ar2(1)) / det
+      b2 = (ar1(1) * adr2 - ar1(2) * adr1) / det
+      bp1 = mod(b1, 1.0_sp)
+      if (bp1 < -0.001_sp) then
+        bp1 = bp1 + 1.0_sp
+      else if (bp1 > 0.999_sp) then
+        bp1 = bp1 - 1.0_sp
+      end if
+      bp2 = mod(b2, 1.0_sp)
+      if (bp2 < 0.001_sp) then
+        bp2 = bp2 + 1.0_sp
+      end if
+      adr1 = bp1 * ar1(1) + bp2 * ar2(1)
+      adr2 = bp1 * ar1(2) + bp2 * ar2(2)
+      ast = -1.0_sp
+      ! Restart from here once more if ideg <= 2
+      do
+        an1 = ant
+        do i1 = 1, li1  ! First in-plane direction
+          an1 = an1 + add
+          an2 = ast
+          do i2 = 1, li2  ! Second in-plane direction
+            an2 = an2 + 1.0_sp
+            ! r is the current lattice vector in the sum; ar = |r|;
+            ! rtab(1) = -exp(i * phi(r))
+            r(1) = an1 * ar1(1) + an2 * ar2(1) + adr1
+            r(2) = an1 * ar1(2) + an2 * ar2(2) + adr2
+            ar = r(1) * r(1) + r(2) * r(2)
+            if (ar > dcut2) cycle  ! Beyond the limit of the lattice sum
+            ar = sqrt(ar)
+            rtab(1) = -cmplx(r(1) / ar, r(2) / ar, sp)
+            abc = 1.0_sp
+            abb = 0.0_sp
+            if (ag > 1.0e-4_sp) then  ! off-normal beam
+              abc = (ak(1) * r(1) + ak(2) * r(2)) / (ag * ar)
+              abb = (-ak(2) * r(1) + ak(1) * r(2)) / (ag * ar)
+            end if
+            sc = ci * ag * ar
+            ! scc contains factors in the summation that depend on the
+            ! direction of r. Contributions from symmetrically related
+            ! sectors can be generated simply and are accumulated for each
+            ! sector, indexed by j. The second subscript is ordered
+            ! m = -l2max, -l2max + 1, ..., l2max
+            do j = 1, ideg
+              ad = abc * anc(j) - abb * ans(j)
+              sd = exp(sc * ad)
+              scc(j, liml) = sd
+              mj = 0
+              se = rtab(1)
+              do m = 1, l2max
+                mj = mj + j
+                mp = liml + m
+                mm = liml - m
+                scc(j, mp) = sd * sa(mj) / se
+                scc(j, mm) = sd * se / sa(mj)
+                se = se * rtab(1)
+              end do
+            end do
+            z = ar * kappa
+            acs = sin(z)
+            acc = cos(z)
+            ! rtab(3), rtab(4) = spherical Hankel functions of the first
+            ! kind, l = 0, 1
+            rtab(3) = (acs - ci * acc) / z
+            rtab(4) = ((acs / z - acc) - ci * (acc / z + acs)) / z
+            al = 0.0_sp
+            ! The sum over factors independent of the direction of r is
+            ! accumulated in flms for each sublattice. The second
+            ! subscript orders l and m as (0,0), (1,-1), (1,1), (2,-2),
+            ! (2,0), (2,2), ...
+            jf = 1
+            do jl = 1, liml
+              rf = rtab(3) * ci
+              jm = l2max + 2 - jl
+              do km = 1, jl
+                ! The corresponding lattice points in the other sectors
+                ! contribute to the appropriate sublattice
+                do j = 1, ideg
+                  jsp = jjs(js, j)
+                  flms(jsp, jf) = flms(jsp, jf) + scc(j, jm) * rf
+                end do
+                jf = jf + 1
+                jm = jm + 2
+              end do
+              ! Spherical Hankel functions for higher l by recurrence
+              acs = (2.0_sp * al + 3.0_sp) * rtab(4) / z - rtab(3)
+              rtab(3) = rtab(4)
+              rtab(4) = acs
+              al = al + 1.0_sp
+            end do
+          end do
+        end do
+
+        ! Special treatment is required if ideg <= 2: two sectors remain to
+        ! be summed over
+        if (ideg <= 2 .and. asst == 0) then
+          asst = 1
+          add = -1.0_sp
+          ast = -1.0_sp
+          if (bp2 > 0.999_sp) ast = -2.0_sp
+          ant = 0.0_sp
+        else
+          exit
+        end if
+      end do
+    end do
+  end subroutine lattice_sums
 
   !> Computes the complex spherical harmonics up to angular momentum lmax for
   !! one direction (legacy SPHRM_MOD). Author: Pendry.

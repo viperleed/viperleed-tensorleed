@@ -296,12 +296,24 @@ _BEAM_CASES = [
     ("ir100_sets_oblique", "p(2x1) superstructure, two beam sets, oblique incidence",
      _IR, (20.0, 10.0)),
 ]
-# FMAT: the lattices of SLIND with their IDEG, and 180-degree axes (IDEG 2)
-# of lattices of a higher symmetry
+# FMAT: the lattices of SLIND with their IDEG, 180-degree axes (IDEG 2) of
+# lattices of a higher symmetry, and 20 x 1 and 1 x 20 superlattices (IDEG 2)
+# whose sublattice vectors fall at 0.05, ..., 0.95 of a superlattice vector
+# (the folding of the sublattice vectors into the superlattice cell moves
+# them only for fractions beyond 0.999 or below -0.001 and 0.001), also
+# along the opposite direction of the vectors
+_SQ_20 = 20 * 2.88
 _FMAT_LATTICES = [row for row in LATTICES if row[0] != "square_p2x2_ideg3"] + [
     (f"{ident}_ideg2", f"{what}, as IDEG 2", sub, sup, 2, nl1, nl2)
     for ident, what, sub, sup, _, nl1, nl2 in LATTICES
     if ident in ("ag100", "cu111", "square_p2x2", "hex_p2x2_ideg3")
+] + [
+    ("square_20x1", "p(20x1) square, sublattices along the first vector", _SQ,
+     ((_SQ_20, 0.0), (0.0, 2.88)), 2, 20, 1),
+    ("square_20x1_reversed", "p(20x1) square, vectors against the substrate "
+     "vectors", _SQ, ((-_SQ_20, 0.0), (0.0, -2.88)), 2, 20, 1),
+    ("square_1x20", "p(1x20) square, sublattices along the second vector", _SQ,
+     ((2.88, 0.0), (0.0, _SQ_20)), 2, 1, 20),
 ]
 # (id, what, input data, IDEG, NL1, NL2, LMAX, energy (eV), angles, mode)
 _RSMF_CASES = [

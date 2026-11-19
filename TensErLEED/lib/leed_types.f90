@@ -15,6 +15,7 @@ module leed_types
 
   public :: atom_sites, layer_type, stacked_layer, geometry
   public :: lattice, control, inner_potential, beam_list, phase_shifts
+  public :: energy_point
 
   !> The kinds of atoms, distinguished by element, vibrational amplitude
   !! and concentration.
@@ -162,4 +163,18 @@ module leed_types
     !> Phase shifts in radian, (n_energies, n_elements, lmax + 1); PHSS.
     real(sp), allocatable :: value(:, :, :)
   end type phase_shifts
+
+  !> The energy, incident-beam parallel momentum and imaginary inner
+  !! potential for which the layer matrices are computed (legacy blank
+  !! common block). The parallel momentum is that of the beam for which the
+  !! layer matrices are computed next, which is not always the incident one.
+  type :: energy_point
+    !> Electron energy in Hartree; E.
+    real(sp) :: energy = 0.0_sp
+    !> Parallel components of the wave vector in inverse atomic units; AK2,
+    !! AK3 (AK21, AK31 in the driver).
+    real(sp) :: k_parallel(2) = 0.0_sp
+    !> Imaginary part of the inner potential in Hartree; VPI.
+    real(sp) :: imaginary_potential = 0.0_sp
+  end type energy_point
 end module leed_types

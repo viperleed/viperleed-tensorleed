@@ -40,7 +40,7 @@ C
 C  modules of the input reader
 
       USE leed_types, ONLY: geometry, lattice, control, inner_potential,
-     +                      beam_list, phase_shifts
+     +                      beam_list, phase_shifts, energy_point
       USE leed_input, ONLY: read_input, read_geometry
 
 C  modules of the setup routines
@@ -52,7 +52,7 @@ C  modules of the setup routines
      +                             atomic_tmatrix,
      +                             accumulate_atomic_tmatrix
       USE beam_selection, ONLY: select_beams
-      USE bravais_layer, ONLY: sublattice_equivalences
+      USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums
 
 C  include parameter statements for dimensions etc
 
@@ -206,6 +206,7 @@ C  TENS  : tensor output for layer ISTACK desired?
       TYPE(inner_potential) POT
       TYPE(beam_list) BMSET
       TYPE(phase_shifts) PHASE
+      TYPE(energy_point) EPT
       INTEGER IGL,IGS,IGP
       REAL ASA
       DIMENSION ASA(3)
@@ -277,7 +278,7 @@ C  variables used in energy loop
 
 C  E    : current energy
 C  EEV  : vacuum energy in eV (for output purposes)
-C  DCUTS,DCUTO: limiting radii for lattice sums in FMAT -
+C  DCUTS,DCUTO: limiting radii for lattice sums in lattice_sums -
 C               DCUTS, DCUTO identical here.
 C  KSQ : total squared momentum of beams outside the crystal
 C  AK   : lateral momentum of incident beam
@@ -363,15 +364,14 @@ C  NP   : maximum number of beams in a single beamset at current E (used as a di
       DIMENSION NPUC(MNPUN)
       INTEGER MPU,NT,NP
 
-C  subroutine fmat
+C  subroutine lattice_sums
 
-C  NLS  : number of sublattices to be treated in FMAT (either 1 or NL, use NL!)
-C  FLMS : output lattice sums F_s(l,m) from fmat
-C  SCC,SA: working spaces for FMAT - see there!
+C  NLS  : number of sublattices to be treated in lattice_sums (either 1 or NL, use NL!)
+C  FLMS : output lattice sums F_s(l,m) from lattice_sums
 
       INTEGER NLS
-      COMPLEX FLMS,SCC,SA
-      DIMENSION FLMS(MNL,MKLM),SCC(MIDEG,4*MLMAX+1),SA(2*MLMAX*MIDEG)
+      COMPLEX FLMS
+      DIMENSION FLMS(MNL,MKLM)
 
 C  subroutine rsmf (and rtinv)
 
@@ -693,7 +693,7 @@ C  copy the result into the variables used by the remaining routines
       PHSS = PHASE%value
 
 C  sublattice_equivalences compares substrate lattice and superlattice
-C  for the benefit of FMAT
+C  for the benefit of lattice_sums
 
       CALL sublattice_equivalences(LAT,NL,V,VL,JJS)
 
@@ -867,7 +867,7 @@ c  shift scattering energy by inner potential value VV
 
 C  SET LIMITING RADII ON LATTICE SUMS, POSSIBLY DIFFERENT FOR SUBSTRATE
 C  (DCUTS) AND OVERLAYER (DCUTO) (currently DCUTO = DCUTS)
-C  used in FMAT ...
+C  used in lattice_sums ...
 
       DCUTS =  - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
       DCUTO =  - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
@@ -973,7 +973,11 @@ C  (NLS = NL is necessary, cf. appendix B of Van Hove / Tong 1979)
 !     While the next call seems not to depend on the beams, it
 !     actually does via the unnamed COMMON block "E,AK21,VPI,..."
 !     since AK21 is changed within DECIDE right above
-      CALL  FMAT (FLMS,V,JJS,NL,NLS,DCUTS,IDEG,LMAX,KLM,SCC,SA)
+      EPT%energy = E
+      EPT%k_parallel(1) = AK21
+      EPT%k_parallel(2) = AK31
+      EPT%imaginary_potential = VPI
+      CALL  lattice_sums (FLMS,V,JJS,NL,NLS,DCUTS,LAT,LMAX,KLM,EPT)
 
 C*************************************************************
 C  compute (plane-wave) scattering matrices for each layer type

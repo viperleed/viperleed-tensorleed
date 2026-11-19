@@ -40,9 +40,10 @@ program refcalc_routines_driver
   use atomic_scattering, only: legendre_product_integrals, atomic_tmatrix, &
                                accumulate_atomic_tmatrix
   use beam_selection, only: select_beams
-  use bravais_layer, only: sublattice_equivalences, spherical_harmonics
+  use bravais_layer, only: sublattice_equivalences, lattice_sums, &
+                           spherical_harmonics
   use kinds, only: sp, dp
-  use leed_types, only: lattice
+  use leed_types, only: lattice, energy_point
   implicit none
 
   ! dimensions of the legacy CAA and CLM as a function of LMAX
@@ -59,7 +60,7 @@ program refcalc_routines_driver
   character(len=16) :: name
 
   ! legacy routines of lib.tleed.f that the tree has not ported yet
-  external :: fmat, rsmf_simple
+  external :: rsmf_simple
 
   read(5, '(A)') name
   select case (trim(name))
@@ -257,15 +258,11 @@ contains
     end do
   end subroutine spherical_harmonics_case
 
-  !> Read a lattice as for SLIND, fill /SL/ with it, and return ideg, nl1, nl2.
+  !> Read a lattice as for SLIND, and return the number of sublattices.
   subroutine read_lattice(lat, nl)
     type(lattice), intent(out) :: lat
     integer, intent(out) :: nl
     real(sp) :: t(12)
-    ! /SL/ as the legacy routines of lib.tleed.f read it; FMAT uses AR1, AR2
-    real(sp) :: br1(2), br2(2), ar1(2), ar2(2), rar1(2), rar2(2)
-    integer :: nl1x, nl2x
-    common /sl/ br1, br2, ar1, ar2, rar1, rar2, nl1x, nl2x
 
     read(5, *) lat%symmetry_degree, lat%repetitions
     call read_reals(t)
@@ -275,25 +272,17 @@ contains
     lat%superlattice_vector(:, 2) = t(7:8)
     lat%superlattice_reciprocal(:, 1) = t(9:10)
     lat%superlattice_reciprocal(:, 2) = t(11:12)
-    br1 = t(1:2)
-    br2 = t(3:4)
-    ar1 = t(5:6)
-    ar2 = t(7:8)
-    rar1 = t(9:10)
-    rar2 = t(11:12)
-    nl1x = lat%repetitions(1)
-    nl2x = lat%repetitions(2)
-    nl = nl1x * nl2x
+    nl = lat%repetitions(1) * lat%repetitions(2)
   end subroutine read_lattice
 
   !> FMAT on the sublattices of the lattice at several (E, VPI, k-parallel).
   subroutine lattice_sums_case()
     type(lattice) :: lat
     integer :: nl, ideg, lmax, klm, ne, ie
-    real(sp) :: e, ak2, ak3, vpi, tv, emach, dcut
-    common e, ak2, ak3, vpi, tv, emach
+    type(energy_point) :: point
+    real(sp) :: dcut
     real(sp), allocatable :: v(:, :)
-    complex(sp), allocatable :: vl(:, :), flms(:, :), scc(:, :), sa(:)
+    complex(sp), allocatable :: vl(:, :), flms(:, :)
     integer, allocatable :: jjs(:, :)
 
     call read_lattice(lat, nl)
@@ -301,19 +290,17 @@ contains
     read(5, *) lmax
     klm = (2 * lmax + 1) * (2 * lmax + 2) / 2
     allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg), flms(nl, klm))
-    allocate(scc(ideg, 4 * lmax + 1), sa(2 * lmax * ideg))
     call sublattice_equivalences(lat, nl, v, vl, jjs)
-    tv = 0.0_sp
-    emach = 1.0e-6_sp
     read(5, *) ne
     do ie = 1, ne
-      e = read_real()
-      vpi = read_real()
-      ak2 = read_real()
-      ak3 = read_real()
-      dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))
+      point%energy = read_real()
+      point%imaginary_potential = read_real()
+      point%k_parallel(1) = read_real()
+      point%k_parallel(2) = read_real()
+      dcut = -5.0_sp * sqrt(2.0_sp * point%energy) &
+             / (min(point%imaginary_potential, -0.05_sp))
       flms = (0.0_sp, 0.0_sp)
-      call fmat(flms, v, jjs, nl, nl, dcut, ideg, lmax, klm, scc, sa)
+      call lattice_sums(flms, v, jjs, nl, nl, dcut, lat, lmax, klm, point)
       call write_complex(numbered('FLMS', ie), reshape(flms, [nl * klm]))
     end do
   end subroutine lattice_sums_case
@@ -324,6 +311,7 @@ contains
   !! with its offset in the beam list, all sublattices).
   subroutine bravais_layer_case()
     type(lattice) :: lat
+    type(energy_point) :: point
     integer :: nl, ideg, lmax, l1, lmmax, klm, lev, lod, nlm
     integer :: knbs, knt, npun, nt, np, mpu, ibs, na, naa, nll
     real(sp) :: e, ak2, ak3, vpi, tv, emach, dcut, tst, eps
@@ -335,7 +323,7 @@ contains
     integer, allocatable :: lx(:), lxi(:), iple(:), iplo(:)
     real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
     real(sp), allocatable :: v(:, :), clm(:)
-    complex(sp), allocatable :: vl(:, :), flms(:, :), scc(:, :), sa(:)
+    complex(sp), allocatable :: vl(:, :), flms(:, :)
     complex(sp), allocatable :: tmat(:), ra(:, :), ta(:, :), amult(:)
     complex(sp), allocatable :: cylm(:, :), flm(:), xev(:, :), xod(:, :)
     complex(sp), allocatable :: ylm(:), ylme(:), ylmo(:)
@@ -375,7 +363,6 @@ contains
     call read_array(spqf)
 
     allocate(v(nl, 2), vl(nl, 2), jjs(nl, ideg), flms(nl, klm))
-    allocate(scc(ideg, 4 * lmax + 1), sa(2 * lmax * ideg))
     call sublattice_equivalences(lat, nl, v, vl, jjs)
     allocate(clm(nlm), lx(lmmax), lxi(lmmax))
     call x_tables(lmax, clm, lx, lxi)
@@ -388,7 +375,8 @@ contains
                       nb, pq, pqf, npuc, mpu, nt, np)
     dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))
     flms = (0.0_sp, 0.0_sp)
-    call fmat(flms, v, jjs, nl, nl, dcut, ideg, lmax, klm, scc, sa)
+    point = energy_point(e, [ak2, ak3], vpi)
+    call lattice_sums(flms, v, jjs, nl, nl, dcut, lat, lmax, klm, point)
 
     allocate(ra(nt, nt), ta(nt, nt), amult(nt), cylm(nt, lmmax))
     allocate(flm(klm), xev(lev, lev), xod(lod, lod), ylm(lmmax))
