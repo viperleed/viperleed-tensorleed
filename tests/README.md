@@ -2,7 +2,7 @@
 
 Regression tests for the TensErLEED programs `ref-calc` and `rfactor`, built for the F77 → modern Fortran refactor. They check correctness (outputs compared with a frozen baseline within calibrated tolerances), clean termination under a debug build, CPU time and peak memory (A/B against the baseline), and end-to-end behaviour through viperleed (R factors and error curves).
 
-Baseline (ground truth): TensErLEED v2.1.1 (`e90a918`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9) and the `CYLM` fix in `FINAL1` (tensors of a Bravais layer above a bulk with several beam sets); details in `cases/BASELINE.txt`.
+Baseline (ground truth): TensErLEED v2.1.1 (`2760478`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9) and the `CYLM` fix in `FINAL1` (tensors of a Bravais layer above a bulk with several beam sets); details in `cases/BASELINE.txt`.
 
 ## Quick start
 
@@ -167,7 +167,7 @@ rfactor cases (from the `ag100` data): `ag100_rfactor` — `pendry`, `r2`, `zj`,
 
 Generator runs use `N_CORES = 2` (with 1 core viperleed uses a single LMAX).
 
-Total size of the committed files in `tests/cases` + `tests/tier2`: 12.0 MB (all of `tests/`: 12.2 MB).
+Total size of the committed files in `tests/cases` + `tests/tier2`: 12.8 MB (all of `tests/`: 13.1 MB).
 
 ## Runtimes (8 cores, 15 GB, WSL2)
 
@@ -175,7 +175,7 @@ Measured 2026-10-07 (8 cores, WSL2, warm build cache, wall clock including `cond
 
 ## Known baseline issues
 
-Baseline = TensErLEED v2.1.1 (`e90a918`, with the ADREF2T, YSMOOTH, DER and `CYLM` fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
+Baseline = TensErLEED v2.1.1 (`2760478`, with the ADREF2T, YSMOOTH, DER and `CYLM` fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
 
 ### ref-calc
 
