@@ -51,6 +51,7 @@ C  modules of the setup routines
       USE atomic_scattering, ONLY: legendre_product_integrals,
      +                             atomic_tmatrix,
      +                             accumulate_atomic_tmatrix
+      USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences
 
 C  include parameter statements for dimensions etc
@@ -962,8 +963,8 @@ C*************************************************************
       write(6,*) "Compute layer diffraction matrices, NEXIT =", NEXIT
 
 C  choose appropriate beams
-      CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK21,AK31,E,TST,       ! MRiva 2021-09-10: remove symmetry codes
-     &           NB,PQ,PQF,NPUC,MPU,NT,NP)
+      CALL SELECT_BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK21,AK31,E,TST,
+     &                  NB,PQ,PQF,NPUC,MPU,NT,NP)
 
 C  compute lattice sums
 C  (NLS = NL is necessary, cf. appendix B of Van Hove / Tong 1979)

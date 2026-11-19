@@ -4,7 +4,7 @@
 !! (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the inputs read from
 !! stdin and prints their results. The routines still in lib.tleed.f are
 !! called through their legacy interface, with the blank COMMON and /SL/
-!! and /MS/ filled as ref-calc.f does. TSCATF and the average of its results
+!! and /MS/ filled as ref-calc.f does. TSCATF, its average and BEAMS
 !! are the module routines of the tree.
 !!
 !! Output, one block per array: a header line "name kind count", then the
@@ -39,6 +39,7 @@ program refcalc_routines_driver
                                   matrix_coefficients
   use atomic_scattering, only: legendre_product_integrals, atomic_tmatrix, &
                                accumulate_atomic_tmatrix
+  use beam_selection, only: select_beams
   use bravais_layer, only: sublattice_equivalences
   use kinds, only: sp, dp
   use leed_types, only: lattice
@@ -58,7 +59,7 @@ program refcalc_routines_driver
   character(len=16) :: name
 
   ! legacy routines of lib.tleed.f that the tree has not ported yet
-  external :: beams, sphrm_mod, fmat, rsmf_simple
+  external :: sphrm_mod, fmat, rsmf_simple
 
   read(5, '(A)') name
   select case (trim(name))
@@ -223,8 +224,8 @@ contains
       pq = 0.0_sp
       pqf = 0.0_sp
       npuc = 0
-      call beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, nb, &
-                 pq, pqf, npuc, mpu, nt, np)
+      call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, &
+                        nb, pq, pqf, npuc, mpu, nt, np)
       call write_int(numbered('NB', ie), nb)
       call write_int(numbered('NT_NP_MPU', ie), [nt, np, mpu])
       call write_int(numbered('NPUC', ie), npuc)
@@ -383,8 +384,8 @@ contains
     pqf = 0.0_sp
     nb = 0
     npuc = 0
-    call beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, nb, &
-               pq, pqf, npuc, mpu, nt, np)
+    call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, &
+                      nb, pq, pqf, npuc, mpu, nt, np)
     dcut = -5.0_sp * sqrt(2.0_sp * e) / (min(vpi, -0.05_sp))
     flms = (0.0_sp, 0.0_sp)
     call fmat(flms, v, jjs, nl, nl, dcut, ideg, lmax, klm, scc, sa)
