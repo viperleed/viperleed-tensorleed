@@ -44,6 +44,15 @@ stays the same and only the input form differs:
   layer matrices for later exit beams too, so the CYLM that FINAL1 gets
   must be complete after each of them, not only after the first. The
   structure differs from the source case, so its outputs are its own.
+- ir100_2x1_o_thick_partial: run E050_L06 of ir100_2x1_o_thick_oblique
+  with tensor output requested for only some stack layers (the flag
+  'Tensor output is required' of the other layers set to 0 and their file
+  names removed): run top_E050_L06 only for the top layer (Bravais O),
+  run layer3_E050_L06 only for layer 3 (a composite layer, below the layers
+  at which FINAL1 can be called). Every other case requests tensors for all
+  layers, so ANY_TENS of ref-calc (guard of the CYLM call and of ADREF2T)
+  is otherwise never tested with a partial request. The outputs are their
+  own: only the requested T_* files exist.
 - ag100_rfactor_hand: the pendry run of ag100_rfactor, edited in WEXPEL.
   pseudo_exp sets EOT = 1, so rfactor reads the experiment with READT as a
   pseudo-experiment in the layout of a theory spectrum: one geometry of the
@@ -161,6 +170,27 @@ def set_incidence(fin, theta, fi):
     return "\n".join(lines)
 
 
+def keep_tensors_of_layers(fin, layers):
+    """Request tensor output in a ref-calc FIN only for the stack layers
+    (1-based, from the top) in `layers`: the flag of every other layer is set
+    to 0 and its tensor file names are removed."""
+    out, lines, i = [], fin.split("\n"), 0
+    while i < len(lines):
+        out.append(lines[i])
+        if "Tensor output is required" in lines[i]:
+            (layer,) = re.findall(r"layer (\d+): layer type", lines[i - 1])
+            names = 0
+            while lines[i + 1 + names].startswith("T_"):
+                names += 1
+            if int(layer) in layers:
+                out += lines[i + 1:i + 1 + names]
+            else:
+                out[-1] = "  0" + lines[i][3:]
+            i += names
+        i += 1
+    return "\n".join(out)
+
+
 def phase_shifts_to_format2(fin):
     """Rewrite the phase-shift block of a ref-calc FIN from PSFORMAT 1 to 2.
 
@@ -253,6 +283,23 @@ def ir100_2x1_o_thick_oblique():
             "runs": runs, "inputs": inputs}
 
 
+def ir100_2x1_o_thick_partial():
+    """Spec of ir100_2x1_o_thick_partial: tensors for only some stack layers."""
+    case, source = "ir100_2x1_o_thick_partial", "ir100_2x1_o_thick_oblique"
+    (source_run,), source_inputs = _source_runs("refcalc", source, ["E050_L06"])
+    fin = set_first_line_title(source_inputs[source_run["stdin"]], f"tl-test {case}")
+    runs, inputs = [], {source_run["param"]: source_inputs[source_run["param"]]}
+    for name, layers in (("top_E050_L06", {1}), ("layer3_E050_L06", {3})):
+        run = {**source_run, "name": name, "stdin": f"inputs/FIN_{name}"}
+        inputs[run["stdin"]] = keep_tensors_of_layers(fin, layers)
+        runs.append(run)
+    return {"program": "refcalc", "name": case,
+            "description": "Ir(100)-(2x1)-O as ir100_2x1_o_thick_oblique with tensor "
+                           "output requested only for the top layer, resp. only for layer 3",
+            "covers": ["oblique-incidence", "partial-tensors"],
+            "runs": runs, "inputs": inputs}
+
+
 def wexpel_head(wexpel):
     """The lines of an rfactor WEXPEL up to and including the title (the line
     after the &NL3 block), without the experimental data after it."""
@@ -299,7 +346,7 @@ def ag100_rfactor_hand():
 
 
 CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ir100_2x1_o_thick_oblique,
-                                 ag100_psformat2, ag100_rfactor_hand)}
+                                 ir100_2x1_o_thick_partial, ag100_psformat2, ag100_rfactor_hand)}
 
 
 def _write(spec, cases_dir):
