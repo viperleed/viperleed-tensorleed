@@ -828,6 +828,18 @@ c          write(6,*) ISITE,IL,TMAT(ISITE,IL)
 c        ENDDO
 c      ENDDO
 
+!    2021-08-26 Michele Riva, added: Check whether we want any tensor,  << TODO: this whole bunch of code can move all the way out of the energy loop, right after reading in stuff
+!    as this requires recomputing amplitudes via ADREF2T below
+!    Set here, before the NEXIT loop, as it also decides below whether
+!    CYLM is computed for all beams (needed only by FINAL1).
+      ANY_TENS = 0
+      DO ISTACK = 1, NSTACK
+        IF (TENS(ISTACK).EQ.1) THEN
+          ANY_TENS = 1
+          EXIT
+        ENDIF
+      ENDDO
+
 C*****************************************************************
 C  begin loop over Tensor LEED output beams (incl. incident beam, NEXIT = 0)
 C  NEXIT
@@ -1101,9 +1113,13 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
 
 C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, RSMF_SIMPLE
 C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
-C  (without the offset NA), so compute all NT rows here.
+C  (without the offset NA), so compute all NT rows here, if any
+C  tensor is requested. AMULT is working space.
 
-      CALL FULLCYLM(CYLM,PQ,NT,YLM,LMAX,LMMAX)
+      IF (ANY_TENS.EQ.1) THEN
+        CALL BEAMS_YLM(CYLM,AMULT,PQ,NT,NT,0,E,AK21,AK31,VPI,LMAX,
+     +                 LMMAX,YLM)
+      ENDIF
 
 C*************************************************************
 C  next, compute intra-crystal scattering matrices up to
@@ -1251,16 +1267,6 @@ C*************************************************************
       IF (BEAMIN.EQ.0) THEN
         STOP 'BEAM NOT IN OUTPUT BEAMSET'
       ENDIF
-
-!    2021-08-26 Michele Riva, added: Check whether we want any tensor,  << TODO: this whole bunch of code can move all the way out of the energy loop, right after reading in stuff
-!    as this requires recomputing amplitudes via ADREF2T below
-      ANY_TENS = 0
-      DO ISTACK = 1, NSTACK
-        IF (TENS(ISTACK).EQ.1) THEN
-          ANY_TENS = 1
-          EXIT
-        ENDIF
-      ENDDO
 
 !     2021-08-26 Michele Riva: Modify the call to ADREF2T (also reimplemented).
 !     Amplitudes need to be recalculated (1) for the (0, 0) beam,
@@ -1435,46 +1441,3 @@ C  that's all, folks!
 C*************************************************************
 
       END
-
-C*************************************************************
-C  SUBROUTINE FULLCYLM computes the spherical harmonics CYLM of all
-C  NT beams in PQ at the current energy, with the same arithmetic as
-C  RSMF_SIMPLE uses for the beams of one beam set. CYLM(IG,K) is
-C  the K-th spherical harmonic of the propagation direction of beam
-C  IG inside the crystal; it is used by FINAL1.
-C  YLM is a work array.
-C*************************************************************
-
-      SUBROUTINE FULLCYLM(CYLM,PQ,NT,YLM,LMAX,LMMAX)
-
-      INTEGER NT,LMAX,LMMAX
-      COMPLEX CYLM,YLM,XA,YA,ST,CF,CT,RU
-      DIMENSION CYLM(NT,LMMAX),PQ(2,NT),YLM(LMMAX)
-      COMMON E,AK2,AK3,VPI
-
-      RU = CMPLX(1.0,0.0)
-      YA = CMPLX(2.0 * E, - 2.0 * VPI + 0.000001)
-      YA = SQRT(YA)
-      DO IG = 1, NT
-        BK2 = PQ(1, IG) + AK2
-        BK3 = PQ(2, IG) + AK3
-        C = BK2 * BK2 + BK3 * BK3
-        XA = CMPLX(2.0 * E - C, - 2.0 * VPI + 0.000001)
-        XA = SQRT(XA)
-        B = 0.0
-        CF = RU
-        IF (C.GT.1.0E-7) THEN ! off-normal beam
-          B = SQRT(C)
-          CF = CMPLX(BK2/B, BK3/B)
-        ENDIF
-        CT = XA/YA
-        ST = B/YA
-        CALL SPHRM_MOD(LMAX, YLM, LMMAX, CT, ST, CF)
-        DO K = 1, LMMAX
-          CYLM(IG, K) = YLM(K)
-        ENDDO
-      ENDDO
-
-      RETURN
-      END
-

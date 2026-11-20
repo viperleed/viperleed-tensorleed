@@ -13,7 +13,7 @@
 case = "ir100_2x1_o"
 run = "E050_L06"
 match = "lib\\.tleed\\.f.*\\n.*array 'spqf'"
-reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003, called from ref-calc.f:1300): index 46 > 37"
+reason = "OUTXIST declares SPQF(2,NT) but indexes up to KNT (lib.tleed.f:3003, called from ref-calc.f:1306): index 46 > 37"
 spec_ref = "tests/README.md, known baseline issues (OUTXIST)"
 
 [[failure]]
