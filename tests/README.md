@@ -2,7 +2,7 @@
 
 Regression tests for the TensErLEED programs `ref-calc` and `rfactor`, built for the F77 → modern Fortran refactor. They check correctness (outputs compared with a frozen baseline within calibrated tolerances), clean termination under a debug build, CPU time and peak memory (A/B against the baseline), and end-to-end behaviour through viperleed (R factors and error curves).
 
-Baseline (ground truth): TensErLEED v2.1.1 (`2760478`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9) and the `CYLM` fix in `FINAL1` (tensors of a Bravais layer above a bulk with several beam sets); details in `cases/BASELINE.txt`.
+Baseline (ground truth): TensErLEED v2.1.1 (`503270e`), which includes the ADREF2T, YSMOOTH and DER fixes (PRs #5, #7, #9) and the `CYLM` fix in `FINAL1` (tensors of a Bravais layer above a bulk with several beam sets); details in `cases/BASELINE.txt`.
 
 ## Quick start
 
@@ -176,7 +176,7 @@ Measured 2026-10-07 (8 cores, WSL2, warm build cache, wall clock including `cond
 
 ## Known baseline issues
 
-Baseline = TensErLEED v2.1.1 (`2760478`, with the ADREF2T, YSMOOTH, DER and `CYLM` fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
+Baseline = TensErLEED v2.1.1 (`503270e`, with the ADREF2T, YSMOOTH, DER and `CYLM` fixes). None of these are fixed by the test suite; they are listed so that the refactor preserves or deliberately fixes them.
 
 ### ref-calc
 
