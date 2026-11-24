@@ -758,7 +758,7 @@ def ag100_input_forms():
     add("E045_L06_tslab1_asbulk_small", set_fin_line(asbulk(fin_e045), "TSLAB", "  1"),
         param_e045,
         no_debug=["TSLAB = 1 leaves ASB(1) unset; ref-calc.f divides by AMIN1(ASB(1),",
-                  "ASA(1)) (legacy ref-calc.f:668, SIGFPE in the debug build)."])
+                  "ASA(1)) (legacy ref-calc.f:680, SIGFPE in the debug build)."])
     return {"program": "refcalc", "name": case,
             "description": "Ag(100) as ag100 with input forms viperleed does not write: "
                            "LMAX = 10, 15, 16 and 30 output beams (NPUN), ASBULK different "
