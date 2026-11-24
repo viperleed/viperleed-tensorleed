@@ -680,6 +680,16 @@ contains
             caa, ncaa, th, lmni, ipl, tsf, lps, lpss, nord, nnsub, lmax1, xh, &
             hghd, l2m, rg1, rg2, tstore, na, ns, lay, ntau, tsts, tv1, dcuts, &
             lmax, lat, point)
+        if (mode == 'B') then
+          call write_complex(numbered('R_TOP', k), reshape(rtop, [nt * nt]))
+          call write_complex(numbered('T_TOP', k), reshape(ttop, [nt * nt]))
+          call write_complex(numbered('R_BOT', k), reshape(rbot, [nt * nt]))
+          call write_complex(numbered('T_BOT', k), reshape(tbot, [nt * nt]))
+          call write_complex(numbered('TSTORE', k), &
+                             reshape(tstore, [2 * lmn * nt]))
+          call write_complex(numbered('AMULT', k), amult(1:naa))
+          call write_complex(numbered('CYLM', k), reshape(cylm, [nt * lmmax]))
+        end if
       end select
       if (mode == 'B') then
         na = na + naa

@@ -822,6 +822,22 @@ C  Sentinel that no beam number takes: an unset entry shows in the output
      +         RGP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
      +         IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
      +         L2M, RG1, RG2, TSTORE)
+          IF (MODE.EQ.'B') THEN
+            CALL NUMBERED('R_TOP', K, LABEL)
+            CALL WRC(LABEL, RTOP, NT*NT)
+            CALL NUMBERED('T_TOP', K, LABEL)
+            CALL WRC(LABEL, TTOP, NT*NT)
+            CALL NUMBERED('R_BOT', K, LABEL)
+            CALL WRC(LABEL, RBOT, NT*NT)
+            CALL NUMBERED('T_BOT', K, LABEL)
+            CALL WRC(LABEL, TBOT, NT*NT)
+            CALL NUMBERED('TSTORE', K, LABEL)
+            CALL WRC(LABEL, TSTORE, 2*LMN*NT)
+            CALL NUMBERED('AMULT', K, LABEL)
+            CALL WRC(LABEL, AMULT, NAA)
+            CALL NUMBERED('CYLM', K, LABEL)
+            CALL WRC(LABEL, CYLM, NT*LMMAX)
+          ENDIF
         ENDIF
         IF (MODE.EQ.'B') THEN
           NA = NA + NAA
