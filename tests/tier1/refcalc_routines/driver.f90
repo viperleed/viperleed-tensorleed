@@ -318,8 +318,9 @@ contains
 
   !> BEAMS_YLM for each beam set of a beam list (with its offset in the
   !! list), and for a window of the list that starts inside the first set
-  !! and ends before the last beam. CYLM starts as a sentinel, so that rows
-  !! that the routine must leave alone show.
+  !! and ends before the last beam. CYLM is reset to a sentinel before every
+  !! call and written in full after it, so that rows that the routine must
+  !! leave alone show.
   subroutine beams_ylm_case()
     type(energy_point) :: point
     integer :: lmax, lmmax, knbs, knt, npun, nt, np, mpu, ibs, na, n
@@ -347,17 +348,17 @@ contains
                       point%k_parallel(2), point%energy, tst, nb, pq, pqf, &
                       npuc, mpu, nt, np)
     allocate(cylm(nt, lmmax), ylm(lmmax))
-    cylm = sentinel
     na = 0
     do ibs = 1, knbs
       allocate(xa(nb(ibs)))
+      cylm = sentinel
       call beams_ylm(cylm, xa, pq, nt, nb(ibs), na, point, lmax, lmmax, ylm)
       call write_complex(numbered('XA', ibs), xa)
+      call write_complex(numbered('CYLM', ibs), reshape(cylm, [nt * lmmax]))
       deallocate(xa)
       na = na + nb(ibs)
     end do
     call write_int('NB', nb)
-    call write_complex('CYLM', reshape(cylm, [nt * lmmax]))
     n = nt - 3
     allocate(xa(n))
     cylm = sentinel

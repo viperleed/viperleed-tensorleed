@@ -559,8 +559,9 @@ C  offset of the set in the beam list, all sublattices)
       SUBROUTINE BYDRV
 C  BEAMS_YLM for each beam set of a beam list (with its offset in the
 C  list), and for a window of the list that starts inside the first set
-C  and ends before the last beam. CYLM starts as a sentinel, so that rows
-C  that the routine must leave alone show.
+C  and ends before the last beam. CYLM is reset to a sentinel before every
+C  call and written in full after it, so that rows that the routine must
+C  leave alone show.
       USE LEGHLP
       IMPLICIT NONE
       REAL RDR1
@@ -590,19 +591,20 @@ C  that the routine must leave alone show.
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)
       ALLOCATE(CYLM(NT,LMMAX), YLM(LMMAX))
-      CYLM = SENT
       NA = 0
       DO IBS = 1, KNBS
         ALLOCATE(XA(NB(IBS)))
+        CYLM = SENT
         CALL BEAMS_YLM(CYLM,XA,PQ,NT,NB(IBS),NA,E,AK2,AK3,VPI,LMAX,
      +                 LMMAX,YLM)
         CALL NUMBERED('XA', IBS, LABEL)
         CALL WRC(LABEL, XA, NB(IBS))
+        CALL NUMBERED('CYLM', IBS, LABEL)
+        CALL WRC(LABEL, CYLM, NT*LMMAX)
         DEALLOCATE(XA)
         NA = NA + NB(IBS)
       ENDDO
       CALL WRI('NB', NB, KNBS)
-      CALL WRC('CYLM', CYLM, NT*LMMAX)
       N = NT - 3
       ALLOCATE(XA(N))
       CYLM = SENT
