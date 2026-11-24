@@ -381,6 +381,16 @@ _RSMF_CASES = [
      _IR, 2, 2, 1, 7, 100.0, (0.0, 0.0), "O"),
     ("cu111_oblique_substrate", "hexagonal lattice, IDEG 3, oblique incidence, "
      "substrate-type layer", _CU, 3, 1, 1, 5, 80.0, (15.0, 20.0), "B"),
+    # 2D superstructure: four sublattices (one at 45 degrees) and beam sets
+    # whose first beams are fractional, so that the sublattice phase of
+    # every set has both components (bk2, bk3) and sums four terms
+    ("square_p2x2_sets_substrate", "p(2x2) square, IDEG 4, four beam sets (first "
+     "beams (1/2, 1/2) etc.), substrate-type layer of four sublattices",
+     {**_AG_OBL, "cells": [*_AG_OBL["cells"][:2], [5.76, 0.0], [0.0, 5.76]],
+      "sets": [[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)],
+               [(0.5, 0.0), (-0.5, 0.0)], [(0.0, 0.5), (0.0, -0.5)],
+               [(0.5, 0.5), (-0.5, 0.5), (0.5, -0.5), (-0.5, -0.5)]]},
+     4, 2, 2, 6, 100.0, (12.0, 33.0), "B"),
 ]
 
 # (id, what it covers, stdin lines of the driver)
