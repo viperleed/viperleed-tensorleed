@@ -1257,7 +1257,7 @@ contains
     !> Work spaces.
     complex(sp), intent(out) :: flm(klm), xev(lev, lev2), xh(lev)
     complex(sp), intent(out) :: taug(lmt), taugm(lmt), ts(lmn)
-    complex(sp), intent(out) :: tg(2, lm2n), vt(lm2n)
+    complex(sp), intent(out) :: tg(2 * lm2n), vt(lm2n)
     complex(sp), intent(inout) :: hghd(l2m)
     complex(sp), intent(out) :: rg1(nlay), rg2(nlay)
 

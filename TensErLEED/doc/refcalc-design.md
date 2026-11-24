@@ -252,7 +252,14 @@ Hazards of each block:
   the packed data intact. The port either keeps one consistent view (arrays
   allocated `NT` by `NT` per energy, the per-energy sizing of stage 8) or
   keeps packed buffers; mixing the two views breaks results only for
-  energies with `NT < MKNT`.
+  energies with `NT < MKNT`. The same holds for the arrays `LEED` sizes
+  with `PARAM` maxima and passes to `RTINV_SIMPLE`, which declares them with
+  the dimensions of the current layer: `TAU(MLMT,MLEV)` as `TAU(LMT,LEV)`,
+  `XEV(MLEV,MLEV2)` as `XEV(LEV,LEV2)`, `GH(MLMG,MLMMAX)` as
+  `GH(LMG,LMMAX)`, `TH(MLMNI,MLMNI)` as `TH(LMNI,LMNI)` and the vectors
+  `TS`, `TAUG`, `TAUGM`, `XH`, `RG1`, `RG2` and `HGHD`. The port keeps these
+  as packed leading parts of the larger arrays (sized by stage 8 from the
+  derived values, they are packed exactly).
 - **Element-as-array passing.**
   - `TENSOV(2,MLMN,MKNT,MNCOMP)`: `LEED` passes `TENSOV(1,1,1,LCOMP(...))`
     to `RTINV_SIMPLE` and `FINALOV`, which declare `TSTORE(2,LMN,NT)`: one
@@ -273,7 +280,13 @@ Hazards of each block:
 - **One actual for two dummies.** `RTINV_SIMPLE` passes its work array
   `VT(LM2N)` to `GHMAT` twice, as `Y1(L2M,L2M)` (handed to `GHD`) and as
   `Y(LM,LM)` (handed to `SH`): one buffer seen with two shapes. The port
-  gives `GHMAT` one work buffer and makes both shapes explicit.
+  gives `interplanar_propagators` one work buffer `work(l2m,l2m)`, which it
+  hands whole to `direct_propagator_sum` (`y(l2m,l2m)`) and to the table
+  routine and the reciprocal-sum routine (`y(lm,lm)`, the leading `lm*lm`
+  elements). The rank-1 `VT(LM2N)` of `composite_layer_matrices` is passed
+  to `work(l2m,l2m)` as one buffer, in the same way. `TG(2,LM2N)`, the
+  work vector `S(LMS)` of `GHMAT`, is declared as a vector `tg(2*lm2n)`, so
+  that only the length differs.
 - **Argument-count mismatch.** `LEED` calls `GET_TOPLAY_MULTSCATT` with 7
   arguments (`..., NT, NEXIT`); the routine declares 6. The port's explicit
   interface removes the extra argument; behaviour is unchanged since the

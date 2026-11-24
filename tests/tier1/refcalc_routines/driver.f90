@@ -528,7 +528,7 @@ contains
     complex(sp), allocatable :: th(:, :), flm(:), xev(:, :), xh(:), hghd(:)
     complex(sp), allocatable :: amult(:), cylm(:, :), rtop(:, :), ttop(:, :)
     complex(sp), allocatable :: rbot(:, :), tbot(:, :), rg(:, :, :), rgp(:)
-    complex(sp), allocatable :: ts(:), tg(:, :), vt(:), taug(:), taugm(:)
+    complex(sp), allocatable :: ts(:), tg(:), vt(:), taug(:), taugm(:)
     complex(sp), allocatable :: rg1(:), rg2(:), tstore(:, :, :), buffer(:)
     real(sp) :: e_c, ak2_c, ak3_c, vpi_c
 
@@ -594,7 +594,7 @@ contains
     allocate(mgh(nlay, nlay), drl(nlay2, 3))
     allocate(nugh(nlay2), ngeq(nlay2), test(nlay2))
     allocate(lpss(nlay), nord(nlay), gh(lmg, lmmax), hghd(l2m))
-    allocate(tg(2, 2 * mnsub * mlmmax), vt(2 * mnsub * mlmmax))
+    allocate(tg(4 * mnsub * mlmmax), vt(2 * mnsub * mlmmax))
     allocate(tau(lmt, lev), xev(lev, lev2), xh(lev), flm(klm))
     mgh = 0
     drl = 0.0_sp

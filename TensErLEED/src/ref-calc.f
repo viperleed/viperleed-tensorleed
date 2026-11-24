@@ -485,7 +485,7 @@ C         method saves a considerable amount of time.
       DIMENSION TEST(MNSUB2)
       COMPLEX GH,RG,TS,TG,VT,TH
       COMPLEX RG_PERP ! Added MRiva 22021-09-21. Replaces the last 'row' of RG, which is now 2 instead of 3
-      DIMENSION GH(MLMG,MLMMAX),RG(2,MNSUB,MKNT),TS(MLMN),TG(2,MLM2N) !make GH, RG allocatable
+      DIMENSION GH(MLMG,MLMMAX),RG(2,MNSUB,MKNT),TS(MLMN),TG(2*MLM2N) !make GH, RG allocatable
       DIMENSION RG_PERP(MKNT)
       DIMENSION VT(MLM2N),TH(MLMNI,MLMNI)
       INTEGER IPL
