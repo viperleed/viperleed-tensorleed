@@ -1,5 +1,5 @@
 {
- "source": "legacy lib/rfacsb.f at 22e3998, GNU Fortran (Ubuntu 15.2.0-16ubuntu1) 15.2.0, flags -O2 and -O0 (identical)",
+ "source": "legacy lib/rfacsb.f at aa56296, GNU Fortran (Ubuntu 15.2.0-16ubuntu1) 15.2.0, flags -O2 and -O0 (identical)",
  "cases": [
   {
    "id": "der_n1",
