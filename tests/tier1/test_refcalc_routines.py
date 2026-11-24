@@ -14,11 +14,12 @@ arrays are compared by a digest of their bits and their leading values.
 For the cases in STOPS the routines stop with an error instead; their
 values in values.json record what the legacy routines gave.
 
-The cases marked live in values.json (those of RSMF_SIMPLE, whose legacy
-results depend on the BLAS/LAPACK the program runs with) have no stored
-values: the legacy driver of the generator is built from the baseline tree
-(--baseline-tl-root or baseline_tl_root; it must be at the baseline commit)
-and run on the same inputs, with the same BLAS/LAPACK, at test time.
+The arrays listed as live in values.json (RA and TA of the cases of
+RSMF_SIMPLE, whose legacy values depend on the BLAS/LAPACK the program runs
+with) have no stored values: the legacy driver of the generator is built
+from the baseline tree (--baseline-tl-root or baseline_tl_root; it must be
+at the baseline commit) and run on the same inputs, with the same
+BLAS/LAPACK, at test time. The other arrays of these cases are stored.
 """
 
 __authors__ = (
@@ -126,14 +127,20 @@ def legacy_driver(request):
 
 
 def _expected(case, request):
-    """The legacy results of case: stored in values.json, or for a live case
-    from the legacy driver of the baseline (fixture legacy_driver)."""
-    if not case.get("live"):
+    """The legacy results of case: stored in values.json, and for the arrays
+    of a live case listed under "live", from the legacy driver of the
+    baseline (fixture legacy_driver)."""
+    live = case.get("live", [])
+    if not live:
         return case["expected"]
-    expected = run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
-    # an empty legacy output would let an empty port output pass
-    assert expected, f"{case['id']}: the legacy driver printed no arrays"
-    return expected
+    legacy = run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
+    # the legacy driver must print exactly the stored and the live arrays (an
+    # empty output would let an empty port output pass)
+    assert set(legacy) == {*case["expected"], *live}, (
+        f"{case['id']}: the legacy driver printed arrays {list(legacy)}, expected "
+        f"{list(case['expected'])} and live {live}")
+    return {name: legacy[name] if name in live else case["expected"][name]
+            for name in legacy}
 
 
 @pytest.mark.tier1

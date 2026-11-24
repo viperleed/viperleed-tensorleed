@@ -27,13 +27,15 @@ beam lists are those of the tier-1 cases in tests/cases. Arrays are
 summarized by their count, a SHA-256 of their bits and their first values
 (harness/routine_blocks.py).
 
-The cases of RSMF_SIMPLE (ids starting with LIVE_PREFIX) are live: of the
-routines driven here only RSMF_SIMPLE calls BLAS/LAPACK (CGETRF, CGETRS),
-and its results RA and TA differ in the last bit between OpenBLAS and the
-reference BLAS (all other cases are bit-identical under both). values.json
-holds their inputs only; the tier-1 test builds this driver from the
-baseline tree (build_legacy_driver) and compares with its output, run with
-the same BLAS/LAPACK as the driver under test.
+The results RA and TA of the cases of RSMF_SIMPLE (ids starting with
+LIVE_PREFIX) are live: of the routines driven here only RSMF_SIMPLE calls
+BLAS/LAPACK (CGETRF, CGETRS), and its RA and TA differ in the last bit
+between OpenBLAS and the reference BLAS (all other arrays, of these and of
+all other cases, are bit-identical under both). values.json holds the other
+arrays of these cases and lists RA and TA under "live"; the tier-1 test
+builds this driver from the baseline tree (build_legacy_driver) and
+compares RA and TA with its output, run with the same BLAS/LAPACK as the
+driver under test.
 
 Result of the -O2 versus -O0 comparison (gfortran 15.2): every array of
 every case is bit-identical in the two builds; the generator stops with an
@@ -66,8 +68,10 @@ TESTS_DIR = Path(__file__).parents[1]
 LEGACY_DRIVER = Path(__file__).with_name("refcalc_routines_legacy_driver.f")
 VALUES = TESTS_DIR / "tier1" / "refcalc_routines" / "values.json"
 LINK = ["-llapack", "-lblas"]
-# cases whose legacy results depend on the BLAS/LAPACK the driver runs with
+# cases with legacy results that depend on the BLAS/LAPACK the driver runs
+# with, and those results
 LIVE_PREFIX = "rsmf_"
+LIVE_ARRAYS = ("RA", "TA")
 LMAX_RANGE = range(2, 19)  # the range of the DATA tables NCA and NLMS
 
 _F32 = np.float32
@@ -449,8 +453,7 @@ def run_legacy_driver(exe, stdin):
 def _check_pstemp_exit():
     """Raise GeneratorError unless the TSCATF cases exercise the early exit
     of PSTEMP (the DEL of the highest L stay zero) and its absence."""
-    cases = {case["id"]: case["expected"] for case in json.loads(VALUES.read_text())["cases"]
-             if not case.get("live")}
+    cases = {case["id"]: case["expected"] for case in json.loads(VALUES.read_text())["cases"]}
     for (case_id, array, first, count), zero in ((_ZERO_DEL, True), (_NONZERO_DEL, False)):
         head = cases[case_id][array]["head"][first:first + count]
         zeros = [bits == "00000000" for bits in head]
@@ -463,7 +466,7 @@ def _generate(argv=None):
     """Generate tier1/refcalc_routines/values.json from the baseline."""
     generate(argv, __doc__.splitlines()[0], build_legacy_driver, run_legacy_driver,
              CASES, VALUES, "lib/lib.tleed.f",
-             live=lambda case_id: case_id.startswith(LIVE_PREFIX))
+             live=lambda case_id: LIVE_ARRAYS if case_id.startswith(LIVE_PREFIX) else ())
     _check_pstemp_exit()
 
 
