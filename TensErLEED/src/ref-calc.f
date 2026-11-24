@@ -54,6 +54,7 @@ C  modules of the setup routines
       USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
      +                         bravais_layer_matrices
+      USE composite_layer, ONLY: sort_subplanes
 
 C  include parameter statements for dimensions etc
 
@@ -446,7 +447,7 @@ C           -x (cf. ROP TOP, declared for rsmf)
 C  TAU  : contains tau-matrices for the sublayers of rtinv
 C  TAUG,TAUGM: derivates of tau matrix used during rtinv
 C  MGH  : contains identification of sublayer propagator positions in matrix GH
-C  DRL,SDRL: inter-subplanar vectors after reordering by srtlay, and (superfluous) storage
+C  DRL  : inter-subplanar vectors after reordering by sort_subplanes
 C  TEST : cutoff for rec. lattice sum in rtinv
 C  GH   : matrix containing inter-subplanar propagators for composite layer
 C  RG   : inter-subplanar plane-wave phase shifts
@@ -477,10 +478,10 @@ C         method saves a considerable amount of time.
       DIMENSION TAU(MLMT,MLEV),TAUG(MLMT),TAUGM(MLMT)
       INTEGER MGH
       DIMENSION MGH(MNSUB,MNSUB)
-      REAL DRL,SDRL
-      DIMENSION DRL(MNSUB2,3),SDRL(MNSUB2,3)
-      INTEGER NUGH,NGEQ,NGOL
-      DIMENSION NUGH(MNSUB2),NGEQ(MNSUB2),NGOL(MNSUB2)
+      REAL DRL
+      DIMENSION DRL(MNSUB2,3)
+      INTEGER NUGH,NGEQ
+      DIMENSION NUGH(MNSUB2),NGEQ(MNSUB2)
       REAL TEST
       DIMENSION TEST(MNSUB2)
       COMPLEX GH,RG,TS,TG,VT,TH
@@ -1168,13 +1169,16 @@ C  copy sublayer positions onto correct grid POS
             NS  = 0  ! used in RTINV via COMMON
             NAA = NT
 
+            CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
+     +                          NLAY2, NUGH, NGEQ, NORD)
+
             CALL RTINV_SIMPLE(
      +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
      +         FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY,
-     +         DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST, GH, LMG, RG,
+     +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
+     +         DRL, NUGH, NGEQ, NLAY2, TEST, GH, LMG, RG,
      +         RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +         IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
+     +         IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
      +         L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +         )
 
@@ -1188,13 +1192,16 @@ C  copy sublayer positions onto correct grid POS
 
               NAA = NB(IBS)
 
+              CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
+     +                            NLAY2, NUGH, NGEQ, NORD)
+
               CALL RTINV_SIMPLE(
      +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
      +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +           TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY,
-     +           DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST, GH, LMG, RG,
+     +           TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
+     +           DRL, NUGH, NGEQ, NLAY2, TEST, GH, LMG, RG,
      +           RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +           IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
+     +           IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
      +           L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +           )
 

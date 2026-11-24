@@ -1451,9 +1451,8 @@ C  Subroutine GHMAT computes (LM)-space interplanar propagators GH for
 C  the composite layer treated by subroutine MTINV. Depending on the
 C  interplanar spacing, either a reciprocal-space summation or a direct
 C  space summation is performed (The latter in routine GHD). Using
-C  information provided by subroutine SRTLAY, GHMAT reuses (does not
-C  recompute) existing values of GH provided previously, computes new values
-C  not previously produced and copies these new values into GH's that are
+C  information provided by subroutine SRTLAY, GHMAT computes new values
+C  and copies these new values into GH's that are
 C  identical (instead of computing the latter seperately). Ordering of the
 C  elements for each GH is arranged as follows for elemenst referenced by
 C  the following (LM) pairings
@@ -1478,8 +1477,6 @@ C  NLAY          =  NO. OF SUBPLANES CONSIDERED.
 C  NUGH          =  LIST OF THOSE GH^S THAT MUST BE COMPUTED.
 C  NGEQ          =  LIST OF THOSE GH^S THAT CAN BE COPIED FROM FRESHLY COMPUTED
 C                   GH^S.
-C  NGOL          =  LIST OF THOSE GH^S THAT CAN BE COPIED FROM PREVIOUSLY
-C                   PRODUCED GH^S.
 C  NLAY2         =  NLAY*(NLAY-1)/2.
 C  TST           =  INPUT QUANTITY FOR DETERMINING NO. OF POINTS REQUIRED IN
 C                   RECIPROCAL LATTICE SUMMATION.
@@ -1512,10 +1509,10 @@ C  NL1,NL2       =  SUPERLATTICE CHARACTERIZATION CODES.
 C
 C =========================================================================
 C
-      SUBROUTINE GHMAT(GH,LMG,LMMAX,MGH,NLAY,NUGH,NGEQ,NGOL,NLAY2,TST,
+      SUBROUTINE GHMAT(GH,LMG,LMMAX,MGH,NLAY,NUGH,NGEQ,NLAY2,TST,
      & TEST,Y1,L2M,Y,LM,S,LMS,DRL,TV,LXM,LEV,DCUT,CAA,NCAA,LAY,HGHD,PQ)
 C
-      DIMENSION MGH(NLAY,NLAY),NUGH(NLAY2),NGEQ(NLAY2),NGOL(NLAY2)
+      DIMENSION MGH(NLAY,NLAY),NUGH(NLAY2),NGEQ(NLAY2)
       DIMENSION RBR1(2),RBR2(2),DRL(NLAY2,3),TEST(NLAY2),LXM(LMMAX)
       DIMENSION ARA1(2),ARA2(2),ARB1(2),ARB2(2),CAA(NCAA)
       DIMENSION RXR1(2),RXR2(2),PQ(2)
@@ -1544,23 +1541,6 @@ C
       K0=SQRT(CMPLX(2.0*E,-2.0*VPI+0.000001))
       CFAC=-16.0*(3.14159265)*(3.14159265)*CI/TV
       NLYLM=NLAY2*LMMAX
-C
-C  COPY OLD VALUES OF GH ONTO GH WHERE APPROPRIATE
-C
-      DO 6 I=1,NLAY2
-         IF (NGOL(I).NE.0) THEN
-            IS=(I-1)*LMMAX
-            IT=(NGOL(I)-1)*LMMAX
-            IU=IS+NLYLM
-            IV=IT+NLYLM
-            DO 1461 K=1,LMMAX
-               DO 2 J=1,LMMAX
-                  GH(IS+J,K)=GH(IT+J,K)
-                  GH(IU+J,K)=GH(IV+J,K)
-2              CONTINUE
-1461        CONTINUE
-         ENDIF
-6     CONTINUE
 C
 C  INITIALIZE GH IN PREPARATION FOR NEW VALUES
 C
@@ -2448,10 +2428,10 @@ C    the sake of compatibility with van Hove / Tong book only.
      &                 R_TOP,T_TOP,R_BOT,T_BOT, N,
      &                 AMULT, CYLM, PQ, NT, FLMS, FLM, NL,
      &                 LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     &                 TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH,
-     &                 NLAY, DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST,
+     &                 TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH,
+     &                 NLAY, DRL, NUGH, NGEQ, NLAY2, TEST,
      &                 GH, LMG, RG, RG_PERP, TS, LMN, TG, LM2N, VT,
-     &                 CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS, NORD,
+     &                 CAA, NCAA, TH, LMNI, IPL, TSF, LPSS, NORD,
      &                 NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2, TSTORE)
       COMPLEX XEV, R_TOP, T_TOP, R_BOT, T_BOT, CYLM, AMULT, XA, ST,
      +        CI, RU, CZ, AM, FLMS, FLM, MFOLT_RT
@@ -2467,16 +2447,16 @@ C    the sake of compatibility with van Hove / Tong book only.
       DIMENSION  CLM(NLM), GP(2), CAA(NCAA)
       DIMENSION  FLMS(NL, KLM)
       DIMENSION  LX(LMMAX), LXI(LMMAX), LT(LMMAX), LXM(LMMAX)
-      DIMENSION  POS(NLAY, 3), POSS(NLAY, 3)
-      DIMENSION  MGH(NLAY, NLAY), DRL(NLAY2, 3), SDRL(NLAY2, 3)
-      DIMENSION  NUGH(NLAY2), NGEQ(NLAY2), NGOL(NLAY2)
+      DIMENSION  POSS(NLAY, 3)
+      DIMENSION  MGH(NLAY, NLAY), DRL(NLAY2, 3)
+      DIMENSION  NUGH(NLAY2), NGEQ(NLAY2)
       DIMENSION  TEST(NLAY2), IPL(LMNI), MFOLT_RT(2)
 CVB
       INTEGER NNSUB, LMAX1
       COMPLEX TSF
       DIMENSION TSF(NNSUB, LMAX1)
-      INTEGER LPS, LPSS, NORD
-      DIMENSION LPS(NNSUB), LPSS(NNSUB), NORD(NNSUB)
+      INTEGER LPSS, NORD
+      DIMENSION LPSS(NNSUB), NORD(NNSUB)
       COMPLEX XH(LEV)
       INTEGER L2M
       COMPLEX HGHD(L2M)
@@ -2512,16 +2492,13 @@ CVB
      &              NLL, FLM, NNSUB, LMAX1, XH)
       ENDIF
 
-!     Sort subplanes according to increasing position along +x axis,
-!     i.e., from vacuum side towards deeper into the solid.
-!     Figure out which old GH\S can be kept, which must be recomputed
-!     and which are mutually identical
-      CALL SRTLAY(POS, POSS, LPS, LPSS, MGH, NLAY, DRL, SDRL, NLAY2,
-     &            NUGH, NGEQ, NGOL, NEW, NORD)
+!     The subplanes are sorted (POSS, LPSS, NORD) and the interlayer
+!     propagators' bookkeeping (MGH, DRL, NUGH, NGEQ) is set up by the
+!     caller, by SORT_SUBPLANES.
 
 !     Compute (or copy) the GH matrices, i.e., the interlayer
 !     propagators in (LM)-space.
-      CALL GHMAT(GH, LMG, LMMAX, MGH, NLAY, NUGH, NGEQ, NGOL, NLAY2,
+      CALL GHMAT(GH, LMG, LMMAX, MGH, NLAY, NUGH, NGEQ, NLAY2,
      &           TST, TEST, VT, L2M, VT, LM, TG, LMS, DRL, TV, LXM,
      &           LEV, DCUT, CAA, NCAA, LAY, HGHD, PQ(1, 1 + NA))
 
@@ -2874,148 +2851,6 @@ CDIR$ SHORTLOOP
         ENDDO
         LM = LM + L + L + 1
       ENDDO
-      RETURN
-      END
-
-C-----------------------------------------------------------------------
-C  SUBROUTINE SRTLAY IS USED BY SUBROUTINES MPERTI AND MTINV TO REORDER
-C  THE SUBPLANES OF A COMPOSITE LAYER ACCORDING TO INCREASING POSITION
-C  ALONG THE +X AXIS (REORDERING THE CHEMICAL ELEMENT ASSIGNMENT AS
-C  WELL). IF NEW=-1 IT FINDS WHICH RESULTS FOR GH WILL BE AVAILABLE BY
-C  SIMPLY COPYING OLD ONES (OF A PREVIOUS CALL TO MPERTI OR MTINV),
-C  WHICH ONES NEED TO BE COMPUTED AFRESH AND WHICH ONES CAN BE OBTAINED
-C  BY COPYING OTHER NEW ONES.
-C   POS= INPUT SUBPLANE POSITIONS (ATOMIC POSITIONS IN UNIT CELL).
-C   POSS= OUTPUT REORDERED POS.
-C   LPS= INPUT CHEMICAL ELEMENT ASSIGNMENT.
-C   LPSS= OUTPUT REORDERED LPS.
-C         dimension should be NNSUB, NLAY is sufficient.
-C   MGH= OUTPUT  INDICATES ORGANIZATION OF GH IN MPERTI OR MTINV.
-C    MGH(I,J)=K MEANS GH(I,J) (I,J= SUBPLANE INDICES) IS TO BE FOUND IN
-C    K-TH POSITION IN COLUMNAR MATRIX GH.
-C   NLAY= NO. OF SUBPLANES.
-C   DRL= OUTPUT INTERPLANAR VECTORS.
-C   SDRL= STORAGE FOR OLD DRL FROM PREVIOUS CALL TO MPERTI OR MTINV.
-C   NLAY2= NLAY*(NLAY-1)/2.
-C   NUGH= OUTPUT  NUGH(K)=1 MEANS THE GH(I,J) (I,J= SUBPLANE INDICES)
-C    FOR WHICH MGH(I,J)=K MUST BE COMPUTED AFRESH. NUGH(K)=0 MEANS NO
-C    COMPUTATION NECESSARY FOR THAT GH(I,J).
-C   NGEQ= OUTPUT  NGEQ(K)=L MEANS THE GH(I,J) FOR WHICH MGH(I,J)=K CAN
-C    BE COPIED FROM THE NEWLY CREATED GH(M,N) FOR WHICH MGH(M,N)=L.
-C    NGEQ(K)=0 MEANS NO COPYING TO BE DONE FOR THAT GH(I,J).
-C   NGOL= OUTPUT  SAME AS NGEQ, BUT FOR COPYING FROM OLD EXISTING VALUES
-C    OF GH(M,N).
-C   NORD stores sublayer order so that reordering can be traced back in TLEED)
-C        (note srtlay is superfluous in itself but kept so that DRL, SDRL can
-C        be handled more conveniently - should be removed in a future version)
-      SUBROUTINE SRTLAY(POS,POSS,LPS,LPSS,MGH,NLAY,DRL,SDRL,NLAY2,
-     1NUGH,NGEQ,NGOL,NEW,NORD)
-      DIMENSION POS(NLAY,3),POSS(NLAY,3),POSA(3),DRL(NLAY2,3),
-     1SDRL(NLAY2,3)
-      DIMENSION LPS(NLAY),LPSS(NLAY),MGH(NLAY,NLAY),NUGH(NLAY2),
-     1NGEQ(NLAY2),NGOL(NLAY2)
-      INTEGER NORD,NORDA
-      DIMENSION NORD(NLAY)
-
-      DO 1 I=1,NLAY
-      LPSS(I)=LPS(I)
-      NORD(I)=I
-      DO 1 J=1,3
-1     POSS(I,J)=POS(I,J)
-C  ANALYSE ORDER OF SUBPLANE POSITIONS ALONG X-AXIS AND REORDER IN
-C  ASCENDING POSITION ALONG +X-AXIS (EQUALLY POSITIONED SUBPLANES ARE
-C  NOT PERMUTED)
-      NLAY1=NLAY-1
-      DO 7 I=1,NLAY1
-      KM=I
-      PM=POSS(I,1)
-      DO 2 K=I+1,NLAY
-      IF (POSS(K,1).GE.PM) GO TO 2
-      PM=POSS(K,1)
-      KM=K
-2     CONTINUE
-      IF (KM.EQ.I) GO TO 7
-      DO 3 J=1,3
-3     POSA(J)=POSS(KM,J)
-      LPSA=LPSS(KM)
-      NORDA=NORD(KM)
-      DO 5 K=KM,I+1,-1
-      DO 4 J=1,3
-4     POSS(K,J)=POSS(K-1,J)
-      NORD(K)=NORD(K-1)
-C  REORDER CHEMICAL ASSIGNMENTS CORRESPONDINGLY
-5     LPSS(K)=LPSS(K-1)
-      DO 6 J=1,3
-6     POSS(I,J)=POSA(J)
-      LPSS(I)=LPSA
-      NORD(I)=NORDA
-7     CONTINUE
-Caws  SET ORIGIN OF COMPOSITE LAYER BRUTALLY ZERO
-      DO I = 2,NLAY,1
-        POSS(I,1) = POSS (I,1) - POSS (1,1)
-      ENDDO
-      POSS(1,1) = 0.0000
-C  GENERATE INTERPLANAR VECTORS DRL
-      IN=1
-      DO 14 I=1,NLAY
-      DO 14 J=I,NLAY
-      MGH(I,J)=0
-      MGH(J,I)=0
-      IF (I-J) 8,14,8
-8     DO 9 K=1,3
-9     DRL(IN,K)=POSS(I,K)-POSS(J,K)
-C  ASSIGN ORGANIZATION OF COLUMNAR MATRIX GH
-      MGH(I,J)=IN
-      MGH(J,I)=IN+NLAY2
-      NUGH(IN)=1
-      NGEQ(IN)=0
-      NGOL(IN)=0
-      IF (IN.EQ.1) GO TO 13
-C  FIND EQUAL INTERPLANAR VECTORS, RECORD FINDINGS IN NGEQ
-      IN1=IN-1
-      DO 12 M=1,IN1
-      DO 10 M1=1,3
-10    POSA(M1)=ABS(DRL(IN,M1)-DRL(M,M1))
-      IF ((POSA(1)+POSA(2)+POSA(3))-0.001) 11,11,12
-11    NGEQ(IN)=M
-      NUGH(IN)=0
-      GO TO 13
-12    CONTINUE
-13    CONTINUE
-      IN=IN+1
-14    CONTINUE
-C  IF OLD VALUES OF GH NOT RELEVANT (DIFFERENT ENERGY) SKIP NEXT
-C  SECTIONS
-      IF (NEW+1) 19,15,19
-C  COMPARE PRESENT WITH OLD INTERPLANAR VECTORS
-15    DO 18 IN=1,NLAY2
-      NGOL(IN)=0
-      DO 16 K=1,3
-16    POSA(K)=ABS(DRL(IN,K)-SDRL(IN,K))
-      IF (POSA(1)+POSA(2)+POSA(3)-0.001) 17,17,24
-C  OLD GH CAN BE LEFT IN ITS PLACE
-17    NUGH(IN)=0
-      NGEQ(IN)=0
-      NGOL(IN)=0
-      GO TO 18
-24    DO 23 IO=1,NLAY2
-      DO 21 K=1,3
-21    POSA(K)=ABS(DRL(IN,K)-SDRL(IO,K))
-      IF (POSA(1)+POSA(2)+POSA(3)-0.001) 22,22,23
-C  OLD GH CAN BE USED, BUT NEEDS COPYING INTO OTHER PLACE. HOWEVER, DO
-C  NOT ALLOW COPYING FROM A PLACE THAT COPYING WILL ALREADY HAVE
-C  OVERWRITTEN
-22    IF (NGOL(IO).NE.0) GO TO 23
-      NUGH(IN)=0
-      NGEQ(IN)=0
-      NGOL(IN)=IO
-      GO TO 18
-23    CONTINUE
-18    CONTINUE
-C  STORE PRESENT INTERPLANAR VECTORS FOR LATER COMPARISON
-19    DO 20 IN=1,NLAY2
-      DO 20 J=1,3
-20    SDRL(IN,J)=DRL(IN,J)
       RETURN
       END
 

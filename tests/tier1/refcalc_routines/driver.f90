@@ -57,6 +57,7 @@ program refcalc_routines_driver
   use bravais_layer, only: sublattice_equivalences, lattice_sums, &
                            spherical_harmonics, bravais_layer_matrices, &
                            beams_ylm
+  use composite_layer, only: sort_subplanes
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -514,10 +515,10 @@ contains
     character(len=16) :: label
     integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
     integer, allocatable :: lx(:), lxi(:), lt(:), lxm(:), lps(:), lpss(:)
-    integer, allocatable :: nord(:), mgh(:, :), nugh(:), ngeq(:), ngol(:), ipl(:)
+    integer, allocatable :: nord(:), mgh(:, :), nugh(:), ngeq(:), ipl(:)
     real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
     real(sp), allocatable :: v(:, :), clm(:), caa(:), subpos(:, :, :)
-    real(sp), allocatable :: pos(:, :), poss(:, :), drl(:, :), sdrl(:, :), test(:)
+    real(sp), allocatable :: pos(:, :), poss(:, :), drl(:, :), test(:)
     complex(sp), allocatable :: flms(:, :), tsf(:, :), tau(:, :), gh(:, :)
     complex(sp), allocatable :: th(:, :), flm(:), xev(:, :), xh(:), hghd(:)
     complex(sp), allocatable :: amult(:), cylm(:, :), rtop(:, :), ttop(:, :)
@@ -535,7 +536,7 @@ contains
     common /ms/ lmax_c, eps_c, liter_c
     common /mpt/ na_c, ns_c, id_c, lay_c, lm_c, ntau_c, tsts_c, tv1_c, dcuts_c, &
                  nopt_c, new_c
-    external :: srtlay, ghmat, taumat, rtinv_simple, copypos
+    external :: ghmat, taumat, rtinv_simple, copypos
 
     call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
     sl_vectors(:, 1:2) = lat%substrate_vector
@@ -608,17 +609,15 @@ contains
     lm_c = l1
     ntau_c = ntauv
     lmt = ntauv * lmmax
-    allocate(mgh(nlay, nlay), drl(nlay2, 3), sdrl(nlay2, 3))
-    allocate(nugh(nlay2), ngeq(nlay2), ngol(nlay2), test(nlay2))
+    allocate(mgh(nlay, nlay), drl(nlay2, 3))
+    allocate(nugh(nlay2), ngeq(nlay2), test(nlay2))
     allocate(lpss(nlay), nord(nlay), gh(lmg, lmmax), hghd(l2m))
     allocate(tg(2, 2 * mnsub * mlmmax), vt(2 * mnsub * mlmmax))
     allocate(tau(lmt, lev), xev(lev, lev2), xh(lev), flm(klm))
     mgh = 0
     drl = 0.0_sp
-    sdrl = 0.0_sp
     nugh = 0
     ngeq = 0
-    ngol = 0
     test = 0.0_sp
     lpss = 0
     nord = 0
@@ -660,9 +659,9 @@ contains
       naa = merge(nt, nb(k), mode == 'O')
       select case (routine)
       case ('GHMAT')
-        call srtlay(pos, poss, lps, lpss, mgh, nlay, drl, sdrl, nlay2, nugh, &
-                    ngeq, ngol, new_c, nord)
-        call ghmat(gh, lmg, lmmax, mgh, nlay, nugh, ngeq, ngol, nlay2, tsts_c, &
+        call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
+                            ngeq, nord)
+        call ghmat(gh, lmg, lmmax, mgh, nlay, nugh, ngeq, nlay2, tsts_c, &
                    test, vt, l2m, vt, lm_c, tg, lms, drl, tv1_c, lxm, lev, &
                    dcuts_c, caa, ncaa, lay_c, hghd, pq(1, 1 + na_c))
         call write_complex(numbered('GH', k), reshape(gh, [lmg * lmmax]))
@@ -673,13 +672,15 @@ contains
         call write_complex(numbered('TAU', k), reshape(tau, [lmt * lev]))
         call write_complex(numbered('FLM', k), flm)
       case default
+        call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
+                            ngeq, nord)
         call rtinv_simple(rtop, ttop, rbot, tbot, naa, amult, cylm, pq, nt, &
                           flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
-                          lev2, tau, lmt, taug, taugm, clm, nlm, pos, poss, &
-                          mgh, nlay, drl, sdrl, nugh, ngeq, ngol, nlay2, test, &
-                          gh, lmg, rg, rgp, ts, lmn, tg, lm2n, vt, caa, ncaa, &
-                          th, lmni, ipl, tsf, lps, lpss, nord, nnsub, lmax1, &
-                          xh, hghd, l2m, rg1, rg2, tstore)
+                          lev2, tau, lmt, taug, taugm, clm, nlm, poss, mgh, &
+                          nlay, drl, nugh, ngeq, nlay2, test, gh, lmg, rg, &
+                          rgp, ts, lmn, tg, lm2n, vt, caa, ncaa, th, lmni, ipl, &
+                          tsf, lpss, nord, nnsub, lmax1, xh, hghd, l2m, rg1, &
+                          rg2, tstore)
       end select
       if (mode == 'B') then
         na_c = na_c + naa
@@ -692,13 +693,11 @@ contains
     case ('GHMAT')
       call write_int('MGH', reshape(mgh, [nlay * nlay]))
       call write_real('DRL', reshape(drl, [nlay2 * 3]))
-      call write_real('SDRL', reshape(sdrl, [nlay2 * 3]))
       call write_real('POSS', reshape(poss, [nlay * 3]))
       call write_int('LPSS', lpss)
       call write_int('NORD', nord)
       call write_int('NUGH', nugh)
       call write_int('NGEQ', ngeq)
-      call write_int('NGOL', ngol)
       call write_real('TEST', test)
     case ('RTINV')
       call write_complex('R_TOP', reshape(rtop, [nt * nt]))

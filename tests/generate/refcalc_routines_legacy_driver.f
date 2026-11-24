@@ -828,13 +828,11 @@ C  sum of the earlier set sizes as NS.
       IF (NAME.EQ.'GHMAT') THEN
         CALL WRI('MGH', MGH, NLAY*NLAY)
         CALL WRR('DRL', DRL, NLAY2*3)
-        CALL WRR('SDRL', SDRL, NLAY2*3)
         CALL WRR('POSS', POSS, NLAY*3)
         CALL WRI('LPSS', LPSS, NLAY)
         CALL WRI('NORD', NORD, NLAY)
         CALL WRI('NUGH', NUGH, NLAY2)
         CALL WRI('NGEQ', NGEQ, NLAY2)
-        CALL WRI('NGOL', NGOL, NLAY2)
         CALL WRR('TEST', TEST, NLAY2)
       ELSE IF (NAME.EQ.'RTINV') THEN
         CALL WRC('R_TOP', RTOP, NT*NT)
