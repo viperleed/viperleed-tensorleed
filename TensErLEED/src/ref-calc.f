@@ -53,7 +53,7 @@ C  modules of the setup routines
      +                             accumulate_atomic_tmatrix
       USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
-     +                         bravais_layer_matrices
+     +                         bravais_layer_matrices, beams_ylm
       USE composite_layer, ONLY: copy_subplane_positions,
      +                           composite_layer_matrices
 
@@ -1229,8 +1229,7 @@ C  (without the offset NA), so compute all NT rows here, if any
 C  tensor is requested. AMULT is working space.
 
       IF (ANY_TENS.EQ.1) THEN
-        CALL BEAMS_YLM(CYLM,AMULT,PQ,NT,NT,0,E,AK21,AK31,VPI,LMAX,
-     +                 LMMAX,YLM)
+        CALL beams_ylm(CYLM,AMULT,PQ,NT,NT,0,EPT,LMAX,LMMAX,YLM)
       ENDIF
 
 C*************************************************************
