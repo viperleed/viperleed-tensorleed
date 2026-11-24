@@ -8,7 +8,8 @@ raises PathNotConfigured, which names both ways to set it.
 
     key                  environment variable          used by
     baseline_tl_root     TL_TEST_BASELINE              perf/benchmark A/B, unit tests
-                                                       of the build, generators
+                                                       of the build, live ref-calc
+                                                       routine checks, generators
     viperleed_examples   TL_TEST_VIPERLEED_EXAMPLES    generators (example inputs)
     generate_workroot    TL_TEST_GENERATE_WORKROOT     generators (viperleed work dirs)
     viperleed_cmd        TL_TEST_VIPERLEED_CMD         tier 2 (command that runs
