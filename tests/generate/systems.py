@@ -177,7 +177,7 @@ SYSTEMS = {
     "ir100_2x1_o": SystemDef(
         "ir100_2x1_o", _IR,
         {"THEO_ENERGIES": "50 170 4", "LMAX": "6-8"},
-        must_cover=["nsub_gt_1", "beam_sets_gt_1", "two_elements"],
+        must_cover=["nsub_gt_1", "beam_sets>=2", "two_elements"],
         covers=["composite-layer", "beeby", "superstructure", "several-beam-sets",
                 "two-elements", "mideg2", "energy-dependent-lmax", "tensors"],
         description="Ir(100)-(2x1)-O, composite layers, several beam sets"),
@@ -195,7 +195,7 @@ SYSTEMS = {
          "BULK_REPEAT": "[0 0 3.83478]",
          "LAYER_CUTS": "0.25 0.35 0.45 0.55 0.73",
          "N_BULK_LAYERS": "1"},
-        must_cover=["nsub_ge_4", "bulk_composite", "beam_sets_gt_1", "two_elements"],
+        must_cover=["nsub_ge_4", "bulk_composite", "beam_sets>=2", "two_elements"],
         covers=["composite-layer", "beeby", "equal-interplanar-vectors",
                 "composite-bulk-layer", "rtinv-substrate", "superstructure",
                 "several-beam-sets", "two-elements", "energy-dependent-lmax", "tensors"],
