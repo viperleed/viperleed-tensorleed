@@ -58,7 +58,8 @@ program refcalc_routines_driver
                            spherical_harmonics, bravais_layer_matrices, &
                            beams_ylm
   use composite_layer, only: sort_subplanes, interplanar_propagators, &
-                             subplane_scattering
+                             subplane_scattering, copy_subplane_positions, &
+                             composite_layer_matrices
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -511,7 +512,8 @@ contains
     integer :: mlmax, mnsub, nlay, layt, nltype, iltype, nnsub, lmax1
     integer :: nlay2, lmg, lmn, lm2n, lmni, l2m, lms, lmt, ntauv
     integer :: knbs, knt, npun, nt, np, mpu, ncalls, k, naa, mlmmax
-    real(sp) :: tstb
+    real(sp) :: tstb, tsts, tv1, dcuts
+    integer :: lay, lm, ntau, na, ns
     character(len=1) :: mode
     character(len=16) :: label
     integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
@@ -527,17 +529,13 @@ contains
     complex(sp), allocatable :: ts(:), tg(:, :), vt(:), taug(:), taugm(:)
     complex(sp), allocatable :: rg1(:), rg2(:), tstore(:, :, :), buffer(:)
     ! the COMMON blocks of the legacy routines: blank (E, AK2, AK3, VPI, TV,
-    ! EMACH), /SL/ (the lattice), /MS/ and /MPT/
+    ! EMACH), /SL/ (the lattice) and /MS/
     real(sp) :: e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
-    real(sp) :: sl_vectors(2, 6), eps_c, tsts_c, tv1_c, dcuts_c
+    real(sp) :: sl_vectors(2, 6), eps_c
     integer :: sl_repetitions(2), lmax_c, liter_c
-    integer :: na_c, ns_c, id_c, lay_c, lm_c, ntau_c, nopt_c, new_c
     common e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
     common /sl/ sl_vectors, sl_repetitions
     common /ms/ lmax_c, eps_c, liter_c
-    common /mpt/ na_c, ns_c, id_c, lay_c, lm_c, ntau_c, tsts_c, tv1_c, dcuts_c, &
-                 nopt_c, new_c
-    external :: rtinv_simple, copypos
 
     call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
     sl_vectors(:, 1:2) = lat%substrate_vector
@@ -550,9 +548,9 @@ contains
     vpi_c = read_real()
     ak2_c = read_real()
     ak3_c = read_real()
-    tv1_c = read_real()
-    tsts_c = read_real()
-    tv_c = tv1_c
+    tv1 = read_real()
+    tsts = read_real()
+    tv_c = tv1
     emach_c = 1.0e-6_sp
     lmax_c = lmax
     eps_c = 0.001_sp
@@ -575,7 +573,7 @@ contains
     lm2n = 2 * lmn
     lmni = lmn
     point = energy_point(e_c, [ak2_c, ak3_c], vpi_c)
-    dcuts_c = -5.0_sp * sqrt(2.0_sp * e_c) / (min(vpi_c, -0.05_sp))
+    dcuts = -5.0_sp * sqrt(2.0_sp * e_c) / (min(vpi_c, -0.05_sp))
 
     allocate(subpos(nltype, mnsub, 3), pos(nlay, 3), poss(nlay, 3))
     call read_array(subpos)
@@ -600,14 +598,11 @@ contains
     call x_tables(lmax, clm, lx, lxi, lt, lxm)
     allocate(caa(ncaa))
     call composite_layer_coefficients(lmax, caa)
-    call copypos(pos, subpos, nltype, nnsub, nlay, iltype)
+    call copy_subplane_positions(pos, subpos, nltype, nnsub, nlay, iltype)
 
-    id_c = 1
-    nopt_c = 1
-    new_c = 1
-    lay_c = layt
-    lm_c = l1
-    ntau_c = ntauv
+    lay = layt
+    lm = l1
+    ntau = ntauv
     lmt = ntauv * lmmax
     allocate(mgh(nlay, nlay), drl(nlay2, 3))
     allocate(nugh(nlay2), ngeq(nlay2), test(nlay2))
@@ -653,45 +648,38 @@ contains
     end if
 
     ncalls = merge(1, knbs, mode == 'O')
-    na_c = 0
-    ns_c = 0
+    na = 0
+    ns = 0
     do k = 1, ncalls
       naa = merge(nt, nb(k), mode == 'O')
       select case (routine)
       case ('GHMAT')
         call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
                             ngeq, nord)
-        call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tsts_c, &
-                                     test, vt, l2m, lm_c, tg, lms, drl, tv1_c, &
-                                     lxm, dcuts_c, caa, ncaa, lay_c, hghd, &
-                                     pq(:, 1 + na_c), lat, point)
+        call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tsts, &
+                                     test, vt, l2m, lm, tg, lms, drl, tv1, &
+                                     lxm, dcuts, caa, ncaa, lay, hghd, &
+                                     pq(:, 1 + na), lat, point)
         call write_complex(numbered('GH', k), reshape(gh, [lmg * lmmax]))
       case ('TAUMAT')
-        call subplane_scattering(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, &
-                                 lmmax, flms, nl, klm, lm_c, clm, nlm, lxi, &
-                                 pq(:, 1 + na_c), nnsub, lmax1, xh, flm, &
-                                 lay_c, lat, point)
+        call subplane_scattering(tau, lmt, ntau, xev, lev, lev2, lod, tsf, &
+                                 lmmax, flms, nl, klm, lm, clm, nlm, lxi, &
+                                 pq(:, 1 + na), nnsub, lmax1, xh, flm, &
+                                 lay, lat, point)
         call write_complex(numbered('TAU', k), reshape(tau, [lmt * lev]))
         call write_complex(numbered('FLM', k), flm)
       case default
-        call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
-                            ngeq, nord)
-        call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tsts_c, &
-                                     test, vt, l2m, lm_c, tg, lms, drl, tv1_c, &
-                                     lxm, dcuts_c, caa, ncaa, lay_c, hghd, &
-                                     pq(:, 1 + na_c), lat, point)
-        call subplane_scattering(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, &
-                                 lmmax, flms, nl, klm, lm_c, clm, nlm, lxi, &
-                                 pq(:, 1 + na_c), nnsub, lmax1, xh, flm, &
-                                 lay_c, lat, point)
-        call rtinv_simple(rtop, ttop, rbot, tbot, naa, amult, cylm, pq, nt, &
-                          lt, lxm, lmmax, lev, tau, lmt, taug, taugm, poss, &
-                          mgh, nlay, gh, lmg, rg, rgp, ts, lmn, lm2n, vt, th, &
-                          lmni, ipl, lpss, nord, nnsub, rg1, rg2, tstore)
+        call composite_layer_matrices(rtop, ttop, rbot, tbot, naa, amult, &
+            cylm, pq, nt, flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
+            lev2, tau, lmt, taug, taugm, clm, nlm, pos, poss, mgh, nlay, drl, &
+            nlay2, nugh, ngeq, test, gh, lmg, rg, rgp, ts, lmn, tg, lm2n, vt, &
+            caa, ncaa, th, lmni, ipl, tsf, lps, lpss, nord, nnsub, lmax1, xh, &
+            hghd, l2m, rg1, rg2, tstore, na, ns, lay, ntau, tsts, tv1, dcuts, &
+            lmax, lat, point)
       end select
       if (mode == 'B') then
-        na_c = na_c + naa
-        ns_c = ns_c + naa
+        na = na + naa
+        ns = ns + naa
       end if
     end do
 

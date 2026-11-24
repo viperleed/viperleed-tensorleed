@@ -1,15 +1,18 @@
 !> \file composite_layer.f90
-!! \brief Composite layers (several subplanes): ordering of the subplanes
-!! and the propagators between them.
+!! \brief Composite layers (several subplanes): ordering of the subplanes,
+!! the propagators between them, and the reflection and transmission
+!! matrices by Beeby's matrix inversion.
 !!
 !! Each routine keeps the precision of every quantity of the legacy routine
 !! it follows, and its results are bit-for-bit those of the legacy code
 !! (tests/tier1/test_refcalc_routines.py).
 
 !> Subplanes of a composite layer, the propagators between them and the
-!! multiple scattering within them.
+!! multiple scattering within them; the reflection and transmission matrices
+!! of the layer.
 module composite_layer
   use constants, only: pi
+  use bravais_layer, only: beams_ylm
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -17,6 +20,7 @@ module composite_layer
   private
 
   public :: sort_subplanes, interplanar_propagators, subplane_scattering
+  public :: copy_subplane_positions, composite_layer_matrices
 
   !> The literal for pi in the estimate of the number of reciprocal-lattice
   !! points of interplanar_propagators; it differs from constants::pi in the
@@ -1061,4 +1065,593 @@ contains
       end do
     end do
   end subroutine harmonics_table
+
+  !> Copies the positions of the subplanes of layer type iltype out of the
+  !! array of all composite layer types (legacy COPYPOS), so that the
+  !! dimensions are those of composite_layer_matrices.
+  subroutine copy_subplane_positions(pos, subpos, nltype, nnsub, nlay, iltype)
+    integer, intent(in) :: nltype, nnsub, nlay, iltype
+    !> Positions of the subplanes of all layer types.
+    real(sp), intent(in) :: subpos(nltype, nnsub, 3)
+    !> Positions of the subplanes of the layer type.
+    real(sp), intent(out) :: pos(nlay, 3)
+
+    integer :: ipos, ilay
+
+    do ipos = 1, 3
+      do ilay = 1, nlay
+        pos(ilay, ipos) = subpos(iltype, ilay, ipos)
+      end do
+    end do
+  end subroutine copy_subplane_positions
+
+  !> Reflection and transmission matrices of a composite layer of nlay
+  !! subplanes for the beams of one beam set (legacy RTINV_SIMPLE), by
+  !! Beeby's matrix inversion. Beam symmetry codes and registry shifts are
+  !! not supported.
+  !!
+  !! Sorts the subplanes (sort_subplanes), computes the propagators between
+  !! them (interplanar_propagators) and the scattering within each of them
+  !! (subplane_scattering), builds and factorizes the matrix to invert
+  !! (beeby_matrix), and for each incident beam finds the scattering
+  !! amplitudes of the subplanes, the elements of the reflection and
+  !! transmission matrices, and the amplitudes stored for tensor LEED.
+  !!
+  !! r_top, t_top, r_bot, t_bot: reflection and transmission matrices for
+  !! beams incident from above (top) or below (bot) the composite layer;
+  !! element (i, j) connects incident beam j to beam i. The amplitudes of
+  !! both beams are taken right next to the layer: r_top(i, j) beams right
+  !! above; t_top(i, j) j right above, i right below; r_bot(i, j) both beams
+  !! right below; t_bot(i, j) j right below, i right above. The entries of
+  !! the beam set are set at the rows and columns ns + 1 ... ns + n; the
+  !! others are kept.
+  !!
+  !! As in bravais_layer_matrices, the rows of amult and cylm are indexed
+  !! by the beam within its set (without n_offset), so with several beam
+  !! sets each call overwrites rows 1 ... n of the previous one. The stored
+  !! amplitudes tstore(:, :, jgp) are indexed by the beam jgp within its set
+  !! as well, without ns: with several beam sets each call overwrites the
+  !! columns of the previous one.
+  !!
+  !! The beam-space matrices are packed with leading dimension nt, the
+  !! number of beams at the current energy, into the leading nt * nt
+  !! elements of the (larger) arrays of the caller; rg, th, tau, gh and the
+  !! work arrays likewise take the leading part of the storage of larger
+  !! arrays.
+  !!
+  !! LAPACK status flags are not checked.
+  subroutine composite_layer_matrices(r_top, t_top, r_bot, t_bot, n, amult, &
+                                      cylm, pq, nt, flms, flm, nl, lxi, lt, &
+                                      lxm, lmmax, klm, xev, lev, lev2, tau, &
+                                      lmt, taug, taugm, clm, nlm, pos, poss, &
+                                      mgh, nlay, drl, nlay2, nugh, ngeq, test, &
+                                      gh, lmg, rg, rg_perp, ts, lmn, tg, lm2n, &
+                                      vt, caa, ncaa, th, lmni, ipl, tsf, lps, &
+                                      lpss, nord, nnsub, lmax1, xh, hghd, l2m, &
+                                      rg1, rg2, tstore, n_offset, ns, lay, &
+                                      ntau, tst, tv, dcut, lmax, lat, point)
+    !> Number of beams in the current beam set.
+    integer, intent(in) :: n
+    !> Total number of beams at the current energy.
+    integer, intent(in) :: nt
+    !> Number of sublattices (rows of flms).
+    integer, intent(in) :: nl
+    !> (lmax + 1)**2.
+    integer, intent(in) :: lmmax
+    !> (2 * lmax + 1) * (2 * lmax + 2) / 2.
+    integer, intent(in) :: klm
+    !> (lmax + 1) * (lmax + 2) / 2.
+    integer, intent(in) :: lev
+    !> 2 * lev.
+    integer, intent(in) :: lev2
+    !> ntau * lmmax.
+    integer, intent(in) :: lmt
+    !> Dimension of clm.
+    integer, intent(in) :: nlm
+    !> Number of subplanes.
+    integer, intent(in) :: nlay
+    !> nlay * (nlay - 1) / 2.
+    integer, intent(in) :: nlay2
+    !> 2 * nlay2 * lmmax.
+    integer, intent(in) :: lmg
+    !> nlay * lmmax.
+    integer, intent(in) :: lmn
+    !> 2 * lmn.
+    integer, intent(in) :: lm2n
+    !> Number of Clebsch-Gordan coefficients.
+    integer, intent(in) :: ncaa
+    !> lmn.
+    integer, intent(in) :: lmni
+    !> Dimensions of tsf.
+    integer, intent(in) :: nnsub, lmax1
+    !> 2 * lmax + 1, or larger.
+    integer, intent(in) :: l2m
+    !> Offset of the current beam set in the list pq.
+    integer, intent(in) :: n_offset
+    !> Offset of the current beam set in the matrices r_top ... t_bot: the
+    !! sum of the sizes of the earlier beam sets.
+    integer, intent(in) :: ns
+    !> 1 for an overlayer, otherwise a substrate layer.
+    integer, intent(in) :: lay
+    !> Number of chemical elements.
+    integer, intent(in) :: ntau
+    !> Highest angular momentum.
+    integer, intent(in) :: lmax
+    !> Convergence criterion of the reciprocal-lattice sums.
+    real(sp), intent(in) :: tst
+    !> Area of the unit cell.
+    real(sp), intent(in) :: tv
+    !> Cutoff radius of the direct-lattice sums.
+    real(sp), intent(in) :: dcut
+    !> Permutations of the (l,m) sequence.
+    integer, intent(in) :: lxi(lmmax), lt(lmmax), lxm(lmmax)
+    !> Chemical element of each subplane.
+    integer, intent(in) :: lps(nlay)
+    !> Beams (reciprocal lattice vectors) at the current energy.
+    real(sp), intent(in) :: pq(2, nt)
+    !> Clebsch-Gordan coefficients.
+    real(sp), intent(in) :: clm(nlm), caa(ncaa)
+    !> Positions of the subplanes.
+    real(sp), intent(in) :: pos(nlay, 3)
+    !> Atomic t-matrix elements.
+    complex(sp), intent(in) :: tsf(nnsub, lmax1)
+    !> Lattice sums.
+    complex(sp), intent(in) :: flms(nl, klm)
+    !> Lattices.
+    type(lattice), intent(in) :: lat
+    !> Energy, parallel momentum of the incident beam, imaginary potential.
+    type(energy_point), intent(in) :: point
+    !> Reflection and transmission matrices; the entries of the beam set are
+    !! set, the others are kept.
+    complex(sp), intent(inout) :: r_top(nt, nt), t_top(nt, nt)
+    complex(sp), intent(inout) :: r_bot(nt, nt), t_bot(nt, nt)
+    !> Prefactors of the matrix elements of the beams of the set.
+    complex(sp), intent(out) :: amult(n)
+    !> Spherical harmonics of the beams of the set, (beam within its set,
+    !! (l, m)); rows 1 ... n are set, the others are kept.
+    complex(sp), intent(inout) :: cylm(nt, lmmax)
+    !> Amplitudes of the scattering within the subplanes for each incident
+    !! beam, for tensor LEED: (1, :, jgp) for incidence towards the solid,
+    !! (2, :, jgp) away from it; the subplanes are in their original order.
+    complex(sp), intent(inout) :: tstore(2, lmn, nt)
+    !> Subplanes sorted by position (see sort_subplanes).
+    real(sp), intent(out) :: poss(nlay, 3)
+    integer, intent(out) :: lpss(nlay), nord(nlay)
+    integer, intent(out) :: mgh(nlay, nlay)
+    real(sp), intent(out) :: drl(nlay2, 3)
+    integer, intent(out) :: nugh(nlay2), ngeq(nlay2)
+    real(sp), intent(out) :: test(nlay2)
+    !> Propagators between the subplanes, in (l,m) space.
+    complex(sp), intent(inout) :: gh(lmg, lmmax)
+    !> Tau matrices of the chemical elements.
+    complex(sp), intent(inout) :: tau(lmt, lev)
+    !> Matrix to invert; on return its LU factors.
+    complex(sp), intent(out) :: th(lmni, lmni)
+    !> Pivot indices of the LU factorization.
+    integer, intent(out) :: ipl(lmni)
+    !> Plane-wave propagators between the subplanes and the layer limits.
+    complex(sp), intent(out) :: rg(2, nlay, n), rg_perp(n)
+    !> Work spaces.
+    complex(sp), intent(out) :: flm(klm), xev(lev, lev2), xh(lev)
+    complex(sp), intent(out) :: taug(lmt), taugm(lmt), ts(lmn)
+    complex(sp), intent(out) :: tg(2, lm2n), vt(lm2n)
+    complex(sp), intent(inout) :: hghd(l2m)
+    complex(sp), intent(out) :: rg1(nlay), rg2(nlay)
+
+    integer :: ig, jg, jgp, jgps, jgs, i, k, in, lp, insort, inc
+    integer :: lod, lee, loe, lm, lms, info
+    real(sp) :: bk2, bk3, c, x, e, vpi, ak2, ak3, gp(2)
+    complex(sp) :: xa, st, am
+    complex(sp) :: rt(2)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+    external :: cgetrf, cgetrs
+
+    e = point%energy
+    vpi = point%imaginary_potential
+    ak2 = point%k_parallel(1)
+    ak3 = point%k_parallel(2)
+    lm = lmax + 1
+    lms = l2m * l2m
+    lod = lmmax - lev
+    lee = (lmax / 2 + 1)**2
+    loe = ((lmax - 1) / 2 + 1)**2
+
+    ! Tau for each chemical element
+    call subplane_scattering(tau, lmt, ntau, xev, lev, lev2, lod, tsf, lmmax, &
+                             flms, nl, klm, lm, clm, nlm, lxi, &
+                             pq(:, 1 + n_offset), nnsub, lmax1, xh, flm, lay, &
+                             lat, point)
+
+    ! Sort the subplanes by increasing position along +x, i.e., from the
+    ! vacuum side towards the solid; find which propagators can be kept,
+    ! which must be recomputed and which are mutually identical
+    call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
+                        ngeq, nord)
+
+    ! Propagators between the subplanes in (l,m) space
+    call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tst, test, &
+                                 vt, l2m, lm, tg, lms, drl, tv, lxm, dcut, &
+                                 caa, ncaa, lay, hghd, pq(:, 1 + n_offset), &
+                                 lat, point)
+
+    ! Matrix to be inverted in Beeby's scheme
+    call beeby_matrix(th, lmni, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, lpss)
+
+    ! Gaussian elimination
+    call cgetrf(lmni, lmni, th, lmni, ipl, info)
+
+    ! Spherical harmonics of the beam directions; amult is overwritten below
+    call beams_ylm(cylm, amult, pq, nt, n, n_offset, point, lmax, lmmax, vt)
+    do ig = 1, n
+      ! Plane-wave propagators, used as prefactors for gh and th
+      jg = ig + n_offset
+      bk2 = pq(1, jg) + ak2
+      bk3 = pq(2, jg) + ak3
+      c = bk2 * bk2 + bk3 * bk3
+      xa = cmplx(2.0_sp * e - c, -2.0_sp * vpi + 0.000001_sp, sp)
+      xa = sqrt(xa)
+      rg_perp(ig) = exp(ci * xa * (poss(nlay, 1) - poss(1, 1)))
+      do i = 1, nlay
+        x = bk2 * poss(i, 2) + bk3 * poss(i, 3)
+        rg(1, i, ig) = exp(ci * (xa * poss(i, 1) + x))
+        rg(2, i, ig) = exp(ci * (xa * poss(i, 1) - x))
+      end do
+      ! Prefactor of the reflection and transmission matrix elements
+      amult(ig) = -16.0_sp * pi * pi * ci / (tv * xa)
+    end do
+
+    ! Loop over incident beams
+    do jgp = 1, n
+      ! Tau times the spherical harmonics, into which the inverse of th is
+      ! multiplied
+      call tau_ylm(taug, taugm, lmt, tau, lev, cylm, nt, lmmax, lt, ntau, lod, &
+                   lee, loe, jgp)
+
+      jgps = jgp + ns
+      gp(1) = pq(1, jgp + n_offset)
+      gp(2) = pq(2, jgp + n_offset)
+      ! First incidence towards +x, i.e., beams propagating towards the
+      ! solid; then incidence towards -x
+      do inc = 1, -1, -2
+        ! Plane-wave propagating factors into taug/taugm
+        do i = 1, nlay
+          in = (i - 1) * lmmax
+          lp = (lpss(i) - 1) * lmmax
+          if (inc == 1) then
+            st = rg(1, i, jgp)
+            do k = 1, lmmax
+              ts(in + k) = taug(lp + k) * st
+            end do
+          else
+            st = ru / rg(2, i, jgp)
+            do k = 1, lmmax
+              ts(in + k) = taugm(lp + k) * st
+            end do
+          end if
+        end do
+
+        ! Left multiplication with the inverse of th
+        call cgetrs('N', lmni, 1, th, lmni, ipl, ts, lmni, info)
+
+        ! Further plane-wave propagating factors; and store the
+        ! intralayer scattering for the tensors, with the sublayers in
+        ! their original order
+        do i = 1, nlay
+          in = (i - 1) * lmmax
+          insort = (nord(i) - 1) * lmmax
+          if (inc == 1) then
+            st = ru / rg(1, i, jgp)
+          else
+            st = rg(2, i, jgp)
+          end if
+          do k = 1, lmmax
+            if (inc == 1) then
+              tstore(1, insort + k, jgp) = 4.0_sp * pi * ts(in + k)
+            else
+              tstore(2, insort + k, jgp) = 4.0_sp * pi * ts(in + k) &
+                                           * rg_perp(jgp)
+            end if
+            ts(in + k) = ts(in + k) * st
+          end do
+        end do
+
+        ! Loop over scattered beams
+        do jg = 1, n
+          call reflection_transmission_element(jg, n_offset, point%k_parallel, &
+                                               gp, lm, cylm, n, lmmax, pq, nt, &
+                                               ts, lmn, rg, rg1, rg2, nlay, &
+                                               jgp, lxm, rt, inc, poss)
+          jgs = jg + ns
+          am = amult(jg)
+          if (inc == -1) then
+            r_bot(jgs, jgps) = rt(1) * am
+            t_bot(jgs, jgps) = rt(2) * am
+          else
+            r_top(jgs, jgps) = rt(1) * am
+            t_top(jgs, jgps) = rt(2) * am
+          end if
+        end do
+
+        ! The unscattered plane wave adds to the transmission
+        if (inc == 1) then
+          t_top(jgps, jgps) = t_top(jgps, jgps) + rg_perp(jgp)
+        else
+          t_bot(jgps, jgps) = t_bot(jgps, jgps) + rg_perp(jgp)
+        end if
+      end do
+    end do
+  end subroutine composite_layer_matrices
+
+  !> Matrix that is inverted in Beeby's scheme (legacy THMAT): the identity
+  !! minus tau times the propagators between the subplanes.
+  !!
+  !! th: the matrix, of dimension lmni = nlay * lmmax. gh: the propagators,
+  !! organized by mgh (see sort_subplanes). lps: the chemical element of
+  !! each subplane, sorted.
+  subroutine beeby_matrix(th, lmni, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, &
+                          lps)
+    integer, intent(in) :: lmni, lmg, lmmax, nlay, lmt, lev
+    integer, intent(in) :: mgh(nlay, nlay), lps(nlay)
+    complex(sp), intent(in) :: gh(lmg, lmmax), tau(lmt, lev)
+    complex(sp), intent(out) :: th(lmni, lmni)
+
+    integer :: i, j, k, in, inp, in1, ic, icl, id, idl, m, m1, lp, lp1
+    integer :: icv, idv, nlay1, lod
+    complex(sp) :: st, su
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
+
+    lod = lmmax - lev
+
+    ! Start from the identity matrix
+    do j = 1, lmni
+      do i = 1, lmni
+        th(i, j) = cz
+      end do
+      th(j, j) = ru
+    end do
+
+    ic = 0
+    nlay1 = nlay - 1
+    do in = 1, nlay1
+      ic = ic + 1
+      icl = (ic - 1) * lmmax
+      id = ic
+      in1 = in + 1
+      do inp = in1, nlay
+        id = id + 1
+        idl = (id - 1) * lmmax
+        m = (mgh(in, inp) - 1) * lmmax
+        m1 = (mgh(inp, in) - 1) * lmmax
+        lp = (lps(in) - 1) * lmmax
+        lp1 = (lps(inp) - 1) * lmmax
+
+        ! -tau * gh for even l+m (in the first index)
+        do i = 1, lev
+          do j = 1, lmmax
+            st = cz
+            su = cz
+            do k = 1, lev
+              st = st + tau(lp + i, k) * gh(m + k, j)
+              su = su + tau(lp1 + i, k) * gh(m1 + k, j)
+            end do
+            th(icl + i, idl + j) = -st
+            th(idl + i, icl + j) = -su
+          end do
+        end do
+
+        lp = lp + lev
+        lp1 = lp1 + lev
+        m = m + lev
+        m1 = m1 + lev
+        icv = icl + lev
+        idv = idl + lev
+
+        ! -tau * gh for odd l+m (in the first index)
+        do i = 1, lod
+          do j = 1, lmmax
+            st = cz
+            su = cz
+            do k = 1, lod
+              st = st + tau(lp + i, k) * gh(m + k, j)
+              su = su + tau(lp1 + i, k) * gh(m1 + k, j)
+            end do
+            th(icv + i, idl + j) = -st
+            th(idv + i, icl + j) = -su
+          end do
+        end do
+      end do
+    end do
+  end subroutine beeby_matrix
+
+  !> Tau times the spherical harmonics of the incident beam jgp, for each
+  !! chemical element (legacy TAUY_SIMPLE); the input of the Beeby inversion.
+  !!
+  !! taug and taugm are the vectors for the beam moving towards the solid
+  !! and away from it, of dimension lmt = ntau * lmmax. lt is the
+  !! permutation of the (l,m) sequence. lee, loe: number of (l,m)
+  !! combinations of even l+m up to which, and of odd l+m up to which, the
+  !! sign of the contribution is reversed.
+  subroutine tau_ylm(taug, taugm, lmt, tau, lev, cylm, nt, lmmax, lt, ntau, &
+                     lod, lee, loe, jgp)
+    integer, intent(in) :: lmt, lev, nt, lmmax, ntau, lod, lee, loe, jgp
+    integer, intent(in) :: lt(lmmax)
+    complex(sp), intent(in) :: tau(lmt, lev), cylm(nt, lmmax)
+    complex(sp), intent(out) :: taug(lmt), taugm(lmt)
+
+    integer :: i, is, jlm, ilm, jtau, klp
+    complex(sp) :: cz, st, su, cf
+
+    cz = cmplx(0.0_sp, 0.0_sp, sp)
+
+    ! Matrix product tau * ylm for each chemical element
+    do i = 1, ntau
+      is = (i - 1) * lmmax
+      do jlm = 1, lev
+        st = cz
+        jtau = is + jlm
+        do ilm = 1, lev
+          klp = lt(ilm)
+          if (ilm > lee) then
+            st = st - tau(jtau, ilm) * cylm(jgp, klp)
+          else
+            st = st + tau(jtau, ilm) * cylm(jgp, klp)
+          end if
+        end do
+        taug(jtau) = st
+        taugm(jtau) = st
+      end do
+
+      is = is + lev
+      do jlm = 1, lod
+        st = cz
+        su = cz
+        jtau = is + jlm
+        do ilm = 1, lod
+          klp = lt(ilm + lev)
+          cf = tau(jtau, ilm) * cylm(jgp, klp)
+          if (ilm > loe) then
+            st = st - cf
+            su = su + cf
+          else
+            st = st + cf
+            su = su - cf
+          end if
+        end do
+        taug(jtau) = st
+        taugm(jtau) = su
+      end do
+    end do
+  end subroutine tau_ylm
+
+  !> Reflection (rt_out(1)) and transmission (rt_out(2)) of incident beam
+  !! jgp into the beam jg of the same beam set, for a composite layer
+  !! (legacy MFOLT_SIMPLE). Beam symmetry codes and registry shifts are not
+  !! supported.
+  !!
+  !! inc = +1: the incident beam moves towards the solid; -1: away from it.
+  !! gp and ak: reciprocal-space part of the incident beam and parallel
+  !! momentum of the primary beam. ts: amplitudes scattered by each
+  !! (l,m) combination of each subplane, from composite_layer_matrices.
+  !! rg(1, ...) is the propagation into the solid, rg(2, ...) towards
+  !! vacuum; rg_r and rg_t are work spaces for the propagation to each
+  !! subplane relative to incidence or exit at the extremes of the layer,
+  !! for reflection and transmission. poss: the positions of the subplanes
+  !! (sorted from the surface), z first. lxm: permutation of the (l,m)
+  !! sequence. lm: lmax + 1.
+  subroutine reflection_transmission_element(jg, na, ak, gp, lm, cylm, n, &
+                                             lmmax, pq, nt, ts, lmn, rg, rg_r, &
+                                             rg_t, nlay, jgp, lxm, rt_out, &
+                                             inc, poss)
+    integer, intent(in) :: jg, na, lm, n, lmmax, nt, lmn, nlay, jgp, inc
+    integer, intent(in) :: lxm(lmmax)
+    real(sp), intent(in) :: ak(2), gp(2), pq(2, nt), poss(nlay, 3)
+    complex(sp), intent(in) :: cylm(nt, lmmax), ts(lmn), rg(2, nlay, n)
+    complex(sp), intent(out) :: rg_r(nlay), rg_t(nlay), rt_out(2)
+
+    integer :: jga, i1, i2, j, l, ll, m, jlm, klm, l1, l2
+    real(sp) :: k_in(2), k_out(2), br, bt
+    complex(sp) :: st, sm, cy, ctr, ctt, r, t, cr, ct, cs, edw_r, edw_t
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
+
+    jga = jg + na
+    k_out(1) = pq(1, jga) + ak(1)
+    k_out(2) = pq(2, jga) + ak(2)
+    k_in(1) = gp(1) + ak(1)
+    k_in(2) = gp(2) + ak(2)
+
+    if (inc == 1) then
+      i1 = 1
+      i2 = nlay
+    else
+      i1 = nlay
+      i2 = 1
+    end if
+
+    ! Total in-plane propagation phase shift for reflection at the first
+    ! subplane encountered (i1), with both k_in and k_out there
+    br = (k_in(1) - k_out(1)) * poss(i1, 2) &
+         + (k_in(2) - k_out(2)) * poss(i1, 3)
+
+    ! Total in-plane propagation phase shift for transmission between the
+    ! first (i1) and the last (i2) subplanes encountered: k_in at the
+    ! first, k_out at the last
+    bt = k_in(1) * poss(i1, 2) + k_in(2) * poss(i1, 3) &
+         - (k_out(1) * poss(i2, 2) + k_out(2) * poss(i2, 3))
+
+    ! In-plane propagators for reflection and transmission
+    edw_r = exp(ci * br)
+    edw_t = exp(ci * bt)
+
+    ! Effect of propagation on the scattered amplitudes, to be combined
+    ! with the (l,m) contributions below
+    do j = 1, nlay
+      if (inc == 1) then
+        ! Fraction of the incident beam reaching plane j relative to the
+        ! first, both moving into the solid
+        st = rg(1, j, jgp) / rg(1, 1, jgp)
+        ! Fraction of the scattered beam leaving plane j relative to the
+        ! one reaching the first, both moving out
+        rg_r(j) = st * rg(2, j, jg) / rg(2, 1, jg)
+        ! Fraction of the scattered beam leaving the last plane relative to
+        ! the one reaching plane j, both moving into the solid
+        rg_t(j) = st * rg(1, nlay, jg) / rg(1, j, jg)
+      else
+        ! Fraction of the incident beam reaching the last plane relative to
+        ! the one at plane j, both moving out
+        st = rg(2, nlay, jgp) / rg(2, j, jgp)
+        ! Fraction of the scattered beam leaving the last plane relative to
+        ! the one reaching plane j, both moving out
+        rg_r(j) = st * rg(1, nlay, jg) / rg(1, j, jg)
+        ! Fraction of the scattered beam leaving plane j relative to the
+        ! one leaving the first, both moving into the solid
+        rg_t(j) = st * rg(2, j, jg) / rg(2, 1, jg)
+      end if
+    end do
+
+    ! Combine propagation with the (l,m)-dependent scattering. The factor
+    ! sm = (-1)**(l+m) * (-1)*(-1)**l = -(-1)**m replaces the products of
+    ! older code.
+    r = cz
+    t = cz
+    jlm = 1
+    l1 = 1
+    do l = 1, lm
+      sm = ru
+      ll = l + l - 1
+      l1 = l1 + ll
+      l2 = l1 - 2 * l
+      do m = 1, ll
+        klm = lxm(jlm)
+        ! Sum over all subplanes
+        cr = cz
+        ct = cz
+        do j = 1, nlay
+          cs = ts((j - 1) * lmmax + klm)
+          cr = cr + rg_r(j) * cs
+          ct = ct + rg_t(j) * cs
+        end do
+
+        ! Spherical harmonics and further prefactors
+        cy = cylm(jg, l2 + m)
+        if (inc == 1) then
+          ctr = sm
+          ctt = ru
+        else
+          ctr = ru
+          ctt = sm
+        end if
+        r = r + ctr * cy * cr
+        t = t + ctt * cy * ct
+        jlm = jlm + 1
+        sm = -sm
+      end do
+    end do
+
+    rt_out(1) = r * edw_r
+    rt_out(2) = t * edw_t
+  end subroutine reflection_transmission_element
 end module composite_layer

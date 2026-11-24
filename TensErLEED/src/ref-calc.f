@@ -54,9 +54,8 @@ C  modules of the setup routines
       USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
      +                         bravais_layer_matrices
-      USE composite_layer, ONLY: sort_subplanes,
-     +                           interplanar_propagators,
-     +                           subplane_scattering
+      USE composite_layer, ONLY: copy_subplane_positions,
+     +                           composite_layer_matrices
 
 C  include parameter statements for dimensions etc
 
@@ -427,8 +426,6 @@ C  subroutine rtinv
 
 C  NOPT : 1 should be default (calc matrix for all beams) - 2 would assume a symmetric
 C         layer, 3 just 1 inc beam. 2 and 3 can not be used in Tensor LEED calculation.
-C  NEW  : would save computing time for tau-matrices, but can be a dangerous bug unless
-C         set to 1
 C  NLAY : dimension - number of sublayers in current rtinv
 C  NLAY2,LMG,L2M: variable dimensions for rtinv
 C  NTAU : number of different site types (t-matrices) in next rtinv call
@@ -463,7 +460,7 @@ C         LCOMP(ILTYPE). In subroutines, Tensov is used as a pointer to the curr
 C         Tensor location. While not conforming to structured programming, this
 C         method saves a considerable amount of time.
 
-      INTEGER NOPT,NEW
+      INTEGER NOPT
       INTEGER NLAY,NLAY2,LMG,NTAU,L2M
       INTEGER TAUNO
       DIMENSION TAUNO(MNSITE)
@@ -602,7 +599,6 @@ C  common blocks
       COMMON /MS/LMAX,EPS,LITER
       COMMON /ADS/ASE,VPIS,VPIO,VV
       COMMON /BT/IT,T,T0,DRPER,DRPAR,DR0
-      COMMON /MPT/ NA,NS,ID,LAY,L1,NTAU,TSTS,TV1,DCUTS,NOPT,NEW  ! Used only by RTINV. MRiva: ID is unnecessary and can be removed completely from the whole code. Same is true for NOPT.
 	  COMMON /INPOT/EM,C1,C2,C3,C4,C5,C6,C7,C8, WORKFN
 
 
@@ -1120,7 +1116,6 @@ C  set some default quantities
 
           ID   = 1
           NOPT = 1
-          NEW  = 1
 
           NM   = NT
 
@@ -1159,7 +1154,8 @@ C  set sublattice characterisation
 
 C  copy sublayer positions onto correct grid POS
 
-          CALL COPYPOS(POS,SUBPOS,NLTYPE,NNSUB,NLAY,ILTYPE)
+          CALL copy_subplane_positions(POS,SUBPOS,NLTYPE,NNSUB,NLAY,
+     +                                 ILTYPE)
 
           LMT = NTAU*LMMAX
           LAY = LATT(ILTYPE)
@@ -1167,29 +1163,19 @@ C  copy sublayer positions onto correct grid POS
           IF (LAY.eq.1) THEN              ! 'overlayer'
 
             TV1 = TVB
-            NA  = 0  ! used in RTINV via COMMON
-            NS  = 0  ! used in RTINV via COMMON
+            NA  = 0
+            NS  = 0
             NAA = NT
 
-            CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
-     +                          NLAY2, NUGH, NGEQ, NORD)
-            CALL INTERPLANAR_PROPAGATORS(GH, LMG, LMMAX, NUGH, NGEQ,
-     +                          NLAY2, TSTS, TEST, VT, L2M, L1, TG,
-     +                          L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
-     +                          NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
-
-            CALL SUBPLANE_SCATTERING(TAU, LMT, NTAU, XEV, LEV, LEV2,
-     +                         LOD, TSF, LMMAX, FLMS, NL, KLM, L1, CLM,
-     +                         NLM, LXI, PQ(:,1+NA), NNSUB, LMAX1, XH,
-     +                         FLM, LAY, LAT, EPT)
-
-            CALL RTINV_SIMPLE(
-     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT,
-     +         LT, LXM, LMMAX, LEV,
-     +         TAU, LMT, TAUG, TAUGM, POSS, MGH, NLAY,
-     +         GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
-     +         IPL, LPSS, NORD, NNSUB,
-     +         RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+            CALL composite_layer_matrices(
+     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS, FLM,
+     +         NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU, LMT,
+     +         TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL, NLAY2,
+     +         NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN, TG,
+     +         LM2N, VT, CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS, NORD,
+     +         NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
+     +         TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
+     +         TV1, DCUTS, LMAX, LAT, EPT
      +         )
 
           ELSE IF (LAY.eq.2) THEN        ! bulk
@@ -1202,25 +1188,15 @@ C  copy sublayer positions onto correct grid POS
 
               NAA = NB(IBS)
 
-              CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
-     +                            NLAY2, NUGH, NGEQ, NORD)
-              CALL INTERPLANAR_PROPAGATORS(GH, LMG, LMMAX, NUGH, NGEQ,
-     +                            NLAY2, TSTS, TEST, VT, L2M, L1, TG,
-     +                            L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
-     +                            NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
-
-              CALL SUBPLANE_SCATTERING(TAU, LMT, NTAU, XEV, LEV, LEV2,
-     +                          LOD, TSF, LMMAX, FLMS, NL, KLM, L1, CLM,
-     +                          NLM, LXI, PQ(:,1+NA), NNSUB, LMAX1, XH,
-     +                          FLM, LAY, LAT, EPT)
-
-              CALL RTINV_SIMPLE(
-     +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT,
-     +           LT, LXM, LMMAX, LEV,
-     +           TAU, LMT, TAUG, TAUGM, POSS, MGH, NLAY,
-     +           GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
-     +           IPL, LPSS, NORD, NNSUB,
-     +           RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+              CALL composite_layer_matrices(
+     +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
+     +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU,
+     +           LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL,
+     +           NLAY2, NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN,
+     +           TG, LM2N, VT, CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS,
+     +           NORD, NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
+     +           TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
+     +           TV1, DCUTS, LMAX, LAT, EPT
      +           )
 
               NA  = NA + NB(IBS)
@@ -1248,7 +1224,7 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
       ENDDO  ! ILTYPE, loop through layers to construct R,T matrices
 
 C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, bravais_layer_matrices
-C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
+C  and composite_layer_matrices leave only rows 1..NB of the last beam set
 C  (without the offset NA), so compute all NT rows here, if any
 C  tensor is requested. AMULT is working space.
 
