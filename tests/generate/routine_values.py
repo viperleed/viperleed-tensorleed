@@ -18,6 +18,7 @@ __license__ = 'GPLv3+'
 
 import argparse
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -25,6 +26,7 @@ import tempfile
 from pathlib import Path
 
 from generate.baseline_tree import GeneratorError, check_baseline_tree
+from harness.runner import THREAD_ENV
 
 FLAG_SETS = ("-O2", "-O0")
 
@@ -36,9 +38,10 @@ def hex32(x):
 
 
 def run_driver(exe, stdin):
-    """Run the driver exe on the stdin lines; return its stdout."""
+    """Run the driver exe on the stdin lines (with THREAD_ENV); return its stdout."""
     return subprocess.run([str(exe)], input="\n".join(stdin) + "\n", text=True,
-                          capture_output=True, check=True).stdout
+                          capture_output=True, check=True,
+                          env={**os.environ, **THREAD_ENV}).stdout
 
 
 def results_per_flag_set(build, run, cases, workdir):

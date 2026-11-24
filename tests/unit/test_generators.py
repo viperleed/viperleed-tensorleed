@@ -108,6 +108,13 @@ def test_ignored_subdirectory_of_baseline_refused(at_baseline):
         check_baseline_tree(sub)
 
 
+def test_tree_outside_git_rejected(tmp_path):
+    """A tree that is not in a git checkout gives a GeneratorError, not a git traceback."""
+    (tmp_path / "TensErLEED").mkdir()
+    with pytest.raises(GeneratorError, match="is not a git checkout"):
+        check_baseline_tree(tmp_path)
+
+
 def test_clean_baseline_accepted(at_baseline):
     """A clean tree at the baseline commit is accepted and its commit returned."""
     assert check_baseline_tree(at_baseline) == git(at_baseline, "rev-parse", "HEAD")

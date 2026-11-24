@@ -28,8 +28,12 @@ def check_baseline_tree(tl, allow_other_commit=False):
     included (always: the commit must describe the code that ran)."""
     def git(*args):
         """Run git in the tree tl and return its stripped stdout."""
-        return subprocess.run(["git", "-C", str(tl), *args], check=True,
-                              capture_output=True, text=True).stdout.strip()
+        proc = subprocess.run(["git", "-C", str(tl), *args],
+                              capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise GeneratorError(f"{tl} is not a git checkout (git {args[0]}: "
+                                 f"{proc.stderr.strip()})")
+        return proc.stdout.strip()
     top = git("rev-parse", "--show-toplevel")
     if Path(top).resolve() != Path(tl).resolve():
         raise GeneratorError(f"{tl} is not the top level of its git checkout ({top})")

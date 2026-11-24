@@ -30,6 +30,7 @@ __created__ = '2026-11-11'
 __license__ = 'GPLv3+'
 
 import json
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -46,8 +47,9 @@ from generate.make_refcalc_routine_values import (
 from generate.routine_values import FLAG_SETS
 from harness.build import DEBUG, RELEASE, cached_dir, program_sources
 from harness.cases import RUN_TIMEOUT_S
-from harness.paths import configured
+from harness.paths import PathNotConfigured
 from harness.routine_blocks import summarize
+from harness.runner import THREAD_ENV
 
 DATA = Path(__file__).with_name("refcalc_routines")
 CASES = json.loads((DATA / "values.json").read_text())["cases"]
@@ -107,13 +109,12 @@ def legacy_driver(request):
     """The legacy driver of the generator, built from the baseline tree's
     lib.tleed.f with LEGACY_FLAGS (cached in tests/.build-cache; the key
     covers the driver's sources and the generator file with its build recipe)."""
-    if not (request.config.getoption("--baseline-tl-root")
-            or configured("baseline_tl_root")):
-        pytest.fail(NO_BASELINE_MSG, pytrace=False)
-    tl = request.getfixturevalue("baseline_tl_root")
     try:
+        tl = request.getfixturevalue("baseline_tl_root")
         check_baseline_tree(tl)
-    except GeneratorError as err:
+    except PathNotConfigured:
+        pytest.fail(NO_BASELINE_MSG, pytrace=False)
+    except (FileNotFoundError, GeneratorError) as err:
         pytest.fail(f"--baseline-tl-root / baseline_tl_root: {err}", pytrace=False)
     lib = tl / "TensErLEED"
     # the generator's file holds the build recipe (build_legacy_driver)
@@ -159,7 +160,7 @@ def test_routines_match_baseline_bits(case, driver, request):
     values differ, the first differing one (hex bit patterns or integers).
     Live cases need the baseline tree (fixture legacy_driver)."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env={**os.environ, **THREAD_ENV})
     assert proc.returncode == 0, f"driver failed:\n{proc.stderr}"
     got = summarize(proc.stdout)
     expected = _expected(case, request)
@@ -194,6 +195,7 @@ def test_routines_stop_where_legacy_result_is_invalid(case, driver):
     Failing means the check of an input the legacy routines handled wrongly
     is gone, or reports another message."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
-                          capture_output=True, text=True, timeout=RUN_TIMEOUT_S)
+                          capture_output=True, text=True, timeout=RUN_TIMEOUT_S,
+                          env={**os.environ, **THREAD_ENV})
     assert proc.returncode != 0, f"exit code 0; stdout:\n{proc.stdout}"
     assert proc.stderr.startswith("ref-calc: " + STOPS[case["id"]]), proc.stderr
