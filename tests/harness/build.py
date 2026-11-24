@@ -224,6 +224,33 @@ def _locked(name):
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+def cached_dir(name, key_files, root, extra, fill):
+    """The cache entry CACHE/<name>-<hash>/, filled by fill(directory) on first use.
+
+    For builds other than build_program (the legacy routine drivers): the
+    hash covers key_files (paths relative to root), extra and toolchain();
+    like build_program, concurrent processes fill an entry once (lock file)
+    and a failed fill leaves no entry."""
+    key = _hash(key_files, root, f"{name}|{extra}|{toolchain()}")
+    out = CACHE / f"{name}-{key}"
+    if out.is_dir():
+        return out
+    with _locked(f"{name}-{key}"):
+        if out.is_dir():  # filled by another process while we waited
+            return out
+        _remove_stale_tmp_dirs()
+        tmp = CACHE / f"{name}-{key}.tmp{os.getpid()}"
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        try:
+            fill(tmp)
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        tmp.rename(out)
+    return out
+
+
 def build_program(tl_root, program, param, flags):
     """Build program from tl_root (cached); return the executable's path."""
     tl_root = Path(tl_root)

@@ -13,6 +13,12 @@ and RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc. Large
 arrays are compared by a digest of their bits and their leading values.
 For the cases in STOPS the routines stop with an error instead; their
 values in values.json record what the legacy routines gave.
+
+The cases marked live in values.json (those of RSMF_SIMPLE, whose legacy
+results depend on the BLAS/LAPACK the program runs with) have no stored
+values: the legacy driver of the generator is built from the baseline tree
+(--baseline-tl-root or baseline_tl_root; it must be at the baseline commit)
+and run on the same inputs, with the same BLAS/LAPACK, at test time.
 """
 
 __authors__ = (
@@ -29,8 +35,16 @@ from pathlib import Path
 
 import pytest
 
-from harness.build import DEBUG, RELEASE, program_sources
+from generate.baseline_tree import GeneratorError, check_baseline_tree
+from generate.make_refcalc_routine_values import (
+    LEGACY_DRIVER,
+    build_legacy_driver,
+    run_legacy_driver,
+    )
+from generate.routine_values import FLAG_SETS
+from harness.build import DEBUG, RELEASE, cached_dir, program_sources
 from harness.cases import RUN_TIMEOUT_S
+from harness.paths import configured
 from harness.routine_blocks import summarize
 
 DATA = Path(__file__).with_name("refcalc_routines")
@@ -45,6 +59,12 @@ STOPS = {
     }
 COMPARED = [c for c in CASES if c["id"] not in STOPS]
 STOPPING = [c for c in CASES if c["id"] in STOPS]
+# flags of the legacy driver for the live cases (the generator checks that
+# all of its flag sets give the same results)
+LEGACY_FLAGS = FLAG_SETS[0]
+NO_BASELINE_MSG = ("the live cases of refcalc_routines/values.json compare with the "
+                   "legacy routines of the baseline tree: pass --baseline-tl-root=<tree> "
+                   "or set baseline_tl_root (tests/local.toml) or TL_TEST_BASELINE")
 
 
 def _compile(cmd, workdir):
@@ -80,6 +100,34 @@ def driver(request, tl_root, tmp_path_factory):
     return exe
 
 
+@pytest.fixture(scope="session")
+def legacy_driver(request):
+    """The legacy driver of the generator, built from the baseline tree's
+    lib.tleed.f with LEGACY_FLAGS (cached in tests/.build-cache)."""
+    if not (request.config.getoption("--baseline-tl-root")
+            or configured("baseline_tl_root")):
+        pytest.fail(NO_BASELINE_MSG, pytrace=False)
+    tl = request.getfixturevalue("baseline_tl_root")
+    try:
+        check_baseline_tree(tl)
+    except GeneratorError as err:
+        pytest.fail(f"--baseline-tl-root / baseline_tl_root: {err}", pytrace=False)
+    lib = tl / "TensErLEED"
+    entry = cached_dir("refcalc-legacy-driver",
+                       [lib / "lib" / "lib.tleed.f", lib / "src" / "GLOBAL", LEGACY_DRIVER],
+                       lib, LEGACY_FLAGS,
+                       lambda tmp: build_legacy_driver(tl, tmp, LEGACY_FLAGS))
+    return entry / f"legacy{LEGACY_FLAGS}"
+
+
+def _expected(case, request):
+    """The legacy results of case: stored in values.json, or for a live case
+    from the legacy driver of the baseline (fixture legacy_driver)."""
+    if not case.get("live"):
+        return case["expected"]
+    return run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
+
+
 @pytest.mark.tier1
 def test_values_hold_cases():
     """values.json holds input sets (without them the comparison below is skipped)."""
@@ -88,17 +136,18 @@ def test_values_hold_cases():
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("case", COMPARED, ids=[c["id"] for c in COMPARED])
-def test_routines_match_baseline_bits(case, driver):
+def test_routines_match_baseline_bits(case, driver, request):
     """The routines give bit-identical results to the legacy routines on these inputs.
 
     Failing means the floating-point operations of a routine (or their order)
     changed; the message names the differing arrays and, where the leading
-    values differ, the first differing one (hex bit patterns or integers)."""
+    values differ, the first differing one (hex bit patterns or integers).
+    Live cases need the baseline tree (fixture legacy_driver)."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
                           capture_output=True, text=True)
     assert proc.returncode == 0, f"driver failed:\n{proc.stderr}"
     got = summarize(proc.stdout)
-    expected = case["expected"]
+    expected = _expected(case, request)
     assert list(got) == list(expected), f"arrays {list(got)}, expected {list(expected)}"
     diffs = []
     for name, want in expected.items():

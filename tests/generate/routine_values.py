@@ -4,6 +4,8 @@ make_rfacsb_routine_values.py and make_refcalc_routine_values.py each build
 a legacy driver against the baseline at every flag set of FLAG_SETS, run it
 on their input sets, require all builds to give the same results, and write
 the inputs and results to a values.json that their tier-1 test reads.
+Cases marked live (results that depend on the BLAS/LAPACK the driver runs
+with) are written without results: their test runs the legacy driver itself.
 """
 
 __authors__ = (
@@ -57,12 +59,15 @@ def results_per_flag_set(build, run, cases, workdir):
     return rows
 
 
-def generate(argv, description, build, run, cases, values, legacy_source):
+def generate(argv, description, build, run, cases, values, legacy_source,
+             live=lambda case_id: False):
     """Parse the command line, check the baseline tree, and write values.
 
     build(tl, workdir, flags) builds the legacy driver against the baseline
     tree tl; run(exe, stdin) returns the result of one case; legacy_source
-    names the legacy file the driver links, for the "source" entry."""
+    names the legacy file the driver links, for the "source" entry. Cases
+    for which live(case_id) is true are written with "live": true instead of
+    their results (which are still computed, for the flag-set check)."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--tl-root", required=True, type=Path,
                         help="baseline TensErLEED tree")
@@ -79,7 +84,8 @@ def generate(argv, description, build, run, cases, values, legacy_source):
     values.write_text(json.dumps({
         "source": f"legacy {legacy_source} at {commit[:7]}, {compiler}, "
                   f"flags {' and '.join(FLAG_SETS)} (identical)",
-        "cases": [{"id": case_id, "covers": what, "stdin": stdin, "expected": result}
+        "cases": [{"id": case_id, "covers": what, "stdin": stdin,
+                   **({"live": True} if live(case_id) else {"expected": result})}
                   for case_id, what, stdin, result in rows]}, indent=1) + "\n")
     print(f"wrote {len(rows)} cases to {values}")
 
