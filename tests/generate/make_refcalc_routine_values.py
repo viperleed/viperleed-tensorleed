@@ -30,7 +30,8 @@ in arrays for three; four sublayers with equal interplanar vectors, and with
 vectors that differ only in the third or only in the first (normal)
 component;
 sublayers out of order along the normal; t-matrices scaled up so that the
-elimination of CXMTXT interchanges rows), at normal and oblique incidence,
+elimination of CXMTXT interchanges rows, also from the last row and among
+several candidates), at normal and oblique incidence,
 for LMAX < MLMAX, for one call over all beams and for one call per beam set
 (offsets NA, NS > 0), as overlayer and as bulk layer; and FMAT with a
 superlattice vector 0.15 % longer than the substrate vector (first and second). Phase shifts
@@ -344,8 +345,10 @@ def _composite_stdin(name, fin, layers, setup):
             for l in range(lmax + 1):
                 d = fin["phases"][0][site - 1][l]
                 tsf[sites[site] - 1][l] = (np.sin(d) * np.cos(d), np.sin(d) * np.sin(d))
-                tsf[sites[site] - 1][l] = tuple(
-                    _F32(setup.get("tsf_scale", 1)) * x for x in tsf[sites[site] - 1][l])
+                scale = setup.get("tsf_scale", 1)
+                if isinstance(scale, dict):
+                    scale = scale.get(site, 1)
+                tsf[sites[site] - 1][l] = tuple(_F32(scale) * x for x in tsf[sites[site] - 1][l])
         lps.append(sites[site])
     tsf_flat = [x for l in range(mlmax + 1) for row in tsf for x in row[l]]
     head, spq, spqf = _beam_lines(fin)
@@ -547,6 +550,11 @@ _COMPOSITE_SETUPS = [
      "oblique incidence",
      _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(20.0, 10.0),
                            mode="O", tsf_scale=20, **_IR_LATTICE)),
+    ("ir100_pivot_last_row", "the top layer with the t-matrices of the O site 3000 times "
+     "as large (not physical: the elimination in CXMTXT takes the last row as pivot "
+     "and finds several candidate rows in a column), oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(20.0, 10.0),
+                           mode="O", tsf_scale={2: 3000}, **_IR_LATTICE)),
     ("ir100_lmax5_mlmax7", "the top layer at LMAX 5 with arrays for MLMAX 7 "
      "(LMAX < MLMAX), oblique incidence",
      _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=7, mnsub=3, ev=90.0, angles=(12.0, 33.0),
