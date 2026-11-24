@@ -125,7 +125,10 @@ def _expected(case, request):
     from the legacy driver of the baseline (fixture legacy_driver)."""
     if not case.get("live"):
         return case["expected"]
-    return run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
+    expected = run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
+    # an empty legacy output would let an empty port output pass
+    assert expected, f"{case['id']}: the legacy driver printed no arrays"
+    return expected
 
 
 @pytest.mark.tier1
