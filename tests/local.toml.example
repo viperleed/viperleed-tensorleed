@@ -3,7 +3,8 @@
 # precedence). See tests/harness/paths.py.
 
 # Baseline TensErLEED tree (TL_TEST_BASELINE): reference for the perf and
-# benchmark A/B tests, the build unit tests and the generators. For the
+# benchmark A/B tests, the build unit tests, the live cases of the ref-calc
+# routine check (tier 1; at the baseline commit) and the generators. For the
 # generators it must be at the baseline commit and contain a working
 # eeasisss (see README, 'Regenerating cases').
 baseline_tl_root = "/path/to/viperleed-tensorleed-fix"

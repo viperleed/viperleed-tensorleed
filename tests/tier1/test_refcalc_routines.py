@@ -13,6 +13,13 @@ and RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc. Large
 arrays are compared by a digest of their bits and their leading values.
 For the cases in STOPS the routines stop with an error instead; their
 values in values.json record what the legacy routines gave.
+
+The arrays listed as live in values.json (RA and TA of the cases of
+RSMF_SIMPLE, whose legacy values depend on the BLAS/LAPACK the program runs
+with) have no stored values: the legacy driver of the generator is built
+from the baseline tree (--baseline-tl-root or baseline_tl_root; it must be
+at the baseline commit) and run on the same inputs, with the same
+BLAS/LAPACK, at test time. The other arrays of these cases are stored.
 """
 
 __authors__ = (
@@ -23,15 +30,26 @@ __created__ = '2026-11-11'
 __license__ = 'GPLv3+'
 
 import json
+import os
 import shlex
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from harness.build import DEBUG, RELEASE, program_sources
+from generate import make_refcalc_routine_values
+from generate.baseline_tree import GeneratorError, check_baseline_tree
+from generate.make_refcalc_routine_values import (
+    LEGACY_DRIVER,
+    build_legacy_driver,
+    run_legacy_driver,
+    )
+from generate.routine_values import FLAG_SETS
+from harness.build import DEBUG, RELEASE, cached_dir, program_sources
 from harness.cases import RUN_TIMEOUT_S
+from harness.paths import PathNotConfigured
 from harness.routine_blocks import summarize
+from harness.runner import THREAD_ENV
 
 DATA = Path(__file__).with_name("refcalc_routines")
 CASES = json.loads((DATA / "values.json").read_text())["cases"]
@@ -45,6 +63,12 @@ STOPS = {
     }
 COMPARED = [c for c in CASES if c["id"] not in STOPS]
 STOPPING = [c for c in CASES if c["id"] in STOPS]
+# flags of the legacy driver for the live cases (the generator checks that
+# all of its flag sets give the same results)
+LEGACY_FLAGS = FLAG_SETS[0]
+NO_BASELINE_MSG = ("the live cases of refcalc_routines/values.json compare with the "
+                   "legacy routines of the baseline tree: pass --baseline-tl-root=<tree> "
+                   "or set baseline_tl_root (tests/local.toml) or TL_TEST_BASELINE")
 
 
 def _compile(cmd, workdir):
@@ -80,6 +104,46 @@ def driver(request, tl_root, tmp_path_factory):
     return exe
 
 
+@pytest.fixture(scope="session")
+def legacy_driver(request):
+    """The legacy driver of the generator, built from the baseline tree's
+    lib.tleed.f with LEGACY_FLAGS (cached in tests/.build-cache; the key
+    covers the driver's sources and the generator file with its build recipe)."""
+    try:
+        tl = request.getfixturevalue("baseline_tl_root")
+        check_baseline_tree(tl)
+    except PathNotConfigured:
+        pytest.fail(NO_BASELINE_MSG, pytrace=False)
+    except (FileNotFoundError, GeneratorError) as err:
+        pytest.fail(f"--baseline-tl-root / baseline_tl_root: {err}", pytrace=False)
+    lib = tl / "TensErLEED"
+    # the generator's file holds the build recipe (build_legacy_driver)
+    recipe = Path(make_refcalc_routine_values.__file__)
+    entry = cached_dir("refcalc-legacy-driver",
+                       [lib / "lib" / "lib.tleed.f", lib / "src" / "GLOBAL", LEGACY_DRIVER,
+                        recipe],
+                       lib, LEGACY_FLAGS,
+                       lambda tmp: build_legacy_driver(tl, tmp, LEGACY_FLAGS))
+    return entry / f"legacy{LEGACY_FLAGS}"
+
+
+def _expected(case, request):
+    """The legacy results of case: stored in values.json, and for the arrays
+    of a live case listed under "live", from the legacy driver of the
+    baseline (fixture legacy_driver)."""
+    live = case.get("live", [])
+    if not live:
+        return case["expected"]
+    legacy = run_legacy_driver(request.getfixturevalue("legacy_driver"), case["stdin"])
+    # the legacy driver must print exactly the stored and the live arrays (an
+    # empty output would let an empty port output pass)
+    assert set(legacy) == {*case["expected"], *live}, (
+        f"{case['id']}: the legacy driver printed arrays {list(legacy)}, expected "
+        f"{list(case['expected'])} and live {live}")
+    return {name: legacy[name] if name in live else case["expected"][name]
+            for name in legacy}
+
+
 @pytest.mark.tier1
 def test_values_hold_cases():
     """values.json holds input sets (without them the comparison below is skipped)."""
@@ -88,17 +152,18 @@ def test_values_hold_cases():
 
 @pytest.mark.tier1
 @pytest.mark.parametrize("case", COMPARED, ids=[c["id"] for c in COMPARED])
-def test_routines_match_baseline_bits(case, driver):
+def test_routines_match_baseline_bits(case, driver, request):
     """The routines give bit-identical results to the legacy routines on these inputs.
 
     Failing means the floating-point operations of a routine (or their order)
     changed; the message names the differing arrays and, where the leading
-    values differ, the first differing one (hex bit patterns or integers)."""
+    values differ, the first differing one (hex bit patterns or integers).
+    Live cases need the baseline tree (fixture legacy_driver)."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env={**os.environ, **THREAD_ENV})
     assert proc.returncode == 0, f"driver failed:\n{proc.stderr}"
     got = summarize(proc.stdout)
-    expected = case["expected"]
+    expected = _expected(case, request)
     assert list(got) == list(expected), f"arrays {list(got)}, expected {list(expected)}"
     diffs = []
     for name, want in expected.items():
@@ -130,6 +195,7 @@ def test_routines_stop_where_legacy_result_is_invalid(case, driver):
     Failing means the check of an input the legacy routines handled wrongly
     is gone, or reports another message."""
     proc = subprocess.run([str(driver)], input="\n".join(case["stdin"]) + "\n",
-                          capture_output=True, text=True, timeout=RUN_TIMEOUT_S)
+                          capture_output=True, text=True, timeout=RUN_TIMEOUT_S,
+                          env={**os.environ, **THREAD_ENV})
     assert proc.returncode != 0, f"exit code 0; stdout:\n{proc.stdout}"
     assert proc.stderr.startswith("ref-calc: " + STOPS[case["id"]]), proc.stderr

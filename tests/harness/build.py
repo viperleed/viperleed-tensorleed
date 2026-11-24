@@ -224,56 +224,70 @@ def _locked(name):
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+def cache_key(name, key_files, root, extra):
+    """The hash of a cache entry: name, extra, toolchain() and the key_files
+    (their paths relative to root and their contents)."""
+    return _hash(key_files, root, f"{name}|{extra}|{toolchain()}")
+
+
+def cached_dir(name, key_files, root, extra, fill):
+    """The cache entry CACHE/<name>-<cache_key>/, filled by fill(directory) on first use.
+
+    Concurrent processes fill an entry once: the fill holds a lock file, and
+    processes waiting for it use the finished entry. fill writes into a
+    temporary directory that is renamed to the entry only when fill returns,
+    so a failed fill leaves no entry."""
+    key = cache_key(name, key_files, root, extra)
+    out = CACHE / f"{name}-{key}"
+    if out.is_dir():
+        return out
+    with _locked(f"{name}-{key}"):
+        if out.is_dir():  # filled by another process while we waited
+            return out
+        _remove_stale_tmp_dirs()
+        tmp = CACHE / f"{name}-{key}.tmp{os.getpid()}"
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        try:
+            fill(tmp)
+        except BaseException:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        tmp.rename(out)
+    return out
+
+
 def build_program(tl_root, program, param, flags):
-    """Build program from tl_root (cached); return the executable's path."""
+    """Build program from tl_root (cached in CACHE/<program>-<key>/); return
+    the executable's path."""
     tl_root = Path(tl_root)
     use_make = uses_makefile(tl_root)
     use_param = needs_param(tl_root, program)
     if use_param and (param is None or not Path(param).is_file()):
         raise BuildError(f"{program} includes PARAM but the run has no PARAM file")
     mode = MAKE if use_make else "legacy"
+    extra = f"{flags}|{mode}|{'param' if use_param else 'noparam'}"
 
-    def tree_key():
-        """Cache key: hash of the flags, the mode, the toolchain and the input files."""
-        key_files = source_files(tl_root, program) + ([Path(param)] if use_param else [])
-        return _hash(key_files, tl_root / "TensErLEED",
-                     f"{program}|{flags}|{mode}|{'param' if use_param else 'noparam'}"
-                     f"|{toolchain()}")
-    key = tree_key()
-    out = CACHE / f"{program}-{key}"
-    exe = out / program
-    if exe.is_file():
-        return exe
-    with _locked(f"{program}-{key}"):
-        if exe.is_file():  # built by another process while we waited
-            return exe
-        return _build_entry(tl_root, program, param, flags, use_make, use_param,
-                            key, tree_key)
+    def key_files():
+        """The files of the cache key: the program's sources and PARAM if used."""
+        return source_files(tl_root, program) + ([Path(param)] if use_param else [])
+    root = tl_root / "TensErLEED"
+    key = cache_key(program, key_files(), root, extra)
 
-
-def _build_entry(tl_root, program, param, flags, use_make, use_param, key, tree_key):
-    """Build program into CACHE/<program>-<key>/ (caller holds its lock)."""
-    out = CACHE / f"{program}-{key}"
-    exe = out / program
-    _remove_stale_tmp_dirs()
-    tmp = CACHE / f"{program}-{key}.tmp{os.getpid()}"
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
-    try:
-        build_in(tmp, tl_root, program, param, flags, use_make, use_param)
-        if tree_key() != key:
-            raise BuildError(f"the source tree {tl_root / 'TensErLEED'} (or PARAM) "
-                             "changed during the build")
-        if not (tmp / program).is_file():
-            raise BuildError("no executable produced")
-    except BaseException as err:
-        # keep only the log of a failed build, never a half-built directory
-        failed_log = CACHE / f"failed-{program}-{key}.log"
-        if (tmp / "build.log").is_file():
-            shutil.copy(tmp / "build.log", failed_log)
-        shutil.rmtree(tmp, ignore_errors=True)
-        if isinstance(err, BuildError):
-            raise BuildError(f"{err}\n(build log: {failed_log})") from err
-        raise
-    tmp.rename(out)
-    return exe
+    def fill(tmp):
+        """Build into tmp; on failure keep only the build log, as failed-<entry>.log."""
+        try:
+            build_in(tmp, tl_root, program, param, flags, use_make, use_param)
+            if cache_key(program, key_files(), root, extra) != key:
+                raise BuildError(f"the source tree {root} (or PARAM) "
+                                 "changed during the build")
+            if not (tmp / program).is_file():
+                raise BuildError("no executable produced")
+        except BaseException as err:
+            failed_log = CACHE / f"failed-{program}-{key}.log"
+            if (tmp / "build.log").is_file():
+                shutil.copy(tmp / "build.log", failed_log)
+            if isinstance(err, BuildError):
+                raise BuildError(f"{err}\n(build log: {failed_log})") from err
+            raise
+    return cached_dir(program, key_files(), root, extra, fill) / program

@@ -4,6 +4,9 @@ make_rfacsb_routine_values.py and make_refcalc_routine_values.py each build
 a legacy driver against the baseline at every flag set of FLAG_SETS, run it
 on their input sets, require all builds to give the same results, and write
 the inputs and results to a values.json that their tier-1 test reads.
+Arrays marked live (results that depend on the BLAS/LAPACK the driver runs
+with) are written without results: their case lists them under "live", and
+its test runs the legacy driver itself for them.
 """
 
 __authors__ = (
@@ -15,6 +18,7 @@ __license__ = 'GPLv3+'
 
 import argparse
 import json
+import os
 import struct
 import subprocess
 import sys
@@ -22,6 +26,7 @@ import tempfile
 from pathlib import Path
 
 from generate.baseline_tree import GeneratorError, check_baseline_tree
+from harness.runner import THREAD_ENV
 
 FLAG_SETS = ("-O2", "-O0")
 
@@ -33,9 +38,10 @@ def hex32(x):
 
 
 def run_driver(exe, stdin):
-    """Run the driver exe on the stdin lines; return its stdout."""
+    """Run the driver exe on the stdin lines (with THREAD_ENV); return its stdout."""
     return subprocess.run([str(exe)], input="\n".join(stdin) + "\n", text=True,
-                          capture_output=True, check=True).stdout
+                          capture_output=True, check=True,
+                          env={**os.environ, **THREAD_ENV}).stdout
 
 
 def results_per_flag_set(build, run, cases, workdir):
@@ -57,12 +63,16 @@ def results_per_flag_set(build, run, cases, workdir):
     return rows
 
 
-def generate(argv, description, build, run, cases, values, legacy_source):
+def generate(argv, description, build, run, cases, values, legacy_source,
+             live=lambda case_id: ()):
     """Parse the command line, check the baseline tree, and write values.
 
     build(tl, workdir, flags) builds the legacy driver against the baseline
     tree tl; run(exe, stdin) returns the result of one case; legacy_source
-    names the legacy file the driver links, for the "source" entry."""
+    names the legacy file the driver links, for the "source" entry.
+    live(case_id) names the arrays of a case that are compared live: they
+    are left out of its "expected" (their results are still computed, for
+    the flag-set check) and listed under "live"."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--tl-root", required=True, type=Path,
                         help="baseline TensErLEED tree")
@@ -79,9 +89,25 @@ def generate(argv, description, build, run, cases, values, legacy_source):
     values.write_text(json.dumps({
         "source": f"legacy {legacy_source} at {commit[:7]}, {compiler}, "
                   f"flags {' and '.join(FLAG_SETS)} (identical)",
-        "cases": [{"id": case_id, "covers": what, "stdin": stdin, "expected": result}
+        "cases": [_case_entry(case_id, what, stdin, result, live(case_id))
                   for case_id, what, stdin, result in rows]}, indent=1) + "\n")
     print(f"wrote {len(rows)} cases to {values}")
+
+
+def _case_entry(case_id, what, stdin, result, live_arrays):
+    """The values.json entry of a case: its results, or with live_arrays
+    (result is then a dict of arrays) the results of the other arrays and
+    the list of live_arrays under "live"."""
+    entry = {"id": case_id, "covers": what, "stdin": stdin, "expected": result}
+    if not live_arrays:
+        return entry
+    missing = [name for name in live_arrays if name not in result]
+    if missing:
+        raise GeneratorError(f"{case_id}: live arrays {missing} are not in its results")
+    entry["expected"] = {name: summary for name, summary in result.items()
+                         if name not in live_arrays}
+    entry["live"] = list(live_arrays)
+    return entry
 
 
 def main(generate_values):

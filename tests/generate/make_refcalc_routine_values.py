@@ -27,6 +27,16 @@ beam lists are those of the tier-1 cases in tests/cases. Arrays are
 summarized by their count, a SHA-256 of their bits and their first values
 (harness/routine_blocks.py).
 
+The results RA and TA of the cases of RSMF_SIMPLE (ids starting with
+LIVE_PREFIX) are live: of the routines driven here only RSMF_SIMPLE calls
+BLAS/LAPACK (CGETRF, CGETRS), and its RA and TA differ in the last bit
+between OpenBLAS and the reference BLAS (all other arrays, of these and of
+all other cases, are bit-identical under both). values.json holds the other
+arrays of these cases and lists RA and TA under "live"; the tier-1 test
+builds this driver from the baseline tree (build_legacy_driver) and
+compares RA and TA with its output, run with the same BLAS/LAPACK as the
+driver under test.
+
 Result of the -O2 versus -O0 comparison (gfortran 15.2): every array of
 every case is bit-identical in the two builds; the generator stops with an
 error otherwise.
@@ -58,6 +68,10 @@ TESTS_DIR = Path(__file__).parents[1]
 LEGACY_DRIVER = Path(__file__).with_name("refcalc_routines_legacy_driver.f")
 VALUES = TESTS_DIR / "tier1" / "refcalc_routines" / "values.json"
 LINK = ["-llapack", "-lblas"]
+# cases with legacy results that depend on the BLAS/LAPACK the driver runs
+# with, and those results
+LIVE_PREFIX = "rsmf_"
+LIVE_ARRAYS = ("RA", "TA")
 LMAX_RANGE = range(2, 19)  # the range of the DATA tables NCA and NLMS
 
 _F32 = np.float32
@@ -367,6 +381,16 @@ _RSMF_CASES = [
      _IR, 2, 2, 1, 7, 100.0, (0.0, 0.0), "O"),
     ("cu111_oblique_substrate", "hexagonal lattice, IDEG 3, oblique incidence, "
      "substrate-type layer", _CU, 3, 1, 1, 5, 80.0, (15.0, 20.0), "B"),
+    # 2D superstructure: four sublattices (one at 45 degrees) and beam sets
+    # whose first beams are fractional, so that the sublattice phase of
+    # every set has both components (bk2, bk3) and sums four terms
+    ("square_p2x2_sets_substrate", "p(2x2) square, IDEG 4, four beam sets (first "
+     "beams (1/2, 1/2) etc.), substrate-type layer of four sublattices",
+     {**_AG_OBL, "cells": [*_AG_OBL["cells"][:2], [5.76, 0.0], [0.0, 5.76]],
+      "sets": [[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)],
+               [(0.5, 0.0), (-0.5, 0.0)], [(0.0, 0.5), (0.0, -0.5)],
+               [(0.5, 0.5), (-0.5, 0.5), (0.5, -0.5), (-0.5, -0.5)]]},
+     4, 2, 2, 6, 100.0, (12.0, 33.0), "B"),
 ]
 
 # (id, what it covers, stdin lines of the driver)
@@ -418,8 +442,9 @@ _ZERO_DEL = ("tscatf_vibrating", "DEL_01", 14, 2)
 _NONZERO_DEL = ("tscatf_no_early_exit", "DEL_01", 0, 6)
 
 
-def _build(tl, workdir, flags):
-    """Compile the legacy driver with the baseline lib.tleed.f; return the executable."""
+def build_legacy_driver(tl, workdir, flags):
+    """Compile the legacy driver with the lib.tleed.f of the tree tl into
+    workdir; return the executable."""
     lib = workdir / f"lib{flags}.o"
     exe = workdir / f"legacy{flags}"
     subprocess.run(["gfortran", flags, "-w", "-I", str(tl / "TensErLEED" / "src"),
@@ -430,7 +455,7 @@ def _build(tl, workdir, flags):
     return exe
 
 
-def _run(exe, stdin):
+def run_legacy_driver(exe, stdin):
     """Run the driver on the stdin lines; return the summary of its output."""
     return summarize(run_driver(exe, stdin))
 
@@ -449,8 +474,9 @@ def _check_pstemp_exit():
 
 def _generate(argv=None):
     """Generate tier1/refcalc_routines/values.json from the baseline."""
-    generate(argv, __doc__.splitlines()[0], _build, _run, CASES, VALUES,
-             "lib/lib.tleed.f")
+    generate(argv, __doc__.splitlines()[0], build_legacy_driver, run_legacy_driver,
+             CASES, VALUES, "lib/lib.tleed.f",
+             live=lambda case_id: LIVE_ARRAYS if case_id.startswith(LIVE_PREFIX) else ())
     _check_pstemp_exit()
 
 

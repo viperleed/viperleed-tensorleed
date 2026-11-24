@@ -32,8 +32,9 @@ _CACHE = Path(__file__).parents[1] / ".build-cache"
 _FAILURE_MARKERS = ("Fortran runtime error", "Program received signal",
                     "Error termination")
 _NONZERO_STOP = re.compile(r"^\s*STOP\s+0*[1-9]\d*\s*$", re.M)
-_THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
-               "MKL_NUM_THREADS": "1"}
+# environment of every program run: BLAS/LAPACK and OpenMP on one thread
+THREAD_ENV = {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1",
+              "MKL_NUM_THREADS": "1"}
 # glibc fills newly allocated memory with 0x7f bytes, also large blocks it
 # takes from fresh, zeroed pages (mmap), so that a read of memory the
 # program never wrote shows in its outputs
@@ -112,7 +113,7 @@ def run_program(exe, cwd, stdin_path, timeout, env=None, args=()):
     env: extra environment variables for the program. stdout/stderr are kept in cwd/.stdout and cwd/.stderr. CPU times and
     peak RSS (KiB) are taken from the child's rusage (os.wait4).
     """
-    env = dict(os.environ, **_THREAD_ENV, **(env or {}))
+    env = dict(os.environ, **THREAD_ENV, **(env or {}))
     cwd = Path(cwd).resolve()  # the launcher runs inside cwd
     out_path, err_path = cwd / ".stdout", cwd / ".stderr"
     usage_path = cwd / ".rusage"

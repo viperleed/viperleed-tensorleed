@@ -381,3 +381,37 @@ def test_toolchain_keeps_full_compiler_version(mocker):
     key1 = build.toolchain()
     version = "GNU Fortran 15.2\nline 2 changed\n"
     assert build.toolchain() != key1
+
+
+def test_cached_dir_fills_an_entry_once(tmp_path, mocker):
+    """cached_dir returns the filled entry and reuses it; no temporary directory stays."""
+    cache = tmp_path / "cache"
+    mocker.patch.object(build, "CACHE", cache)
+    key_file = tmp_path / "input"
+    key_file.write_text("a")
+    fills = []
+
+    def fill(directory):
+        fills.append(directory)
+        (directory / "out").write_text("built")
+    entry = build.cached_dir("thing", [key_file], tmp_path, "x", fill)
+    assert entry.parent == cache and entry.name.startswith("thing-")
+    assert (entry / "out").read_text() == "built"
+    assert build.cached_dir("thing", [key_file], tmp_path, "x", fill) == entry
+    assert len(fills) == 1
+    assert [p.name for p in cache.iterdir()] == [entry.name]
+
+
+def test_cached_dir_failed_fill_leaves_no_entry(tmp_path, mocker):
+    """A fill that raises leaves nothing in the cache, and the next call fills again."""
+    cache = tmp_path / "cache"
+    mocker.patch.object(build, "CACHE", cache)
+
+    def fail(directory):
+        (directory / "half").write_text("")
+        raise RuntimeError("fill failed")
+    with pytest.raises(RuntimeError, match="fill failed"):
+        build.cached_dir("thing", [], tmp_path, "x", fail)
+    assert not list(cache.iterdir())
+    entry = build.cached_dir("thing", [], tmp_path, "x", lambda d: None)
+    assert entry.is_dir()
