@@ -26,7 +26,8 @@ for several beam sets (RA, TA, AMULT, CYLM, XEVST, XODST); the composite
 layer: SRTLAY with GHMAT (GHD, SH, SB, GHSC), TAUMAT (XMT, CXMTXT) and
 RTINV_SIMPLE (THMAT, TAUY_SIMPLE, MFOLT_SIMPLE; R/T top and bottom, TSTORE)
 on sublayer stacks of Ir(100)-(2x1)-O (three sublayers; coplanar sublayers
-in arrays for three; four sublayers with equal interplanar vectors;
+in arrays for three; four sublayers with equal interplanar vectors, and with
+vectors that differ only in z;
 sublayers out of order along the normal), at normal and oblique incidence,
 for LMAX < MLMAX, for one call over all beams and for one call per beam set
 (offsets NA, NS > 0), as overlayer and as bulk layer; and FMAT with a
@@ -473,6 +474,16 @@ _THICK_LAYERS = _read_layers("ir100_2x1_o_thick", "E118_L07")
 # a composite bulk layer: two sublayers of the substrate 2.7116 Angstrom
 # square cell, 1.9174 Angstrom apart along the normal, shifted by half a cell
 _BULK_LAYERS = [{"lay": 2, "subs": [(3, 0.0, 0.0, 0.0), (3, 1.9174, 1.3558, 1.3558)]}]
+# the thick layer with its last sublayer moved to (1.9174, 0, 2.7116): the
+# interplanar vectors to it and to the one before differ only in z
+_Z_ONLY_LAYERS = [
+    *_THICK_LAYERS[:1],
+    {**_THICK_LAYERS[1], "subs": [*_THICK_LAYERS[1]["subs"][:3],
+                                  (3, 1.9174, 0.0, 2.7116)]},
+    *_THICK_LAYERS[2:],
+]
+# a composite bulk layer of two coplanar sublayers (direct lattice sum only)
+_BULK_COPLANAR_LAYERS = [{"lay": 2, "subs": [(3, 0.0, 0.0, 0.0), (3, 0.0, 1.3558, 1.3558)]}]
 _IR_LATTICE = {"ideg": 2, "nl1": 2, "nl2": 1}
 # (id, what, input data, layer types, setup): setup holds the layer type, LMAX
 # and MLMAX (the PARAM size: it sets L2M = 2 * MLMAX + 1), MNSUB (the size of
@@ -498,6 +509,15 @@ _COMPOSITE_SETUPS = [
      "(NGEQ), oblique incidence",
      _IR, _THICK_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
                               angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_bulk_coplanar", "a bulk-type layer of two coplanar sublayers (direct "
+     "lattice sum only), oblique incidence, in arrays for three sublayers",
+     _IR, _BULK_COPLANAR_LAYERS, dict(layer=1, lmax=6, mlmax=6, mnsub=3, ev=100.0,
+                                      angles=(20.0, 10.0), mode="O", **_IR_LATTICE)),
+    ("ir100_thick_z_only_vectors", "the same four sublayers with the last one moved so "
+     "that some interplanar vectors differ only in the third component, oblique "
+     "incidence",
+     _IR, _Z_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                               angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
     ("ir100_lmax5_mlmax7", "the top layer at LMAX 5 with arrays for MLMAX 7 "
      "(LMAX < MLMAX), oblique incidence",
      _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=7, mnsub=3, ev=90.0, angles=(12.0, 33.0),
@@ -607,12 +627,15 @@ def run_legacy_driver(exe, stdin):
 
 def _check_composite_cases():
     """Raise GeneratorError unless the GHMAT cases show what they are for:
-    equal interplanar vectors (NGEQ), sublayers sorted by SRTLAY (NORD), and
-    coplanar sublayers (the x component of the interplanar vector is zero)."""
+    equal interplanar vectors (NGEQ), interplanar vectors that differ only in
+    the third component and are not equal (all NGEQ zero), sublayers sorted by
+    SRTLAY (NORD), and coplanar sublayers (the x component of the interplanar
+    vector is zero)."""
     cases = {case["id"]: case["expected"] for case in json.loads(VALUES.read_text())["cases"]}
     heads = lambda case_id, array: cases[f"ghmat_ir100_{case_id}"][array]["head"]
     checks = [
         ("thick_equal_vectors", any(n != "0" for n in heads("thick_equal_vectors", "NGEQ"))),
+        ("thick_z_only_vectors", all(n == "0" for n in heads("thick_z_only_vectors", "NGEQ"))),
         ("unsorted_oblique", heads("unsorted_oblique", "NORD") != ["1", "2", "3"]),
         ("coplanar", heads("coplanar", "DRL")[0] == "00000000"),
         ]
