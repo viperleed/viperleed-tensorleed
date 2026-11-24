@@ -248,18 +248,25 @@ def _sites(fin):
     return sites
 
 
-def _layer_sites(fin):
-    """{layer type: [site type of each Bravais sublayer]}."""
-    layers, cur = {}, None
+def _layer_types(fin):
+    """{layer type: {"lay": LAY, "nsub": number of Bravais sublayers,
+    "sites": [site type of each Bravais sublayer]}}."""
+    types, cur = {}, None
     for line in fin.splitlines():
         m = re.match(r"^-\s+layer type (\d+)", line)
         if m:
-            cur = layers.setdefault(int(m.group(1)), [])
-        elif cur is not None and re.search(r"Atom N=\d+", line):
-            cur.append(int(line.split()[0]))
+            cur = types.setdefault(int(m.group(1)), {"sites": []})
+        elif cur is None:
+            continue
+        elif "LAY = " in line:
+            cur["lay"] = int(line.split()[0])
+        elif "number of Bravais sublayers" in line:
+            cur["nsub"] = int(line.split()[0])
+        elif re.search(r"Atom N=\d+", line):
+            cur["sites"].append(int(line.split()[0]))
         elif "define bulk stacking" in line:
             cur = None
-    return layers
+    return types
 
 
 def _n_beam_sets(fin):
@@ -267,6 +274,22 @@ def _n_beam_sets(fin):
     lines = fin.splitlines()
     tst = next(i for i, l in enumerate(lines) if "TST" in l)
     return sum(1 for l in lines[6:tst] if re.fullmatch(r"\s*\d+\s*", l))
+
+
+def _n_bravais_tensor_layers(fin):
+    """Layers of the stacking with one Bravais sublayer, overlayer periodicity
+    (LAY = 1) and tensor output."""
+    types = _layer_types(fin)
+    stack, cur_layer = [], None
+    for line in fin.splitlines():
+        m = re.search(r"layer \d+: layer type (\d+)", line)
+        if m:
+            cur_layer = int(m.group(1))
+        elif "Tensor output is required" in line and cur_layer is not None:
+            stack.append((cur_layer, int(line.split()[0])))
+            cur_layer = None
+    return sum(1 for t, flag in stack
+               if flag and types[t].get("nsub") == 1 and types[t].get("lay") == 1)
 
 
 def check_coverage(fin, checks):
@@ -283,8 +306,8 @@ def check_coverage(fin, checks):
         elif check == "nsub_ge_4":
             ok = any(n >= 4 for n in nsub)
         elif check == "bulk_composite":
-            lay = _ints(_fin_lines(fin, "LAY = "))
-            ok = any(l == 2 and n > 1 for l, n in zip(lay, nsub))
+            ok = any(t.get("lay") == 2 and t.get("nsub", 0) > 1
+                     for t in _layer_types(fin).values())
         elif check.startswith("tensor_layers="):
             want = int(check.split("=")[1])
             flags = _ints(_fin_lines(fin, "Tensor output is required"))
@@ -299,8 +322,9 @@ def check_coverage(fin, checks):
         elif check == "bulk_layers_distinct_sites":
             (top,) = _fin_lines(fin, "top layer of bulk unit")
             (bot,) = _fin_lines(fin, "bottom layer of bulk unit")
-            sites = _layer_sites(fin)
-            ok = sites[int(top.split()[0])] != sites[int(bot.split()[0])]
+            types = _layer_types(fin)
+            ok = (types[int(top.split()[0])]["sites"]
+                  != types[int(bot.split()[0])]["sites"])
         elif check == "two_elements":
             ok = len({el for site in _sites(fin) for el, _ in site}) >= 2
         elif check == "mixed_site":
@@ -311,8 +335,12 @@ def check_coverage(fin, checks):
             v1, v2 = ([float(x) for x in l.split()[:2]] for l in (a1, a2))
             cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (math.hypot(*v1) * math.hypot(*v2))
             ok = abs(abs(cos) - 0.5) < 1e-4
-        elif check == "beam_sets_gt_1":
-            ok = _n_beam_sets(fin) > 1
+        elif check.startswith("beam_sets="):
+            ok = _n_beam_sets(fin) == int(check.split("=")[1])
+        elif check.startswith("beam_sets>="):
+            ok = _n_beam_sets(fin) >= int(check.split(">=")[1])
+        elif check.startswith("bravais_tensor_layers>="):
+            ok = _n_bravais_tensor_layers(fin) >= int(check.split(">=")[1])
         else:
             raise GeneratorError(f"unknown coverage check {check!r}")
         results[check] = ok

@@ -5,6 +5,6 @@
 #     the test fails ("DID NOT RAISE") and this list must be updated;
 # (2) the same run to finish cleanly with all checks except bounds
 #     (-fcheck=all,no-bounds), so new FP traps etc. in these paths are caught.
-# Line numbers refer to baseline v2.1.0.
+# Line numbers refer to baseline v2.1.1.
 # What qualifies for this list and how to add or remove an entry:
 # tests/README.md, 'Rules'.

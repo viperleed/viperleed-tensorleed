@@ -2453,8 +2453,8 @@ C    the sake of compatibility with van Hove / Tong book only.
      &                 GH, LMG, RG, RG_PERP, TS, LMN, TG, LM2N, VT,
      &                 CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS, NORD,
      &                 NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2, TSTORE)
-      COMPLEX XEV, R_TOP, T_TOP, R_BOT, T_BOT, CYLM, AMULT, XA, YA, ST,
-     +        CF, CT, CI, RU, CZ, AM, FLMS, FLM, MFOLT_RT
+      COMPLEX XEV, R_TOP, T_TOP, R_BOT, T_BOT, CYLM, AMULT, XA, ST,
+     +        CI, RU, CZ, AM, FLMS, FLM, MFOLT_RT
       COMPLEX SQRT,EXP
       COMPLEX TH(LMNI, LMNI), TSTORE(2, LMN, NT)
       COMPLEX TAU(LMT, LEV), GH(LMG, LMMAX), RG(2, NLAY, N)            ! May be worth to have 2 as last?
@@ -2532,8 +2532,13 @@ CVB
 !     Prepare TH for inversion (Gaussian elimination)
       CALL CGETRF(LMNI, LMNI, TH, LMNI, IPL, INFO)
 
-      YA = CMPLX(2.0 * E, - 2.0 * VPI + 0.000001)
-      YA = SQRT(YA)
+!     If NEW=1 (i.e. new energy) compute new spherical harmonics for
+!     the beam directions. NB: NEW is always == 1! AMULT is overwritten
+!     below.
+      IF (NEW.EQ.1) THEN
+        CALL BEAMS_YLM(CYLM, AMULT, PQ, NT, N, NA, E, AK2, AK3, VPI,
+     &                 LMAX, LMMAX, VT)
+      ENDIF
       DO IG = 1, N
 !       Generate plane-wave propagators for use as prefactors for GH and TH
         JG = IG + NA
@@ -2548,25 +2553,9 @@ CVB
           RG(1, I, IG) = EXP(CI * (XA * POSS(I, 1) + X))
           RG(2, I, IG) = EXP(CI * (XA * POSS(I, 1) - X))
         ENDDO
-!       If NEW=1 (i.e. new energy) compute new spherical harmonics for
-!       the beam directions, using SPHRM. NB: NEW is always == 1!
         IF (NEW.EQ.1) THEN
-          B = 0.0
-          CF = RU
-          IF (C.GT.1.0E-7) THEN
-            B = SQRT(C)               ! Norm of in-plane wave vector
-            CF = CMPLX(BK2/B, BK3/B)  ! Complex azimuthal incidence angle
-          ENDIF
-          CT = XA/YA  ! Complex cosine of polar incidence angle
-          ST = B/YA   ! Complex sine of polar incidence angle
-
 !         Generate prefactor of reflection and transmission matrix elements
           AMULT(IG) =  - 16.0 * PI * PI * CI / (TV * XA)
-!         Prepare and store the spherical harmonics
-          CALL  SPHRM_MOD(LMAX, VT, LMMAX, CT, ST, CF)
-          DO K = 1, LMMAX
-            CYLM(IG, K) = VT(K)
-          ENDDO
         ENDIF
       ENDDO
 
@@ -2729,6 +2718,65 @@ C   Y= OUTPUT COMPLEX SPHERICAL HARMONICS.
           AA = BB1
           ANOR = ANOR*SQRT((1.0 + 1.0/(BN - 0.5))
      +                     * ((BN - BM)/(BN + BM)))
+        ENDDO
+      ENDDO
+
+      RETURN
+      END
+
+!-----------------------------------------------------------------------
+!  SUBROUTINE BEAMS_YLM computes the spherical harmonics of the
+!  propagation directions inside the crystal of the N beams
+!  N_OFFSET+1..N_OFFSET+N in PQ and stores them in rows 1..N of CYLM.
+!  Used by RSMF_SIMPLE and RTINV_SIMPLE for one beam set, and by the
+!  main program of ref-calc for all NT beams before FINAL1.
+!
+!   CYLM= OUTPUT: CYLM(IG,K) IS THE K-TH SPHERICAL HARMONIC OF BEAM
+!    N_OFFSET+IG; ROWS N+1..NT ARE LEFT UNCHANGED.
+!   XA= OUTPUT: COMPLEX PERPENDICULAR WAVE-VECTOR COMPONENT OF BEAM
+!    N_OFFSET+IG INSIDE THE CRYSTAL.
+!   PQ= LIST OF BEAMS G.
+!   NT= TOTAL NO. OF BEAMS IN MAIN PROGRAM AT CURRENT ENERGY.
+!   N= NO. OF BEAMS TO COMPUTE.
+!   N_OFFSET= OFFSET OF THE FIRST OF THEM IN LIST PQ.
+!   E,VPI= CURRENT COMPLEX ENERGY.
+!   AK2,AK3= PARALLEL COMPONENTS OF PRIMARY INCIDENT K-VECTOR.
+!   LMAX= LARGEST VALUE OF L.
+!   LMMAX= (LMAX+1)**2.
+!   YLM= WORKING SPACE.
+      SUBROUTINE BEAMS_YLM(CYLM, XA, PQ, NT, N, N_OFFSET, E, AK2, AK3,
+     &                     VPI, LMAX, LMMAX, YLM)
+
+      IMPLICIT NONE
+      INTEGER, INTENT(IN) :: NT, N, N_OFFSET, LMAX, LMMAX
+      REAL, INTENT(IN) :: PQ(2, NT), E, AK2, AK3, VPI
+      COMPLEX, INTENT(INOUT) :: CYLM(NT, LMMAX)
+      COMPLEX, INTENT(OUT) :: XA(N), YLM(LMMAX)
+
+      INTEGER IG, JG, K
+      REAL BK2, BK3, C, B
+      COMPLEX YA, CT, ST, CF
+
+      YA = CMPLX(2.0 * E, - 2.0 * VPI + 0.000001)
+      YA = SQRT(YA)
+      DO IG = 1, N
+        JG = IG + N_OFFSET
+        BK2 = PQ(1, JG) + AK2
+        BK3 = PQ(2, JG) + AK3
+        C = BK2 * BK2 + BK3 * BK3
+        XA(IG) = CMPLX(2.0 * E - C, - 2.0 * VPI + 0.000001)
+        XA(IG) = SQRT(XA(IG))
+        B = 0.0
+        CF = CMPLX(1.0, 0.0)
+        IF (C.GT.1.0E-7) THEN ! off-normal beam
+          B = SQRT(C)
+          CF = CMPLX(BK2/B, BK3/B)
+        ENDIF
+        CT = XA(IG)/YA
+        ST = B/YA
+        CALL SPHRM_MOD(LMAX, YLM, LMMAX, CT, ST, CF)
+        DO K = 1, LMMAX
+          CYLM(IG, K) = YLM(K)
         ENDDO
       ENDDO
 

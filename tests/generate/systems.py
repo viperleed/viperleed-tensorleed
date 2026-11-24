@@ -84,6 +84,51 @@ _CU111_IVBEAMS = """  h         k
   2.000000   0.000000
 """
 
+# Ir(100) with O adsorbates, defined here so that the layer structure is
+# chosen freely: scale a/sqrt(2) = 2.7116 A, Ir planes 0.1 c = 1.917 A apart
+# (c = 7.0710678 x scale), alternately shifted by half a surface vector.
+_IR_SCALE = 2.7116
+_IR_PLANES = 7
+# cuts between the Ir planes; the cases add the cuts around their O atoms
+_CUTS_LOW = "0.15 0.25 0.35 0.45 0.55"
+
+
+def _ir100_poscar(title, ncell, adatoms):
+    """POSCAR of an (ncell x 1) cell: seven Ir planes (the top one at z = 0.7)
+    and O atoms at adatoms = [(x in units of the scale, z in units of c)]."""
+    ir = []
+    for i in range(_IR_PLANES):
+        z = 0.7 - 0.1 * i
+        xs, y = ([n + 0.5 for n in range(ncell)], 0.0) if i % 2 == 0 else (
+            [float(n) for n in range(ncell)], 0.5)
+        ir += [(x / ncell, y, z) for x in xs]
+    o = [(x / ncell, 0.0, z) for x, z in adatoms]
+    lines = [title, f"  {_IR_SCALE}",
+             f"    {float(ncell):.16f}    0.0000000000000000    0.0000000000000000",
+             "    0.0000000000000000    1.0000000000000000    0.0000000000000000",
+             "    0.0000000000000000    0.0000000000000000    7.0710678000000000",
+             "    O   Ir", f"    {len(o)}   {len(ir)}", "Direct"]
+    lines += [f"  {x:.10f}  {y:.10f}  {z:.4f}" for x, y, z in o + ir]
+    return "\n".join(lines) + "\n"
+
+
+_IR_O_PARAMETERS = """RUN = 0
+V0_IMAG = 5.0
+BULK_LIKE_BELOW = 0.35
+SITE_DEF Ir = surf top({n_surf})
+SITE_DEF O = ads top(1)
+T_DEBYE = 420
+T_EXPERIMENT = 100
+VIBR_AMP_SCALE = *surf 1.3
+"""
+
+
+def _ivbeams(nums, den):
+    """IVBEAMS text with the beams (n/den, 0) for n in nums, (0, 1) and (1, 1)."""
+    rows = [(n / den, 0.0) for n in nums] + [(0.0, 1.0), (1.0, 1.0)]
+    return "  h         k\n" + "".join(f"{h:10.6f} {k:10.6f}\n" for h, k in rows)
+
+
 SYSTEMS = {
     "ag100": SystemDef(
         "ag100", _AG, dict(_AG_BASE),
@@ -132,7 +177,7 @@ SYSTEMS = {
     "ir100_2x1_o": SystemDef(
         "ir100_2x1_o", _IR,
         {"THEO_ENERGIES": "50 170 4", "LMAX": "6-8"},
-        must_cover=["nsub_gt_1", "beam_sets_gt_1", "two_elements"],
+        must_cover=["nsub_gt_1", "beam_sets>=2", "two_elements"],
         covers=["composite-layer", "beeby", "superstructure", "several-beam-sets",
                 "two-elements", "mideg2", "energy-dependent-lmax", "tensors"],
         description="Ir(100)-(2x1)-O, composite layers, several beam sets"),
@@ -150,7 +195,7 @@ SYSTEMS = {
          "BULK_REPEAT": "[0 0 3.83478]",
          "LAYER_CUTS": "0.25 0.35 0.45 0.55 0.73",
          "N_BULK_LAYERS": "1"},
-        must_cover=["nsub_ge_4", "bulk_composite", "beam_sets_gt_1", "two_elements"],
+        must_cover=["nsub_ge_4", "bulk_composite", "beam_sets>=2", "two_elements"],
         covers=["composite-layer", "beeby", "equal-interplanar-vectors",
                 "composite-bulk-layer", "rtinv-substrate", "superstructure",
                 "several-beam-sets", "two-elements", "energy-dependent-lmax", "tensors"],
@@ -163,6 +208,27 @@ SYSTEMS = {
         covers=["bravais", "fcc111", "hexagonal", "lateral-bulk-shift", "tensors",
                 "layer-doubling"],
         description="Cu(111)-(1x1), fcc stacking (non-equivalent mirrored bulk shift)"),
+    "ir100_3x1_o": SystemDef(
+        "ir100_3x1_o", None, {"THEO_ENERGIES": "50 110 4", "LMAX": "5-7",
+                                "LAYER_CUTS": f"{_CUTS_LOW} 0.65 0.73"},
+        base_files={"POSCAR": _ir100_poscar("Ir(100)-3x1_O", 3, [(0.0, 0.76)]),
+                    "PARAMETERS": _IR_O_PARAMETERS.format(n_surf=3),
+                    "IVBEAMS": _ivbeams([0, 1, 2, 3, 4], 3)},
+        must_cover=["beam_sets=3", "bravais_tensor_layers>=1", "two_elements"],
+        covers=["composite-layer", "superstructure", "several-beam-sets",
+                "two-elements", "energy-dependent-lmax", "tensors"],
+        description="Ir(100)-(3x1)-O, three beam sets, Bravais tensor layer (O) above composite layers"),
+    "ir100_2x1_oo": SystemDef(
+        "ir100_2x1_oo", None, {"THEO_ENERGIES": "50 110 4", "LMAX": "5-7",
+                               "LAYER_CUTS": f"{_CUTS_LOW} 0.625 0.675 0.73"},
+        base_files={"POSCAR": _ir100_poscar("Ir(100)-2x1_OO", 2,
+                                            [(0.0, 0.76), (1.0, 0.65)]),
+                    "PARAMETERS": _IR_O_PARAMETERS.format(n_surf=2),
+                    "IVBEAMS": _ivbeams([0, 1, 2, 3], 2)},
+        must_cover=["beam_sets=2", "bravais_tensor_layers>=2", "two_elements"],
+        covers=["composite-layer", "superstructure", "several-beam-sets",
+                "two-elements", "energy-dependent-lmax", "tensors"],
+        description="Ir(100)-(2x1) with O at two heights, two Bravais tensor layers"),
 }
 
 # Large systems for the opt-in benchmark (tests/benchmark): inputs only, two

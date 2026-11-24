@@ -17,7 +17,7 @@ module bravais_layer
   private
 
   public :: sublattice_equivalences, lattice_sums, spherical_harmonics
-  public :: bravais_layer_matrices
+  public :: bravais_layer_matrices, beams_ylm
 
   !> Small number to compare the phase factors of sublattice vectors
   !! (the legacy argument EPSD).
@@ -425,6 +425,72 @@ contains
       lm = lm + l + l + 1
     end do
   end subroutine spherical_harmonics
+
+  !> Computes the spherical harmonics of the propagation directions inside
+  !! the crystal of the beams n_offset + 1 ... n_offset + n of pq (legacy
+  !! BEAMS_YLM) and stores them in rows 1 ... n of cylm.
+  !!
+  !! Rows n + 1 ... nt of cylm are left unchanged. xa(ig) returns the
+  !! complex perpendicular wave-vector component of beam n_offset + ig inside
+  !! the crystal. Used by bravais_layer_matrices.
+  !!
+  !! The legacy copy in lib.tleed.f is kept for the legacy callers in
+  !! ref-calc.f (RTINV_SIMPLE and the call before FINAL1) until they are
+  !! ported.
+  subroutine beams_ylm(cylm, xa, pq, nt, n, n_offset, point, lmax, lmmax, ylm)
+    !> Total number of beams at the current energy
+    integer, intent(in) :: nt
+    !> Number of beams to compute
+    integer, intent(in) :: n
+    !> Offset of the first of them in the list pq
+    integer, intent(in) :: n_offset
+    !> Highest angular momentum
+    integer, intent(in) :: lmax
+    !> (lmax + 1)**2
+    integer, intent(in) :: lmmax
+    !> Beams (reciprocal lattice vectors) at the current energy
+    real(sp), intent(in) :: pq(2, nt)
+    !> Energy, parallel momentum of the incident beam, imaginary potential
+    type(energy_point), intent(in) :: point
+    !> Spherical harmonics of the beams, (beam within its set, (L, M)); rows
+    !! 1 ... n are set, the others are kept
+    complex(sp), intent(inout) :: cylm(nt, lmmax)
+    !> Perpendicular wave-vector component of the beams
+    complex(sp), intent(out) :: xa(n)
+    !> Work space
+    complex(sp), intent(out) :: ylm(lmmax)
+
+    integer :: ig, jg, k
+    real(sp) :: bk2, bk3, c, b
+    complex(sp) :: ya, ct, st, cf
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+
+    ya = cmplx(2.0_sp * point%energy, &
+               -2.0_sp * point%imaginary_potential + 0.000001_sp, sp)
+    ya = sqrt(ya)
+    do ig = 1, n
+      jg = ig + n_offset
+      bk2 = pq(1, jg) + point%k_parallel(1)
+      bk3 = pq(2, jg) + point%k_parallel(2)
+      c = bk2 * bk2 + bk3 * bk3
+      xa(ig) = cmplx(2.0_sp * point%energy - c, &
+                     -2.0_sp * point%imaginary_potential + 0.000001_sp, sp)
+      xa(ig) = sqrt(xa(ig))
+      b = 0.0_sp
+      cf = ru
+      if (c > 1.0e-7_sp) then  ! off-normal beam
+        b = sqrt(c)
+        cf = cmplx(bk2 / b, bk3 / b, sp)
+      end if
+      ct = xa(ig) / ya
+      st = b / ya
+      call spherical_harmonics(lmax, ylm, lmmax, ct, st, cf)
+      do k = 1, lmmax
+        cylm(ig, k) = ylm(k)
+      end do
+    end do
+  end subroutine beams_ylm
+
   !> Reflection and transmission matrices of a single Bravais-lattice layer
   !! for the beams of one beam set (legacy RSMF_SIMPLE), by Pendry's
   !! formula.
@@ -438,12 +504,12 @@ contains
   !! The beam-space matrices are packed with leading dimension nt, the
   !! number of beams at the current energy, into the leading nt * nt
   !! elements of the (larger) arrays of the caller; the dummies are
-  !! explicit-shape for that reason. The rows of amult and cylm are indexed
-  !! by the beam within its set, without n_offset. With several beam sets
-  !! each call therefore overwrites rows 1 ... n of the previous one. After
-  !! the call, amult and rows 1 ... n of cylm hold the values of this beam
-  !! set; rows n + 1 ... nt of cylm keep what they held on entry (values of
-  !! an earlier, larger beam set or layer, which later readers rely on).
+  !! explicit-shape for that reason. The rows of amult and cylm (computed by
+  !! beams_ylm) are indexed by the beam within its set, without n_offset.
+  !! With several beam sets each call therefore overwrites rows 1 ... n of
+  !! the previous one. After the call, amult and rows 1 ... n of cylm hold
+  !! the values of this beam set; rows n + 1 ... nt of cylm are left
+  !! unchanged, as the legacy routine does.
   !!
   !! LAPACK status flags are not checked.
   subroutine bravais_layer_matrices(ra, ta, n, amult, cylm, pq, nt, flms, &
@@ -509,8 +575,8 @@ contains
     integer, intent(out) :: iple(lev), iplo(lod)
 
     integer :: ig, jg, jgp, jgps, jlm, jj, js, i, j, k, l, ll, jm, lev1, lm, info
-    real(sp) :: bk2, bk3, c, b, abr
-    complex(sp) :: xa, ya, st, cf, ct, am
+    real(sp) :: bk2, bk3, abr
+    complex(sp) :: xa, ya, st, am
     complex(sp) :: rt(2)
     complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
     complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
@@ -520,32 +586,15 @@ contains
     lm = lmax + 1
     lev1 = lev + 1
 
+    ! Spherical harmonics for all beam directions; amult returns the
+    ! perpendicular wave-vector component of each beam
+    call beams_ylm(cylm, amult, pq, nt, n, n_offset, point, lmax, lmmax, ylm)
     ya = cmplx(2.0_sp * point%energy, &
                -2.0_sp * point%imaginary_potential + 0.000001_sp, sp)
     ya = sqrt(ya)
     do ig = 1, n
-      jg = ig + n_offset
-      bk2 = pq(1, jg) + point%k_parallel(1)
-      bk3 = pq(2, jg) + point%k_parallel(2)
-      c = bk2 * bk2 + bk3 * bk3
-      xa = cmplx(2.0_sp * point%energy - c, &
-                 -2.0_sp * point%imaginary_potential + 0.000001_sp, sp)
-      xa = sqrt(xa)
-      b = 0.0_sp
-      cf = ru
-      if (c > 1.0e-7_sp) then  ! off-normal beam
-        b = sqrt(c)
-        cf = cmplx(bk2 / b, bk3 / b, sp)
-      end if
-      ct = xa / ya
-      st = b / ya
       ! Prefactor for reflection and transmission matrix elements
-      amult(ig) = -8.0_sp * pi * pi * ci / (ya * tv * xa)
-      ! Spherical harmonics for all beam directions
-      call spherical_harmonics(lmax, ylm, lmmax, ct, st, cf)
-      do k = 1, lmmax
-        cylm(ig, k) = ylm(k)
-      end do
+      amult(ig) = -8.0_sp * pi * pi * ci / (ya * tv * amult(ig))
     end do
 
     ! Sum over sublattices
