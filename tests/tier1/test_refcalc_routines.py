@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 
+from generate import make_refcalc_routine_values
 from generate.baseline_tree import GeneratorError, check_baseline_tree
 from generate.make_refcalc_routine_values import (
     LEGACY_DRIVER,
@@ -103,7 +104,8 @@ def driver(request, tl_root, tmp_path_factory):
 @pytest.fixture(scope="session")
 def legacy_driver(request):
     """The legacy driver of the generator, built from the baseline tree's
-    lib.tleed.f with LEGACY_FLAGS (cached in tests/.build-cache)."""
+    lib.tleed.f with LEGACY_FLAGS (cached in tests/.build-cache; the key
+    covers the driver's sources and the generator file with its build recipe)."""
     if not (request.config.getoption("--baseline-tl-root")
             or configured("baseline_tl_root")):
         pytest.fail(NO_BASELINE_MSG, pytrace=False)
@@ -113,8 +115,11 @@ def legacy_driver(request):
     except GeneratorError as err:
         pytest.fail(f"--baseline-tl-root / baseline_tl_root: {err}", pytrace=False)
     lib = tl / "TensErLEED"
+    # the generator's file holds the build recipe (build_legacy_driver)
+    recipe = Path(make_refcalc_routine_values.__file__)
     entry = cached_dir("refcalc-legacy-driver",
-                       [lib / "lib" / "lib.tleed.f", lib / "src" / "GLOBAL", LEGACY_DRIVER],
+                       [lib / "lib" / "lib.tleed.f", lib / "src" / "GLOBAL", LEGACY_DRIVER,
+                        recipe],
                        lib, LEGACY_FLAGS,
                        lambda tmp: build_legacy_driver(tl, tmp, LEGACY_FLAGS))
     return entry / f"legacy{LEGACY_FLAGS}"
