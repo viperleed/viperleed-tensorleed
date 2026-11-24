@@ -215,15 +215,15 @@ contains
     real(sp) :: e, vpi, ak2, ak3
     real(sp) :: rxr1(2), rxr2(2), atv, tsts, fact1, akp2, gx, gy, gkx, gky, gk2
     real(sp) :: cfy, fy
-    complex(sp) :: ci, cz, kprg, k0, z, t1, t1p, t2, t2p, t3, cfac
+    complex(sp) :: kprg, k0, z, t1, t1p, t2, t2p, t3, cfac
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
 
     e = point%energy
     vpi = point%imaginary_potential
     ak2 = point%k_parallel(1)
     ak3 = point%k_parallel(2)
 
-    cz = cmplx(0.0_sp, 0.0_sp, sp)
-    ci = cmplx(0.0_sp, 1.0_sp, sp)
     if (lay == 1) then  ! overlayer
       rxr1 = lat%superlattice_reciprocal(:, 1)
       rxr2 = lat%superlattice_reciprocal(:, 2)
@@ -342,7 +342,6 @@ contains
               if (gky < 0.0_sp) fy = -fy
             end if
 
-            ! Spherical harmonics
             call harmonics_table(lm, z, fy, work)
 
             ! Loop over the interplanar vectors
@@ -714,7 +713,7 @@ contains
     integer, intent(in) :: lay
     !> Parallel momentum of the first beam of the current beam set.
     real(sp), intent(in) :: pq(2)
-    !> Work array: spherical Bessel functions.
+    !> Work array: spherical Hankel functions.
     complex(sp), intent(inout) :: h(l2m)
     !> Lattices; uses substrate_vector and superlattice_vector.
     type(lattice), intent(in) :: lat
@@ -723,7 +722,10 @@ contains
 
     integer :: l, m, l1, kk, jj1, jj2, j1, j2, nr1, nr2, nor
     real(sp) :: dcut2, v(3), px, py, x1, x2, fy, cfy, ak2, ak3, ar1(2), ar2(2)
-    complex(sp) :: ru, ci, cz, ff, z, z1, z2, z3, st
+    complex(sp) :: ff, z, z1, z2, z3, st
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
 
     ak2 = point%k_parallel(1)
     ak3 = point%k_parallel(2)
@@ -735,9 +737,6 @@ contains
       ar2 = lat%substrate_vector(:, 2)
     end if
 
-    ru = cmplx(1.0_sp, 0.0_sp, sp)
-    cz = cmplx(0.0_sp, 0.0_sp, sp)
-    ci = cmplx(0.0_sp, 1.0_sp, sp)
     dcut2 = dcut * dcut
 
     s = cz
@@ -799,11 +798,10 @@ contains
             if ((py + v(3)) < 0.0_sp) fy = -fy
           end if
 
-          ! Spherical Bessel functions and spherical harmonics
-          call spherical_bessel(z2, h, l2m)
+          ! Spherical Hankel functions and spherical harmonics
+          call spherical_hankel(z2, h, l2m)
           call harmonics_table(l2m, z, fy, y)
 
-          ! Lattice sum into s
           st = ru
           do l = 1, l2m
             st = st * ci
@@ -936,10 +934,10 @@ contains
     m = i - l - l * l - 1
   end subroutine decode_lm
 
-  !> Spherical Bessel functions (legacy SB): hh(1:n3) are the functions of
-  !! the complex argument x for l = 0 to n3 - 1. hh is not changed if x is
-  !! (nearly) zero.
-  subroutine spherical_bessel(x, hh, n3)
+  !> Spherical Hankel functions of the first kind (legacy SB): hh(1:n3) are
+  !! the functions of the complex argument x for l = 0 to n3 - 1. hh is not
+  !! changed if x is (nearly) zero.
+  subroutine spherical_hankel(x, hh, n3)
     complex(sp), intent(in) :: x
     integer, intent(in) :: n3
     complex(sp), intent(inout) :: hh(n3)
@@ -958,7 +956,7 @@ contains
     do j = 3, n3
       hh(j) = (2.0_sp * real(j - 2, sp) + 1.0_sp) / c * hh(j - 1) - hh(j - 2)
     end do
-  end subroutine spherical_bessel
+  end subroutine spherical_hankel
 
   !> Adds the contribution of one reciprocal-lattice point to the limited
   !! set of matrix elements of the propagators between subplanes, for the
@@ -1272,7 +1270,6 @@ contains
     ! Matrix to be inverted in Beeby's scheme
     call beeby_matrix(th, lmn, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, lpss)
 
-    ! Gaussian elimination
     call cgetrf(lmn, lmn, th, lmn, ipl, info)
 
     ! Spherical harmonics of the beam directions; amult is overwritten below
@@ -1295,7 +1292,6 @@ contains
       amult(ig) = -16.0_sp * pi * pi * ci / (tv * xa)
     end do
 
-    ! Loop over incident beams
     do jgp = 1, n
       ! Tau times the spherical harmonics, into which the inverse of th is
       ! multiplied
@@ -1350,7 +1346,6 @@ contains
           end do
         end do
 
-        ! Loop over scattered beams
         do jg = 1, n
           call reflection_transmission_element(jg, n_offset, point%k_parallel, &
                                                gp, lm, cylm, n, lmmax, pq, nt, &
@@ -1398,7 +1393,6 @@ contains
 
     lod = lmmax - lev
 
-    ! Start from the identity matrix
     do j = 1, lmn
       do i = 1, lmn
         th(i, j) = cz
@@ -1475,9 +1469,8 @@ contains
     complex(sp), intent(out) :: taug(lmt), taugm(lmt)
 
     integer :: i, is, jlm, ilm, jtau, klp
-    complex(sp) :: cz, st, su, cf
-
-    cz = cmplx(0.0_sp, 0.0_sp, sp)
+    complex(sp) :: st, su, cf
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
 
     ! Matrix product tau * ylm for each chemical element
     do i = 1, ntau
@@ -1607,8 +1600,7 @@ contains
     end do
 
     ! Combine propagation with the (l,m)-dependent scattering. The factor
-    ! sm = (-1)**(l+m) * (-1)*(-1)**l = -(-1)**m replaces the products of
-    ! older code.
+    ! sm is (-1)**(l+m) * (-1)*(-1)**l = -(-1)**m.
     r = cz
     t = cz
     jlm = 1
