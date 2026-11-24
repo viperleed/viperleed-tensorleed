@@ -537,27 +537,35 @@ subroutine step(x,y,f,neqn,h,eps,wt,start,hold,k,kold,crash,phi,p,yp,&
       erkm2 = 0.0d0
       erkm1 = 0.0d0
       erk = 0.0d0
-      do 265 l = 1,neqn
+      do l = 1,neqn
         temp3 = 1.0d0/wt(l)
         temp4 = yp(l) - phi(l,1)
-        if(km2)265,260,255
-  255   erkm2 = erkm2 + ((phi(l,km1)+temp4)*temp3)**2
-  260   erkm1 = erkm1 + ((phi(l,k)+temp4)*temp3)**2
-  265   erk = erk + (temp4*temp3)**2
-      if(km2)280,275,270
-  270 erkm2 = absh*sig(km1)*gstr(km2)*dsqrt(erkm2)
-  275 erkm1 = absh*sig(k)*gstr(km1)*dsqrt(erkm1)
-  280 temp5 = absh*dsqrt(erk)
+        if(km2 .gt. 0) then
+          erkm2 = erkm2 + ((phi(l,km1)+temp4)*temp3)**2
+        end if
+        if(km2 .ge. 0) then
+          erkm1 = erkm1 + ((phi(l,k)+temp4)*temp3)**2
+        end if
+        erk = erk + (temp4*temp3)**2
+      end do
+      if(km2 .gt. 0) then
+        erkm2 = absh*sig(km1)*gstr(km2)*dsqrt(erkm2)
+      end if
+      if(km2 .ge. 0) then
+        erkm1 = absh*sig(k)*gstr(km1)*dsqrt(erkm1)
+      end if
+      temp5 = absh*dsqrt(erk)
       err = temp5*(g(k)-g(kp1))
       erk = temp5*sig(kp1)*gstr(k)
       knew = k
 !test if order should be lowered.
-      if(km2)299,290,285
-  285 if(dmax1(erkm1,erkm2) .le. erk) knew = km1
-      go to 299
-  290 if(erkm1 .le. 0.5d0*erk) knew = km1
+      if(km2 .gt. 0) then
+        if(dmax1(erkm1,erkm2) .le. erk) knew = km1
+      else if(km2 .eq. 0) then
+        if(erkm1 .le. 0.5d0*erk) knew = km1
+      end if
 !test if step successful.
-  299 if(err .le. eps) go to 400
+      if(err .le. eps) go to 400
 !end BLOCK 2
 !
 !begin BLOCK 3
@@ -583,10 +591,13 @@ subroutine step(x,y,f,neqn,h,eps,wt,start,hold,k,kold,crash,phi,p,yp,&
 !on third failure, set order to one.  thereafter, use optimal step size.
   320 ifail = ifail + 1
       temp2 = 0.5d0
-      if(ifail - 3) 335,330,325
-  325 if(p5eps .lt. 0.25d0*erk) temp2 = dsqrt(p5eps/erk)
-  330 knew = 1
-  335 h = temp2*h
+      if(ifail .gt. 3) then
+        if(p5eps .lt. 0.25d0*erk) temp2 = dsqrt(p5eps/erk)
+      end if
+      if(ifail .ge. 3) then
+        knew = 1
+      end if
+      h = temp2*h
       k = knew
       if(dabs(h) .ge. fouru*dabs(x)) go to 340
       crash = .true.

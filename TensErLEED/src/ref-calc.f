@@ -743,6 +743,18 @@ C  copy the result into the arrays used by the remaining routines
         END IF
       ENDDO
 
+C  ANY_TENS = 1 if a tensor is requested for any layer (2021-08-26
+C  Michele Riva). It decides whether ADREF2T recomputes the amplitudes
+C  for NEXIT > 0 and whether CYLM is computed for all beams before
+C  FINAL1.
+      ANY_TENS = 0
+      DO ISTACK = 1, NSTACK
+        IF (TENS(ISTACK).EQ.1) THEN
+          ANY_TENS = 1
+          EXIT
+        ENDIF
+      ENDDO
+
 C*************************************************************
 C open output files, write title and general information
 C*************************************************************
@@ -1210,6 +1222,16 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
 
       ENDDO  ! ILTYPE, loop through layers to construct R,T matrices
 
+C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, RSMF_SIMPLE
+C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
+C  (without the offset NA), so compute all NT rows here, if any
+C  tensor is requested. AMULT is working space.
+
+      IF (ANY_TENS.EQ.1) THEN
+        CALL BEAMS_YLM(CYLM,AMULT,PQ,NT,NT,0,E,AK21,AK31,VPI,LMAX,
+     +                 LMMAX,YLM)
+      ENDIF
+
 C*************************************************************
 C  next, compute intra-crystal scattering matrices up to
 C  second layer in plane wave representation
@@ -1356,16 +1378,6 @@ C*************************************************************
       IF (BEAMIN.EQ.0) THEN
         STOP 'BEAM NOT IN OUTPUT BEAMSET'
       ENDIF
-
-!    2021-08-26 Michele Riva, added: Check whether we want any tensor,  << TODO: this whole bunch of code can move all the way out of the energy loop, right after reading in stuff
-!    as this requires recomputing amplitudes via ADREF2T below
-      ANY_TENS = 0
-      DO ISTACK = 1, NSTACK
-        IF (TENS(ISTACK).EQ.1) THEN
-          ANY_TENS = 1
-          EXIT
-        ENDIF
-      ENDDO
 
 !     2021-08-26 Michele Riva: Modify the call to ADREF2T (also reimplemented).
 !     Amplitudes need to be recalculated (1) for the (0, 0) beam,
@@ -1540,4 +1552,3 @@ C  that's all, folks!
 C*************************************************************
 
       END
-
