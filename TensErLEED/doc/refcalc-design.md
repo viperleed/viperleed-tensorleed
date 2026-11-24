@@ -257,8 +257,17 @@ Hazards of each block:
   with `PARAM` maxima and passes to `RTINV_SIMPLE`, which declares them with
   the dimensions of the current layer: `TAU(MLMT,MLEV)` as `TAU(LMT,LEV)`,
   `XEV(MLEV,MLEV2)` as `XEV(LEV,LEV2)`, `GH(MLMG,MLMMAX)` as
-  `GH(LMG,LMMAX)`, `TH(MLMNI,MLMNI)` as `TH(LMNI,LMNI)` (`th(lmn,lmn)` in the port) and the vectors
-  `TS`, `TAUG`, `TAUGM`, `XH`, `RG1`, `RG2` and `HGHD`. The port keeps these
+  `GH(LMG,LMMAX)`, `TH(MLMNI,MLMNI)` as `TH(LMNI,LMNI)` (`th(lmn,lmn)` in
+  the port) and the vectors `TS`, `TAUG`, `TAUGM`, `XH`, `RG1`, `RG2` and
+  `HGHD`. Likewise the arrays `LEED` sizes with the sublayer maxima `MNSUB`
+  and `MNSUB2` and passes to `RTINV_SIMPLE` and on to `SRTLAY`, `GHMAT` and
+  `COPYPOS`, which declare them with the sublayer count `NLAY` of the
+  current layer and `NLAY2 = NLAY*(NLAY-1)/2`: `POS(MNSUB,3)` and
+  `POSS(MNSUB,3)` as `POS(NLAY,3)`, `POSS(NLAY,3)`, `MGH(MNSUB,MNSUB)` as
+  `MGH(NLAY,NLAY)` and `DRL(MNSUB2,3)` as `DRL(NLAY2,3)`, whose elements
+  move for `NLAY < MNSUB`, and the vectors `LPS`, `LPSS`, `NORD`
+  (`MNSUB`), `TEST`, `NUGH`, `NGEQ` (`MNSUB2`) and `IPL` (`MLMNI` as
+  `LMN`), which keep their element order. The port keeps these
   as packed leading parts of the larger arrays (sized by stage 8 from the
   derived values, they are packed exactly).
 - **Element-as-array passing.**

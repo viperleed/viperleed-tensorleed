@@ -432,7 +432,7 @@ C         - contains only t-matrices actually used in next composite_layer_matri
 C  LPS  : contains ID of t-matrix TSF(LPS(ISUB),...) belonging to subplane ISUB
 C  LPSS : later storage array for reordered sublayer chemistry (subroutine sort_subplanes)
 C  NORD : map between input sublayer number NORD(ILAY) and sublayer number ILAY
-C         after srtlay reordering
+C         after sort_subplanes reordering
 C  POS  : internal array for composite_layer_matrices that contains positions of sublayers of current layer
 C  POSS : same as POS, but ordered by rising z (sim. to LPSS)
 C  LMT  : variable dimension for tau-matrix in composite_layer_matrices (should be NTAU*LMMAX)
