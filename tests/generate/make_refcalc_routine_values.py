@@ -17,7 +17,9 @@ after an early exit, no vibration, no early exit, extrapolation above the
 table of phase shifts, a mixed site); BEAMS over energy sweeps for normal and
 oblique incidence, with one and with several beam sets, where beams stop
 propagating as the energy falls; SPHRM_MOD on a grid of angles for every
-LMAX from 2 to 18; FMAT for the SLIND lattices and every IDEG that fits
+LMAX from 2 to 18; BEAMS_YLM for each beam set of a beam list (nonzero
+offsets, rows of CYLM beyond the set untouched) and for a window of the
+list, at normal and oblique incidence; FMAT for the SLIND lattices and every IDEG that fits
 them, at two energies and k-parallel values; and BEAMS, FMAT and
 RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc, for one and
 for several beam sets (RA, TA, AMULT, CYLM, XEVST, XODST). Phase shifts and
@@ -222,6 +224,14 @@ def _sphrm_stdin():
     return ["SPHRM", str(len(points)), *map(_hex, values)]
 
 
+def _bylm_stdin(fin, lmax, ev, angles):
+    """BYLM input: the beam list of fin at the energy ev (eV)."""
+    ak2, ak3 = _k_parallel(ev, *angles)
+    head, spq, spqf = _beam_lines(fin)
+    return ["BYLM", *map(_hex, [_crystal_energy(ev), _VPI, ak2, ak3]), str(lmax),
+            *head, _hex(_TST), *map(_hex, spq), *map(_hex, spqf)]
+
+
 def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
                 incidences=((50.0, (0.0, 0.0)), (120.0, (15.0, 25.0)))):
     """FMAT input: the incidences (energy in eV, angles) in turn; by default
@@ -291,6 +301,19 @@ _BEAM_CASES = [
      _IR, (0.0, 0.0)),
     ("ir100_sets_oblique", "p(2x1) superstructure, two beam sets, oblique incidence",
      _IR, (20.0, 10.0)),
+]
+# (id, what, input data, LMAX, energy (eV), angles)
+_BYLM_CASES = [
+    ("ir100_sets_normal", "two beam sets (offset > 0), normal incidence",
+     _IR, 7, 100.0, (0.0, 0.0)),
+    ("ir100_sets_oblique", "two beam sets (offset > 0), oblique incidence",
+     _IR, 7, 100.0, (20.0, 10.0)),
+    ("ir100_sets_low_energy", "two beam sets, oblique incidence, at an energy "
+     "where beams are evanescent", _IR, 4, 20.0, (30.0, 70.0)),
+    ("cu111_oblique", "one beam set, hexagonal lattice, oblique incidence",
+     _CU, 5, 80.0, (15.0, 20.0)),
+    ("ag100_theta0p05", "one beam set, almost normal incidence",
+     _AG_OBL, 6, 45.0, (0.05, 30.0)),
 ]
 # FMAT: the lattices of SLIND with their IDEG, 180-degree axes (IDEG 2) of
 # lattices of a higher symmetry, and 20 x 1 and 1 x 20 superlattices (IDEG 2)
@@ -367,6 +390,10 @@ CASES = [
 ] + [
     ("sphrm_grid", "SPHRM_MOD on a grid of real and complex angles, LMAX = 2 to 18",
      _sphrm_stdin()),
+] + [
+    (f"bylm_{ident}", f"BEAMS_YLM, {what}, LMAX = {lmax}, {energy:g} eV",
+     _bylm_stdin(fin, lmax, energy, angles))
+    for ident, what, fin, lmax, energy, angles in _BYLM_CASES
 ] + [
     (f"fmat_{ident}", f"FMAT, {what}, NL1 x NL2 = {nl1} x {nl2}, IDEG {ideg}, "
      "LMAX = 4, normal incidence at 50 eV and oblique at 120 eV",

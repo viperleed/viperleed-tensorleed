@@ -1,7 +1,7 @@
 C  Calls the legacy routines of lib/lib.tleed.f that set up the angular
 C  coefficients (CAAA, CELMG, LXGENT, CPPP) and the sublattices (SLIND),
 C  and those of the energy loop up to the layer diffraction matrices of
-C  a Bravais layer (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the
+C  a Bravais layer (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the
 C  inputs read from stdin and prints their results. Same protocol as
 C  tier1/refcalc_routines/driver.f90 (see there).
       MODULE LEGHLP
@@ -82,6 +82,8 @@ C  FMAT with the cutoff distance of ref-calc.f
         CALL BMDRV
       ELSE IF (NAME.EQ.'SPHRM') THEN
         CALL SPDRV
+      ELSE IF (NAME.EQ.'BYLM') THEN
+        CALL BYDRV
       ELSE IF (NAME.EQ.'FMAT') THEN
         CALL FMDRV
       ELSE IF (NAME.EQ.'RSMF') THEN
@@ -552,4 +554,59 @@ C  offset of the set in the beam list, all sublattices)
       CALL WRC('CYLM', CYLM, NT*LMMAX)
       CALL WRC('XEVST', XEVST, LEV*LEV)
       CALL WRC('XODST', XODST, LOD*LOD)
+      END
+
+      SUBROUTINE BYDRV
+C  BEAMS_YLM for each beam set of a beam list (with its offset in the
+C  list), and for a window of the list that starts inside the first set
+C  and ends before the last beam. CYLM starts as a sentinel, so that rows
+C  that the routine must leave alone show.
+      USE LEGHLP
+      IMPLICIT NONE
+      REAL RDR1
+      INTEGER LMAX, LMMAX, KNBS, KNT, NPUN, NT, NP, MPU, IBS, NA, N
+      REAL TST, E, AK2, AK3, VPI
+      INTEGER, ALLOCATABLE :: KNB(:), NPU(:), NB(:), NPUC(:)
+      REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:), PQ(:,:), PQF(:,:)
+      COMPLEX, ALLOCATABLE :: XA(:), CYLM(:,:), YLM(:)
+      COMPLEX SENT
+      CHARACTER*16 LABEL
+
+      SENT = (7.0, -3.0)
+      E = RDR1()
+      VPI = RDR1()
+      AK2 = RDR1()
+      AK3 = RDR1()
+      READ(5,*) LMAX
+      LMMAX = (LMAX+1)**2
+      CALL RDBEAMS(KNBS, KNB, KNT, TST, SPQ, SPQF)
+      NPUN = 1
+      ALLOCATE(NB(KNBS), NPU(NPUN), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
+      NPU = 1
+      PQ = 0.
+      PQF = 0.
+      NB = 0
+      NPUC = -7
+      CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
+     +           PQF,NPUC,MPU,NT,NP)
+      ALLOCATE(CYLM(NT,LMMAX), YLM(LMMAX))
+      CYLM = SENT
+      NA = 0
+      DO IBS = 1, KNBS
+        ALLOCATE(XA(NB(IBS)))
+        CALL BEAMS_YLM(CYLM,XA,PQ,NT,NB(IBS),NA,E,AK2,AK3,VPI,LMAX,
+     +                 LMMAX,YLM)
+        CALL NUMBERED('XA', IBS, LABEL)
+        CALL WRC(LABEL, XA, NB(IBS))
+        DEALLOCATE(XA)
+        NA = NA + NB(IBS)
+      ENDDO
+      CALL WRI('NB', NB, KNBS)
+      CALL WRC('CYLM', CYLM, NT*LMMAX)
+      N = NT - 3
+      ALLOCATE(XA(N))
+      CYLM = SENT
+      CALL BEAMS_YLM(CYLM,XA,PQ,NT,N,1,E,AK2,AK3,VPI,LMAX,LMMAX,YLM)
+      CALL WRC('XA_WINDOW', XA, N)
+      CALL WRC('CYLM_WINDOW', CYLM, NT*LMMAX)
       END

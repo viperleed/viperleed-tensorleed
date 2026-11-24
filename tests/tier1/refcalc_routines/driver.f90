@@ -1,7 +1,7 @@
 !> Calls the routines that set up the angular coefficients (CAAA, CELMG,
 !! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc, and those of its
 !! energy loop up to the layer diffraction matrices of a Bravais layer
-!! (TSCATF, BEAMS, SPHRM_MOD, FMAT, RSMF_SIMPLE), on the inputs read from
+!! (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the inputs read from
 !! stdin and prints their results.
 !!
 !! Output, one block per array: a header line "name kind count", then the
@@ -20,6 +20,9 @@
 !!            e, ak2, ak3
 !!   SPHRM:   name, number of points, ct, st, cf of all points (real and
 !!            imaginary part of each); runs LMAX = 2 to 18
+!!   BYLM:    name, e, vpi, ak2, ak3, lmax, then the beam list as for
+!!            BEAMS (npun = 1, npu = 1, one energy): knbs, set sizes, tst,
+!!            spq, spqf
 !!   FMAT:    name, the lattice as for SLIND, lmax, the number of energies,
 !!            then for each e, vpi, ak2, ak3
 !!   RSMF:    name, the lattice as for SLIND, lmax, e, vpi, ak2, ak3, tv,
@@ -38,7 +41,8 @@ program refcalc_routines_driver
                                accumulate_atomic_tmatrix
   use beam_selection, only: select_beams
   use bravais_layer, only: sublattice_equivalences, lattice_sums, &
-                           spherical_harmonics, bravais_layer_matrices
+                           spherical_harmonics, bravais_layer_matrices, &
+                           beams_ylm
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -68,6 +72,8 @@ program refcalc_routines_driver
     call beam_selection_case()
   case ('SPHRM')
     call spherical_harmonics_case()
+  case ('BYLM')
+    call beams_ylm_case()
   case ('FMAT')
     call lattice_sums_case()
   case ('RSMF')
@@ -309,6 +315,56 @@ contains
     lat%superlattice_reciprocal(:, 2) = t(11:12)
     nl = lat%repetitions(1) * lat%repetitions(2)
   end subroutine read_lattice
+
+  !> BEAMS_YLM for each beam set of a beam list (with its offset in the
+  !! list), and for a window of the list that starts inside the first set
+  !! and ends before the last beam. CYLM starts as a sentinel, so that rows
+  !! that the routine must leave alone show.
+  subroutine beams_ylm_case()
+    type(energy_point) :: point
+    integer :: lmax, lmmax, knbs, knt, npun, nt, np, mpu, ibs, na, n
+    real(sp) :: tst
+    integer, allocatable :: knb(:), npu(:), nb(:), npuc(:)
+    real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
+    complex(sp), allocatable :: xa(:), cylm(:, :), ylm(:)
+    complex(sp), parameter :: sentinel = (7.0_sp, -3.0_sp)
+
+    point%energy = read_real()
+    point%imaginary_potential = read_real()
+    point%k_parallel(1) = read_real()
+    point%k_parallel(2) = read_real()
+    read(5, *) lmax
+    lmmax = (lmax + 1)**2
+    call read_beam_list(knbs, knb, knt, tst, spq, spqf)
+    npun = 1
+    allocate(nb(knbs), npu(npun), npuc(npun), pq(2, knt), pqf(2, knt))
+    npu = 1
+    pq = 0.0_sp
+    pqf = 0.0_sp
+    nb = 0
+    npuc = -7
+    call select_beams(knbs, knb, spq, spqf, knt, npu, npun, point%k_parallel(1), &
+                      point%k_parallel(2), point%energy, tst, nb, pq, pqf, &
+                      npuc, mpu, nt, np)
+    allocate(cylm(nt, lmmax), ylm(lmmax))
+    cylm = sentinel
+    na = 0
+    do ibs = 1, knbs
+      allocate(xa(nb(ibs)))
+      call beams_ylm(cylm, xa, pq, nt, nb(ibs), na, point, lmax, lmmax, ylm)
+      call write_complex(numbered('XA', ibs), xa)
+      deallocate(xa)
+      na = na + nb(ibs)
+    end do
+    call write_int('NB', nb)
+    call write_complex('CYLM', reshape(cylm, [nt * lmmax]))
+    n = nt - 3
+    allocate(xa(n))
+    cylm = sentinel
+    call beams_ylm(cylm, xa, pq, nt, n, 1, point, lmax, lmmax, ylm)
+    call write_complex('XA_WINDOW', xa)
+    call write_complex('CYLM_WINDOW', reshape(cylm, [nt * lmmax]))
+  end subroutine beams_ylm_case
 
   !> FMAT on the sublattices of the lattice at several (E, VPI, k-parallel).
   subroutine lattice_sums_case()

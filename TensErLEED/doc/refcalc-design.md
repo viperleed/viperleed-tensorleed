@@ -48,7 +48,7 @@ Stage 4 adds the atomic t-matrices to `atomic_scattering`
 (`atomic_tmatrix`, with `thermal_phase_shifts` and `spherical_bessel` as
 private helpers, and `accumulate_atomic_tmatrix` for the sum over
 elements), the beam selection `select_beams` in `beam_selection`, and in
-`bravais_layer` `lattice_sums`, `spherical_harmonics` and
+`bravais_layer` `lattice_sums`, `spherical_harmonics`, `beams_ylm` and
 `bravais_layer_matrices` (with `intralayer_matrix` and `matrix_elements` as
 private helpers). The new type `energy_point` (energy, k-parallel,
 imaginary potential) in `leed_types` replaces the blank COMMON of the
@@ -117,6 +117,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `matrix_elements` (private) |
 | `XM` | `lib.tleed.f` | `bravais_layer` | 4, done | `intralayer_matrix` (private) |
 | `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4, done | `spherical_harmonics`; the error message goes to stderr. A legacy copy stays in `lib.tleed.f` for `RTINV_SIMPLE` (and the composite layer) and is removed when that is ported |
+| `BEAMS_YLM` | `lib.tleed.f` | `bravais_layer` | 4, done | `beams_ylm`, on top of `spherical_harmonics`, with an `energy_point` instead of `E,AK2,AK3,VPI`; called by `bravais_layer_matrices` before it forms the prefactors `AMULT` from the returned `XA`, as `RSMF_SIMPLE` does. The legacy routine stays in `lib.tleed.f` (frozen) for the legacy `ref-calc.f` (`RTINV_SIMPLE`, and the call before `FINAL1`); both coexist until stage 5 and stage 8 remove the legacy one |
 | `COPYPOS` | `lib.tleed.f` | `composite_layer` | 5 | |
 | `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | `/MPT/`, `/MFB/`; writes tensors to `TSTORE` |
 | `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | reads `/MFB/` |
