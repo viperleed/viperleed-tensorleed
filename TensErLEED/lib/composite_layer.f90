@@ -212,11 +212,9 @@ contains
 
     integer :: i, j, k, iz, ii, in, iin, inn, is, it, kk, nlylm
     integer :: ncount, jj1, jj2, j1, j2, ng1, ng2, nog
-    integer :: ip, jp, nii, nni, njm, nnm, im1, imp, jm2, jmp
-    integer :: l1, l2, m1, m2
     real(sp) :: e, vpi, ak2, ak3
     real(sp) :: rxr1(2), rxr2(2), atv, tsts, fact1, akp2, gx, gy, gkx, gky, gk2
-    real(sp) :: cfy, fy, phase
+    real(sp) :: cfy, fy
     complex(sp) :: ci, cz, kprg, k0, z, t1, t1p, t2, t2p, t3, cfac
 
     e = point%energy
@@ -376,33 +374,9 @@ contains
       ! produced, using symmetry relations
       do iz = 1, nlay2
         if (nugh(iz) == 0) cycle
-        do i = 1, lmmax
-          ip = lxm(i)
-          nii = ip + (iz - 1) * lmmax
-          nni = nii + nlylm
-          l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
-          m1 = i - l1 - l1 * l1 - 1
-          im1 = i - 2 * m1
-          imp = lxm(im1)
-          do j = 1, lmmax
-            jp = lxm(j)
-            l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
-            m2 = j - l2 - l2 * l2 - 1
-            jm2 = j - 2 * m2
-            jmp = lxm(jm2)
-            njm = jmp + (iz - 1) * lmmax
-            nnm = njm + nlylm
-            phase = (-1.0_sp)**mod(m1 + m2, 2)
-            if (i == j) then
-              if (m1 <= 0) cycle
-            else if (l1 >= l2 .and. &
-                     (l1 /= l2 .or. abs(m1) >= abs(m2))) then
-              cycle
-            end if
-            gh(nni, jp) = phase * gh(nnm, imp)
-            gh(nii, jp) = phase * gh(njm, imp)
-          end do
-        end do
+        call fill_symmetric_elements(gh, lmg, lmmax, lxm, (iz - 1) * lmmax)
+        call fill_symmetric_elements(gh, lmg, lmmax, lxm, &
+                                     (iz - 1) * lmmax + nlylm)
         nugh(iz) = 0
       end do
     end if
@@ -485,12 +459,13 @@ contains
     type(energy_point), intent(in) :: point
 
     integer :: i, j, k, it, il, is, l, ld, ld1, ll, js, clm_index, lmax
+    integer :: n1, n2, jset
     real(sp) :: bk2, bk3, s1, s2, adr1, adr2, abr
-    complex(sp) :: ak, cz, ci, xa
+    complex(sp) :: ak, xa
+    complex(sp), parameter :: cz = cmplx(0.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
 
     lmax = lm - 1
-    cz = cmplx(0.0_sp, 0.0_sp, sp)
-    ci = cmplx(0.0_sp, 1.0_sp, sp)
     ak = -0.5_sp / sqrt(cmplx(2.0_sp * point%energy, &
                               -2.0_sp * point%imaginary_potential &
                               + 0.000001_sp, sp))
@@ -498,13 +473,20 @@ contains
     bk2 = pq(1)
     bk3 = pq(2)
 
-    ! Total lattice sum: the sum over the sublattices with phase factors
-    ! (only the first term for an overlayer)
-    js = 1
-    s1 = 0.0_sp
-    sublattices: do j = 1, lat%repetitions(1)
-      s2 = 0.0_sp
-      do k = 1, lat%repetitions(2)
+    ! Total lattice sum: the sum over the sublattices with phase factors.
+    ! An overlayer (lay == 1 holds exactly if the legacy layer count NLL is
+    ! 1) has only the first term.
+    n1 = lat%repetitions(1)
+    n2 = lat%repetitions(2)
+    if (lay == 1) then
+      n1 = 1
+      n2 = 1
+    end if
+    do j = 1, n1
+      s1 = real(j - 1, sp)
+      do k = 1, n2
+        s2 = real(k - 1, sp)
+        js = (j - 1) * lat%repetitions(2) + k
         adr1 = s1 * lat%substrate_vector(1, 1) + s2 * lat%substrate_vector(1, 2)
         adr2 = s1 * lat%substrate_vector(2, 1) + s2 * lat%substrate_vector(2, 2)
         abr = adr1 * bk2 + adr2 * bk3
@@ -512,12 +494,8 @@ contains
         do i = 1, klm
           flm(i) = flm(i) + flms(js, i) * xa
         end do
-        if (lay == 1) exit sublattices
-        js = js + 1
-        s2 = s2 + 1.0_sp
       end do
-      s1 = s1 + 1.0_sp
-    end do sublattices
+    end do
 
     do it = 1, ntau
       do il = 1, 2
@@ -533,25 +511,16 @@ contains
         ! Quantities into which the inverse of 1 - X is multiplied: the
         ! diagonal blocks, first those of l = 0 (1), 2 (3), ... then those
         ! of l = 1 (2), 3 (4), ... for even (odd) l+m
+        jset = 2 - il
         ld1 = 0
         do is = 0, 1
-          if (il == 2) then
-            do l = is, lmax, 2
-              ld = ld1 + 1
-              ld1 = ld + l
-              do i = ld, ld1
-                x(i, i + lev) = ak * tsf(it, l + 1)
-              end do
+          do l = is + jset, lmax, 2
+            ld = ld1 + 1
+            ld1 = ld + l - jset
+            do i = ld, ld1
+              x(i, i + ll) = ak * tsf(it, l + 1)
             end do
-          else
-            do l = 1 + is, lmax, 2
-              ld = ld1 + 1
-              ld1 = ld + l - 1
-              do i = ld, ld1
-                x(i, i + lod) = ak * tsf(it, l + 1)
-              end do
-            end do
-          end if
+          end do
         end do
 
         ! Inversion and multiplication
@@ -599,13 +568,13 @@ contains
     !> Running index of clm: set to 1 if il = 1, advanced by every call.
     integer, intent(inout) :: clm_index
 
-    integer :: lmax, l2max, jset, mm, j, k, l, m, lpp, mpp, mpa, lpa
-    integer :: mp1, lp1, jlm, jx, kx
-    complex(sp) :: acc, ci, st, su, ru
+    integer :: lmax, l2max, jset, mm, j, k, l, m, lpp, mpp, mpa
+    integer :: mp1, lp1, jx, kx
+    complex(sp) :: acc, st, su
+    complex(sp), parameter :: ru = cmplx(1.0_sp, 0.0_sp, sp)
+    complex(sp), parameter :: ci = cmplx(0.0_sp, 1.0_sp, sp)
 
     lmax = lm - 1
-    ru = cmplx(1.0_sp, 0.0_sp, sp)
-    ci = cmplx(0.0_sp, 1.0_sp, sp)
     l2max = lmax + lmax
     if (il < 2) then  ! odd l+m only
       jset = 1
@@ -616,49 +585,31 @@ contains
       mm = 0
     end if
 
-    j = 1
-    l = jset
-    l_loop: do
-      m = -l + jset
+    j = 0
+    do l = jset, lmax
       st = (-ci)**mod(l, 4)
-      m_loop: do
-        k = 1
-        lpp = jset
-        lpp_loop: do
-          mpp = -lpp + jset
+      do m = -l + jset, l, 2
+        j = j + 1
+        k = 0
+        do lpp = jset, lmax
           su = ((-ci)**mod(lpp, 4)) / st
-          mpp_loop: do
-            mpa = abs(mpp - m)
-            lpa = abs(lpp - l)
-            if (lpa > mpa) mpa = lpa
+          do mpp = -lpp + jset, lpp, 2
+            k = k + 1
+            mpa = max(abs(mpp - m), abs(lpp - l))
             mp1 = mpp - m + l2max + 1
-            lp1 = l + lpp + 1
             acc = cmplx(0.0_sp, 0.0_sp, sp)
-            do
-              jlm = (lp1 * lp1 + mp1 - l2max) / 2
-              acc = acc + clm(clm_index) * flm(jlm)
+            do lp1 = l + lpp + 1, mpa + 1, -2
+              acc = acc + clm(clm_index) * flm((lp1 * lp1 + mp1 - l2max) / 2)
               clm_index = clm_index + 1
-              lp1 = lp1 - 2
-              if (lp1 - 1 - mpa < 0) exit
             end do
             jx = lxi(j + mm)
             kx = lxi(k + mm)
             x(kx, jx) = -acc * tsf(it, lpp + 1) * su
             if (j == k) x(kx, jx) = x(kx, jx) + ru
-            k = k + 1
-            mpp = mpp + 2
-            if (lpp - mpp < 0) exit mpp_loop
-          end do mpp_loop
-          lpp = lpp + 1
-          if (lmax - lpp < 0) exit lpp_loop
-        end do lpp_loop
-        j = j + 1
-        m = m + 2
-        if (l - m < 0) exit m_loop
-      end do m_loop
-      l = l + 1
-      if (lmax - l < 0) exit l_loop
-    end do l_loop
+          end do
+        end do
+      end do
+    end do
   end subroutine multiple_scattering_matrix
 
   !> Solves a set of linear equations by Gaussian elimination with partial
@@ -894,9 +845,9 @@ contains
     complex(sp), intent(in) :: ff
     integer, intent(in) :: lxm(lmmax)
 
-    integer :: i, j, ii, ila, la, ip, jp, nii, njm, nlylm
-    integer :: l1, l2, m1, m2, m3, il, im, lmin, lmax_sum, im1, imp, jm2, jmp
-    real(sp) :: cc, phase
+    integer :: i, j, ii, ila, la, ip, jp, nii, nlylm, row0
+    integer :: l1, l2, m1, m2, m3, il, im, lmin, lmax_sum
+    real(sp) :: cc
 
     ii = 1
     nlylm = lmmax * nlay2
@@ -905,12 +856,10 @@ contains
       ip = lxm(i)
       nii = ip + (iz - 1) * lmmax
       if (is == 2) nii = nii + nlylm
-      l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
-      m1 = i - l1 - l1 * l1 - 1
+      call decode_lm(i, l1, m1)
       do j = 1, lmmax
         jp = lxm(j)
-        l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
-        m2 = j - l2 - l2 * l2 - 1
+        call decode_lm(j, l2, m2)
         m3 = m2 - m1
         il = abs(l1 - l2)
         im = abs(m3)
@@ -934,22 +883,38 @@ contains
     end do
 
     ! Fill in the missing matrix elements from the elements just produced
+    row0 = (iz - 1) * lmmax
+    if (is == 2) row0 = row0 + nlylm
+    call fill_symmetric_elements(gh, lmg, lmmax, lxm, row0)
+  end subroutine propagator_from_sum
+
+  !> Fills in the elements of a block of lmmax rows of the propagators that
+  !! the other routines leave out, from the elements they produced, using
+  !! the symmetry relations (the elements (i, j) with l(i) < l(j), or with
+  !! equal l and |m(i)| < |m(j)|, and those with i = j and m <= 0).
+  !!
+  !! row0 + 1 is the first row of the block.
+  subroutine fill_symmetric_elements(gh, lmg, lmmax, lxm, row0)
+    integer, intent(in) :: lmg, lmmax, row0
+    complex(sp), intent(inout) :: gh(lmg, lmmax)
+    integer, intent(in) :: lxm(lmmax)
+
+    integer :: i, j, ip, jp, nii, njm, im1, imp, jm2, jmp
+    integer :: l1, l2, m1, m2
+    real(sp) :: phase
+
     do i = 1, lmmax
       ip = lxm(i)
-      nii = ip + (iz - 1) * lmmax
-      if (is == 2) nii = nii + nlylm
-      l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
-      m1 = i - l1 - l1 * l1 - 1
+      nii = ip + row0
+      call decode_lm(i, l1, m1)
       im1 = i - 2 * m1
       imp = lxm(im1)
       do j = 1, lmmax
         jp = lxm(j)
-        l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
-        m2 = j - l2 - l2 * l2 - 1
+        call decode_lm(j, l2, m2)
         jm2 = j - 2 * m2
         jmp = lxm(jm2)
-        njm = jmp + (iz - 1) * lmmax
-        if (is == 2) njm = njm + nlylm
+        njm = jmp + row0
         phase = (-1.0_sp)**mod(m1 + m2, 2)
         if (i == j) then
           if (m1 <= 0) cycle
@@ -959,7 +924,17 @@ contains
         gh(nii, jp) = phase * gh(njm, imp)
       end do
     end do
-  end subroutine propagator_from_sum
+  end subroutine fill_symmetric_elements
+
+  !> Angular momentum l and magnetic quantum number m of the element i of
+  !! the (l,m) sequence (l = 0, m = 0 first, then l = 1, m = -1, 0, 1, ...).
+  pure subroutine decode_lm(i, l, m)
+    integer, intent(in) :: i
+    integer, intent(out) :: l, m
+
+    l = int(sqrt(real(i - 1, sp) + 0.00001_sp))
+    m = i - l - l * l - 1
+  end subroutine decode_lm
 
   !> Spherical Bessel functions (legacy SB): hh(1:n3) are the functions of
   !! the complex argument x for l = 0 to n3 - 1. hh is not changed if x is
@@ -1007,8 +982,7 @@ contains
       ip = lxm(i)
       nii = ip + (iz - 1) * lmmax
       nni = nii + nlylm
-      l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
-      m1 = i - l1 - l1 * l1 - 1
+      call decode_lm(i, l1, m1)
       if (m1 > 0) then
         bs = y(m1, l1 + 1)
       else
@@ -1016,8 +990,7 @@ contains
       end if
       do j = 1, lmmax
         jp = lxm(j)
-        l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
-        m2 = j - l2 - l2 * l2 - 1
+        call decode_lm(j, l2, m2)
         if (i == j) then
           if (m1 > 0) cycle
         else if (l1 < l2 .or. (l1 == l2 .and. abs(m1) < abs(m2))) then
@@ -1149,9 +1122,9 @@ contains
                                       lmt, taug, taugm, clm, nlm, pos, poss, &
                                       mgh, nlay, drl, nlay2, nugh, ngeq, test, &
                                       gh, lmg, rg, rg_perp, ts, lmn, tg, lm2n, &
-                                      vt, caa, ncaa, th, lmni, ipl, tsf, lps, &
-                                      lpss, nord, nnsub, lmax1, xh, hghd, l2m, &
-                                      rg1, rg2, tstore, n_offset, ns, lay, &
+                                      vt, caa, ncaa, th, ipl, tsf, lps, lpss, &
+                                      nord, nnsub, lmax1, xh, hghd, l2m, rg1, &
+                                      rg2, tstore, n_offset, ns, lay, &
                                       ntau, tst, tv, dcut, lmax, lat, point)
     !> Number of beams in the current beam set.
     integer, intent(in) :: n
@@ -1183,8 +1156,6 @@ contains
     integer, intent(in) :: lm2n
     !> Number of Clebsch-Gordan coefficients.
     integer, intent(in) :: ncaa
-    !> lmn.
-    integer, intent(in) :: lmni
     !> Dimensions of tsf.
     integer, intent(in) :: nnsub, lmax1
     !> 2 * lmax + 1, or larger.
@@ -1249,9 +1220,9 @@ contains
     !> Tau matrices of the chemical elements.
     complex(sp), intent(inout) :: tau(lmt, lev)
     !> Matrix to invert; on return its LU factors.
-    complex(sp), intent(out) :: th(lmni, lmni)
+    complex(sp), intent(out) :: th(lmn, lmn)
     !> Pivot indices of the LU factorization.
-    integer, intent(out) :: ipl(lmni)
+    integer, intent(out) :: ipl(lmn)
     !> Plane-wave propagators between the subplanes and the layer limits.
     complex(sp), intent(out) :: rg(2, nlay, n), rg_perp(n)
     !> Work spaces.
@@ -1299,10 +1270,10 @@ contains
                                  lat, point)
 
     ! Matrix to be inverted in Beeby's scheme
-    call beeby_matrix(th, lmni, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, lpss)
+    call beeby_matrix(th, lmn, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, lpss)
 
     ! Gaussian elimination
-    call cgetrf(lmni, lmni, th, lmni, ipl, info)
+    call cgetrf(lmn, lmn, th, lmn, ipl, info)
 
     ! Spherical harmonics of the beam directions; amult is overwritten below
     call beams_ylm(cylm, amult, pq, nt, n, n_offset, point, lmax, lmmax, vt)
@@ -1355,7 +1326,7 @@ contains
         end do
 
         ! Left multiplication with the inverse of th
-        call cgetrs('N', lmni, 1, th, lmni, ipl, ts, lmni, info)
+        call cgetrs('N', lmn, 1, th, lmn, ipl, ts, lmn, info)
 
         ! Further plane-wave propagating factors; and store the
         ! intralayer scattering for the tensors, with the sublayers in
@@ -1409,15 +1380,15 @@ contains
   !> Matrix that is inverted in Beeby's scheme (legacy THMAT): the identity
   !! minus tau times the propagators between the subplanes.
   !!
-  !! th: the matrix, of dimension lmni = nlay * lmmax. gh: the propagators,
+  !! th: the matrix, of dimension lmn = nlay * lmmax. gh: the propagators,
   !! organized by mgh (see sort_subplanes). lps: the chemical element of
   !! each subplane, sorted.
-  subroutine beeby_matrix(th, lmni, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, &
+  subroutine beeby_matrix(th, lmn, gh, lmg, lmmax, mgh, nlay, tau, lmt, lev, &
                           lps)
-    integer, intent(in) :: lmni, lmg, lmmax, nlay, lmt, lev
+    integer, intent(in) :: lmn, lmg, lmmax, nlay, lmt, lev
     integer, intent(in) :: mgh(nlay, nlay), lps(nlay)
     complex(sp), intent(in) :: gh(lmg, lmmax), tau(lmt, lev)
-    complex(sp), intent(out) :: th(lmni, lmni)
+    complex(sp), intent(out) :: th(lmn, lmn)
 
     integer :: i, j, k, in, inp, in1, ic, icl, id, idl, m, m1, lp, lp1
     integer :: icv, idv, nlay1, lod
@@ -1428,8 +1399,8 @@ contains
     lod = lmmax - lev
 
     ! Start from the identity matrix
-    do j = 1, lmni
-      do i = 1, lmni
+    do j = 1, lmn
+      do i = 1, lmn
         th(i, j) = cz
       end do
       th(j, j) = ru

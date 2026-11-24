@@ -1124,7 +1124,6 @@ C  set some default quantities
           LMG  = NLAY2*LMMAX*2
           LMN  = NLAY * LMMAX
           LM2N = 2 * LMN
-          LMNI = NLAY*LMMAX
           L2M  = MN
 
 C  set sublattice characterisation
@@ -1172,7 +1171,7 @@ C  copy sublayer positions onto correct grid POS
      +         NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU, LMT,
      +         TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL, NLAY2,
      +         NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN, TG,
-     +         LM2N, VT, CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS, NORD,
+     +         LM2N, VT, CAA, NCAA, TH, IPL, TSF, LPS, LPSS, NORD,
      +         NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
      +         TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
      +         TV1, DCUTS, LMAX, LAT, EPT
@@ -1193,7 +1192,7 @@ C  copy sublayer positions onto correct grid POS
      +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU,
      +           LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL,
      +           NLAY2, NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN,
-     +           TG, LM2N, VT, CAA, NCAA, TH, LMNI, IPL, TSF, LPS, LPSS,
+     +           TG, LM2N, VT, CAA, NCAA, TH, IPL, TSF, LPS, LPSS,
      +           NORD, NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
      +           TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
      +           TV1, DCUTS, LMAX, LAT, EPT

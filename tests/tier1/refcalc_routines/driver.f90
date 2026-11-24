@@ -513,7 +513,7 @@ contains
     type(energy_point) :: point
     integer :: nl, lmax, klm, l1, lmmax, lev, lod, lev2, nlm, ncaa
     integer :: mlmax, mnsub, nlay, layt, nltype, iltype, nnsub, lmax1
-    integer :: nlay2, lmg, lmn, lm2n, lmni, l2m, lms, lmt, ntauv
+    integer :: nlay2, lmg, lmn, lm2n, l2m, lms, lmt, ntauv
     integer :: knbs, knt, npun, nt, np, mpu, ncalls, k, naa, mlmmax
     real(sp) :: tstb, tsts, tv1, dcuts
     integer :: lay, lm, ntau, na, ns
@@ -557,7 +557,6 @@ contains
     lmg = nlay2 * lmmax * 2
     lmn = nlay * lmmax
     lm2n = 2 * lmn
-    lmni = lmn
     point = energy_point(e_c, [ak2_c, ak3_c], vpi_c)
     dcuts = -5.0_sp * sqrt(2.0_sp * e_c) / (min(vpi_c, -0.05_sp))
 
@@ -612,7 +611,7 @@ contains
     xh = (0.0_sp, 0.0_sp)
     flm = (0.0_sp, 0.0_sp)
     if (routine == 'RTINV') then
-      allocate(th(lmni, lmni), ipl(lmni), amult(nt), cylm(nt, lmmax))
+      allocate(th(lmn, lmn), ipl(lmn), amult(nt), cylm(nt, lmmax))
       allocate(rtop(nt, nt), ttop(nt, nt), rbot(nt, nt), tbot(nt, nt))
       allocate(rg(2, nlay, nt), rgp(nt), ts(lmn), taug(lmt))
       allocate(taugm(lmt), rg1(nlay), rg2(nlay), tstore(2, lmn, nt))
@@ -660,7 +659,7 @@ contains
             cylm, pq, nt, flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
             lev2, tau, lmt, taug, taugm, clm, nlm, pos, poss, mgh, nlay, drl, &
             nlay2, nugh, ngeq, test, gh, lmg, rg, rgp, ts, lmn, tg, lm2n, vt, &
-            caa, ncaa, th, lmni, ipl, tsf, lps, lpss, nord, nnsub, lmax1, xh, &
+            caa, ncaa, th, ipl, tsf, lps, lpss, nord, nnsub, lmax1, xh, &
             hghd, l2m, rg1, rg2, tstore, na, ns, lay, ntau, tsts, tv1, dcuts, &
             lmax, lat, point)
         if (mode == 'B') then
