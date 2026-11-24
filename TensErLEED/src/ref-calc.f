@@ -1222,7 +1222,7 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
 
       ENDDO  ! ILTYPE, loop through layers to construct R,T matrices
 
-C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, RSMF_SIMPLE
+C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, bravais_layer_matrices
 C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
 C  (without the offset NA), so compute all NT rows here, if any
 C  tensor is requested. AMULT is working space.

@@ -19,8 +19,8 @@ oblique incidence, with one and with several beam sets, where beams stop
 propagating as the energy falls; SPHRM_MOD on a grid of angles for every
 LMAX from 2 to 18; BEAMS_YLM for each beam set of a beam list (nonzero
 offsets, rows of CYLM beyond the set untouched) and for a window of the
-list, at normal and oblique incidence; FMAT for the SLIND lattices and every IDEG that fits
-them, at two energies and k-parallel values; and BEAMS, FMAT and
+list, at normal and oblique incidence; FMAT for the SLIND lattices and every
+IDEG that fits them, at two energies and k-parallel values; and BEAMS, FMAT and
 RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc, for one and
 for several beam sets (RA, TA, AMULT, CYLM, XEVST, XODST). Phase shifts and
 beam lists are those of the tier-1 cases in tests/cases. Arrays are

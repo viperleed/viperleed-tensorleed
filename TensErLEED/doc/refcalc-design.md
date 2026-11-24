@@ -117,7 +117,7 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `matrix_elements` (private) |
 | `XM` | `lib.tleed.f` | `bravais_layer` | 4, done | `intralayer_matrix` (private) |
 | `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4, done | `spherical_harmonics`; the error message goes to stderr. A legacy copy stays in `lib.tleed.f` for `RTINV_SIMPLE` (and the composite layer) and is removed when that is ported |
-| `BEAMS_YLM` | `lib.tleed.f` | `bravais_layer` | 4, done | `beams_ylm`, on top of `spherical_harmonics`, with an `energy_point` instead of `E,AK2,AK3,VPI`; called by `bravais_layer_matrices` before it forms the prefactors `AMULT` from the returned `XA`, as `RSMF_SIMPLE` does. The legacy routine stays in `lib.tleed.f` (frozen) for the legacy `ref-calc.f` (`RTINV_SIMPLE`, and the call before `FINAL1`); both coexist until stage 5 and stage 8 remove the legacy one |
+| `BEAMS_YLM` | `lib.tleed.f` | `bravais_layer` | 4, done | `beams_ylm`, on top of `spherical_harmonics`, with an `energy_point` instead of `E,AK2,AK3,VPI`; called by `bravais_layer_matrices` before it forms the prefactors `AMULT` from the returned `XA`, as `RSMF_SIMPLE` does. The legacy routine stays in `lib.tleed.f` (frozen) for the legacy `ref-calc.f` (`RTINV_SIMPLE`, and the call before `FINAL1`); both coexist until stage 5 and stage 8 port its last callers |
 | `COPYPOS` | `lib.tleed.f` | `composite_layer` | 5 | |
 | `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | `/MPT/`, `/MFB/`; writes tensors to `TSTORE` |
 | `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5 | reads `/MFB/` |

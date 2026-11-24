@@ -1,8 +1,8 @@
 !> Calls the routines that set up the angular coefficients (CAAA, CELMG,
 !! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc, and those of its
 !! energy loop up to the layer diffraction matrices of a Bravais layer
-!! (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the inputs read from
-!! stdin and prints their results.
+!! (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the inputs read
+!! from stdin and prints their results.
 !!
 !! Output, one block per array: a header line "name kind count", then the
 !! values: kind r4 / r8 as the hex digits of the bit patterns (8 / 16 per

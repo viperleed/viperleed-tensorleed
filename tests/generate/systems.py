@@ -89,7 +89,7 @@ _CU111_IVBEAMS = """  h         k
 # (c = 7.0710678 x scale), alternately shifted by half a surface vector.
 _IR_SCALE = 2.7116
 _IR_PLANES = 7
-# cuts between the Ir planes (and, for the second case, around the second O)
+# cuts between the Ir planes; the cases add the cuts around their O atoms
 _CUTS_LOW = "0.15 0.25 0.35 0.45 0.55"
 
 
@@ -121,7 +121,6 @@ T_DEBYE = 420
 T_EXPERIMENT = 100
 VIBR_AMP_SCALE = *surf 1.3
 """
-
 
 
 def _ivbeams(nums, den):

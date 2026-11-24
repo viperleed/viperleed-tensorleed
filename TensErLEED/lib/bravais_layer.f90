@@ -434,8 +434,9 @@ contains
   !! complex perpendicular wave-vector component of beam n_offset + ig inside
   !! the crystal. Used by bravais_layer_matrices.
   !!
-  !! The legacy copy in lib.tleed.f stays for the legacy ref-calc.f
-  !! (RTINV_SIMPLE and the call before FINAL1), which cannot use this module.
+  !! The legacy copy in lib.tleed.f is kept for the legacy callers in
+  !! ref-calc.f (RTINV_SIMPLE and the call before FINAL1) until they are
+  !! ported.
   subroutine beams_ylm(cylm, xa, pq, nt, n, n_offset, point, lmax, lmmax, ylm)
     !> Total number of beams at the current energy
     integer, intent(in) :: nt
@@ -504,12 +505,11 @@ contains
   !! number of beams at the current energy, into the leading nt * nt
   !! elements of the (larger) arrays of the caller; the dummies are
   !! explicit-shape for that reason. The rows of amult and cylm (computed by
-  !! beams_ylm) are indexed
-  !! by the beam within its set, without n_offset. With several beam sets
-  !! each call therefore overwrites rows 1 ... n of the previous one. After
-  !! the call, amult and rows 1 ... n of cylm hold the values of this beam
-  !! set; rows n + 1 ... nt of cylm keep what they held on entry (values of
-  !! an earlier, larger beam set or layer, which later readers rely on).
+  !! beams_ylm) are indexed by the beam within its set, without n_offset.
+  !! With several beam sets each call therefore overwrites rows 1 ... n of
+  !! the previous one. After the call, amult and rows 1 ... n of cylm hold
+  !! the values of this beam set; rows n + 1 ... nt of cylm are left
+  !! unchanged, as the legacy routine does.
   !!
   !! LAPACK status flags are not checked.
   subroutine bravais_layer_matrices(ra, ta, n, amult, cylm, pq, nt, flms, &
