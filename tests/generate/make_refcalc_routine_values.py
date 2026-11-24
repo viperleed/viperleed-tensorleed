@@ -124,7 +124,7 @@ LATTICES = [
 def _reciprocal(a):
     """Reciprocal vectors of the cell a (rows: first and second basis vector) as
     read_input of ref-calc computes them, in 32-bit arithmetic."""
-    area = abs(a[0][0] * a[1][1] - a[1][0] * a[0][1])
+    area = _area(a)
     atv = _F32(2) * _PI / area
     return [(a[1][1] * atv, -a[1][0] * atv), (-a[0][1] * atv, a[0][0] * atv)]
 
@@ -271,12 +271,16 @@ def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
     return lines
 
 
+def _area(cell):
+    """The area of the unit cell spanned by the vectors cell[0], cell[1]."""
+    return abs(cell[0][0] * cell[1][1] - cell[1][0] * cell[0][1])
+
+
 def _rsmf_stdin(fin, ideg, nl1, nl2, lmax, ev, angles, mode):
     """RSMF input: the lattices and beam list of fin at the energy ev (eV);
     the atomic t-matrix of its first phase shifts, as sin(d) exp(i d)."""
     cells = _bohr_cell(fin["cells"])
-    area = lambda cell: abs(cell[0][0] * cell[1][1] - cell[1][0] * cell[0][1])
-    tv = area(cells[2:] if mode == "O" else cells[:2])
+    tv = _area(cells[2:] if mode == "O" else cells[:2])
     ak2, ak3 = _k_parallel(ev, *angles)
     delta = [fin["phases"][0][0][l] if l < len(fin["phases"][0][0]) else _F32(0)
              for l in range(lmax + 1)]
@@ -325,8 +329,7 @@ def _composite_stdin(name, fin, layers, setup):
     layer = layers[setup["layer"] - 1]
     lay = layer["lay"]
     cells = _bohr_cell(fin["cells"])
-    area = lambda cell: abs(cell[0][0] * cell[1][1] - cell[1][0] * cell[0][1])
-    tv = area(cells[2:] if lay == 1 else cells[:2])
+    tv = _area(cells[2:] if lay == 1 else cells[:2])
     ak2, ak3 = _k_parallel(setup["ev"], *setup["angles"])
     subpos = [_F32(_sublayer(lay_, isub)[1 + k]) / _BOHR for k in range(3)
               for isub in range(mnsub) for lay_ in layers]

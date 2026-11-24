@@ -503,7 +503,7 @@ contains
   end subroutine bravais_layer_case
 
   !> SRTLAY and GHMAT, TAUMAT, or RTINV_SIMPLE on a composite layer, with the
-  !! arguments, array sizes and COMMON blocks of ref-calc.f. Mode O: one call
+  !! arguments and array sizes of ref-calc.f. Mode O: one call
   !! for all beams (offsets na = ns = 0); mode B: one call per beam set, with
   !! the offset of the set in the beam list as na and the sum of the earlier
   !! set sizes as ns.
@@ -518,7 +518,6 @@ contains
     real(sp) :: tstb, tsts, tv1, dcuts
     integer :: lay, lm, ntau, na, ns
     character(len=1) :: mode
-    character(len=16) :: label
     integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
     integer, allocatable :: lx(:), lxi(:), lt(:), lxm(:), lps(:), lpss(:)
     integer, allocatable :: nord(:), mgh(:, :), nugh(:), ngeq(:), ipl(:)
@@ -531,20 +530,9 @@ contains
     complex(sp), allocatable :: rbot(:, :), tbot(:, :), rg(:, :, :), rgp(:)
     complex(sp), allocatable :: ts(:), tg(:, :), vt(:), taug(:), taugm(:)
     complex(sp), allocatable :: rg1(:), rg2(:), tstore(:, :, :), buffer(:)
-    ! the COMMON blocks of the legacy routines: blank (E, AK2, AK3, VPI, TV,
-    ! EMACH), /SL/ (the lattice) and /MS/
-    real(sp) :: e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
-    real(sp) :: sl_vectors(2, 6), eps_c
-    integer :: sl_repetitions(2), lmax_c, liter_c
-    common e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
-    common /sl/ sl_vectors, sl_repetitions
-    common /ms/ lmax_c, eps_c, liter_c
+    real(sp) :: e_c, ak2_c, ak3_c, vpi_c
 
     call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
-    sl_vectors(:, 1:2) = lat%substrate_vector
-    sl_vectors(:, 3:4) = lat%superlattice_vector
-    sl_vectors(:, 5:6) = lat%superlattice_reciprocal
-    sl_repetitions = lat%repetitions
     read(5, *) mlmax, mnsub, nlay, layt, nltype, iltype
     read(5, *) mode
     e_c = read_real()
@@ -553,11 +541,6 @@ contains
     ak3_c = read_real()
     tv1 = read_real()
     tsts = read_real()
-    tv_c = tv1
-    emach_c = 1.0e-6_sp
-    lmax_c = lmax
-    eps_c = 0.001_sp
-    liter_c = 10
     l1 = lmax + 1
     lmmax = l1 * l1
     lev = l1 * (l1 + 1) / 2
