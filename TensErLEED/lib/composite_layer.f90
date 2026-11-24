@@ -151,7 +151,8 @@ contains
   !! nugh is modified: it is zero on exit for every propagator that was
   !! computed. The work arrays work and s are overwritten. The array
   !! work(l2m, l2m) is used as the table of spherical harmonics by the
-  !! direct sum (whole) and by the reciprocal sum (leading lm by lm part).
+  !! direct sum (whole) and by the reciprocal sum (its leading lm * lm
+  !! elements, as an lm by lm table).
   !! The array pq is the parallel momentum of the first beam of the
   !! current beam set.
   subroutine interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tst, &
@@ -216,7 +217,7 @@ contains
     real(sp) :: e, vpi, ak2, ak3
     real(sp) :: rxr1(2), rxr2(2), atv, tsts, fact1, akp2, gx, gy, gkx, gky, gk2
     real(sp) :: cfy, fy, phase
-    complex(sp) :: ci, cz, kprg, k0, z, t1, t1p, t2, t2p, t3, bs, cs, cfac
+    complex(sp) :: ci, cz, kprg, k0, z, t1, t1p, t2, t2p, t3, cfac
 
     e = point%energy
     vpi = point%imaginary_potential
@@ -344,7 +345,7 @@ contains
             end if
 
             ! Spherical harmonics
-            call harmonics_table(lm, z, fy, work(1:lm, 1:lm))
+            call harmonics_table(lm, z, fy, work)
 
             ! Loop over the interplanar vectors
             do iz = 1, nlay2
@@ -359,37 +360,8 @@ contains
               t1p = (exp(ci * (t2p + t3)) / kprg) * cfac
 
               ! A limited set of matrix elements
-              do i = 1, lmmax
-                ip = lxm(i)
-                nii = ip + (iz - 1) * lmmax
-                nni = nii + nlylm
-                l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
-                m1 = i - l1 - l1 * l1 - 1
-                if (m1 > 0) then
-                  bs = work(m1, l1 + 1)
-                else
-                  bs = (-1.0_sp)**(mod(m1, 2)) * work(l1 + 1, -m1 + 1)
-                end if
-                do j = 1, lmmax
-                  jp = lxm(j)
-                  l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
-                  m2 = j - l2 - l2 * l2 - 1
-                  if (i == j) then
-                    if (m1 > 0) cycle
-                  else if (l1 < l2 .or. (l1 == l2 .and. abs(m1) < abs(m2))) then
-                    cycle
-                  end if
-                  if (m2 >= 0) then
-                    cs = work(l2 + 1, m2 + 1)
-                  else
-                    cs = (-1.0_sp)**(mod(m2, 2)) * work(-m2, l2 + 1)
-                  end if
-                  ! gh(i, j) and gh(j, i) are produced together
-                  gh(nni, jp) = gh(nni, jp) + t1p * bs * cs
-                  gh(nii, jp) = gh(nii, jp) &
-                      + (-1.0_sp)**(mod(l1 + m1 + l2 + m2, 2)) * t1 * bs * cs
-                end do
-              end do
+              call add_reciprocal_terms(gh, lmg, lmmax, lxm, iz, nlylm, lm, &
+                                        work, t1, t1p)
             end do
           end do quadrants
 
@@ -554,9 +526,9 @@ contains
         if (il == 2) ll = lev
         ! Matrix 1 - X for odd l+m (il = 1), then for even l+m (il = 2).
         ! clm_index runs on from the first call to the second
-        call multiple_scattering_matrix(il, flm, x, lev, ll, tsf, it, lm, &
-                                        lxi, lmmax, klm, clm, nlm, clm_index, &
-                                        nnsub, lmax1)
+        call multiple_scattering_matrix(il, flm, x(:, 1:ll), lev, ll, tsf, it, &
+                                        lm, lxi, lmmax, klm, clm, nlm, &
+                                        clm_index, nnsub, lmax1)
 
         ! Quantities into which the inverse of 1 - X is multiplied: the
         ! diagonal blocks, first those of l = 0 (1), 2 (3), ... then those
@@ -583,7 +555,7 @@ contains
         end do
 
         ! Inversion and multiplication
-        call solve_pivoted(x, lev, ll, ll, xh)
+        call solve_pivoted(x(:, 1:2 * ll), lev, ll, ll, xh)
 
         ld = (it - 1) * lmmax
         if (il == 1) ld = ld + lev
@@ -1013,6 +985,57 @@ contains
     end do
   end subroutine spherical_bessel
 
+  !> Adds the contribution of one reciprocal-lattice point to the limited
+  !! set of matrix elements of the propagators between subplanes, for the
+  !! interplanar vector iz, from the table y of spherical harmonics.
+  subroutine add_reciprocal_terms(gh, lmg, lmmax, lxm, iz, nlylm, lm, y, t1, &
+                                  t1p)
+    integer, intent(in) :: lmg, lmmax, iz, nlylm, lm
+    !> Propagators, stacked vertically.
+    complex(sp), intent(inout) :: gh(lmg, lmmax)
+    !> Permutation of the (l,m) sequence.
+    integer, intent(in) :: lxm(lmmax)
+    !> Table of spherical harmonics.
+    complex(sp), intent(in) :: y(lm, lm)
+    !> Phase factors of the two propagation directions.
+    complex(sp), intent(in) :: t1, t1p
+
+    integer :: i, j, ip, jp, nii, nni, l1, l2, m1, m2
+    complex(sp) :: bs, cs
+
+    do i = 1, lmmax
+      ip = lxm(i)
+      nii = ip + (iz - 1) * lmmax
+      nni = nii + nlylm
+      l1 = int(sqrt(real(i - 1, sp) + 0.00001_sp))
+      m1 = i - l1 - l1 * l1 - 1
+      if (m1 > 0) then
+        bs = y(m1, l1 + 1)
+      else
+        bs = (-1.0_sp)**(mod(m1, 2)) * y(l1 + 1, -m1 + 1)
+      end if
+      do j = 1, lmmax
+        jp = lxm(j)
+        l2 = int(sqrt(real(j - 1, sp) + 0.00001_sp))
+        m2 = j - l2 - l2 * l2 - 1
+        if (i == j) then
+          if (m1 > 0) cycle
+        else if (l1 < l2 .or. (l1 == l2 .and. abs(m1) < abs(m2))) then
+          cycle
+        end if
+        if (m2 >= 0) then
+          cs = y(l2 + 1, m2 + 1)
+        else
+          cs = (-1.0_sp)**(mod(m2, 2)) * y(-m2, l2 + 1)
+        end if
+        ! gh(i, j) and gh(j, i) are produced together
+        gh(nni, jp) = gh(nni, jp) + t1p * bs * cs
+        gh(nii, jp) = gh(nii, jp) &
+            + (-1.0_sp)**(mod(l1 + m1 + l2 + m2, 2)) * t1 * bs * cs
+      end do
+    end do
+  end subroutine add_reciprocal_terms
+
   !> Spherical harmonics of the direction with polar angle cosine z
   !! (complex) and azimuth fi (legacy SH).
   !!
@@ -1024,7 +1047,7 @@ contains
     integer, intent(in) :: nharm
     complex(sp), intent(in) :: z
     real(sp), intent(in) :: fi
-    complex(sp), intent(out) :: y(:, :)
+    complex(sp), intent(out) :: y(nharm, nharm)
 
     integer :: l, ll
     real(sp) :: rz, anora, bm, bn
