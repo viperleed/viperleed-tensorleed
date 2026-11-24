@@ -1,7 +1,8 @@
 !> Calls the routines that set up the angular coefficients (CAAA, CELMG,
 !! LXGENT, CPPP) and the sublattices (SLIND) of ref-calc, and those of its
 !! energy loop up to the layer diffraction matrices of a Bravais layer
-!! (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the inputs read
+!! (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), and the
+!! composite layer (SRTLAY and GHMAT; TAUMAT; RTINV_SIMPLE), on the inputs read
 !! from stdin and prints their results.
 !!
 !! Output, one block per array: a header line "name kind count", then the
@@ -31,6 +32,19 @@
 !!            the atomic t-matrix (lmax + 1 complex values), then the beam
 !!            list as for BEAMS (npun = 1, npu = 1, one energy): knbs,
 !!            set sizes, tst, spq, spqf
+!!   GHMAT, TAUMAT, RTINV: name, the lattice as for SLIND, lmax, then
+!!            mlmax mnsub nlay lay nltype iltype (the sizes MLMAX and MNSUB
+!!            of the arrays of ref-calc, which set L2M = 2 * mlmax + 1 and the
+!!            leading dimension of the t-matrices; the number of sublayers
+!!            of the layer iltype, its lateral periodicity (1 overlayer, 2
+!!            bulk), the number of layer types and the layer type), mode (O:
+!!            one call for all beams; B: one call per beam set, with the
+!!            offset of the set in the beam list), e, vpi, ak2, ak3, tv (the
+!!            unit cell area of the layer), tst (the convergence criterion of
+!!            GHMAT), the sublayer positions of all layer types (nltype,
+!!            mnsub, 3), the number of different t-matrices in use, their
+!!            number for each sublayer, the t-matrices (mnsub, mlmax + 1),
+!!            then the beam list as for BEAMS (npun = 1, npu = 1, one energy)
 !! generate/refcalc_routines_legacy_driver.f is the same driver for the
 !! legacy routines of the baseline.
 program refcalc_routines_driver
@@ -78,6 +92,8 @@ program refcalc_routines_driver
     call lattice_sums_case()
   case ('RSMF')
     call bravais_layer_case()
+  case ('GHMAT', 'TAUMAT', 'RTINV')
+    call composite_layer_case(trim(name))
   case default
     error stop 'unknown routine'
   end select
@@ -400,7 +416,7 @@ contains
     real(sp) :: e, ak2, ak3, vpi, tv, tst
     character(len=1) :: mode
     integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
-    integer, allocatable :: lx(:), lxi(:), iple(:), iplo(:)
+    integer, allocatable :: lx(:), lxi(:), lt(:), lxm(:), iple(:), iplo(:)
     real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
     real(sp), allocatable :: v(:, :), clm(:)
     complex(sp), allocatable :: flms(:, :)
@@ -428,8 +444,8 @@ contains
     allocate(nb(knbs), npu(npun), npuc(npun), pq(2, knt), pqf(2, knt))
     npu = 1
 
-    allocate(clm(nlm), lx(lmmax), lxi(lmmax))
-    call x_tables(lmax, clm, lx, lxi)
+    allocate(clm(nlm), lx(lmmax), lxi(lmmax), lt(lmmax), lxm(lmmax))
+    call x_tables(lmax, clm, lx, lxi, lt, lxm)
 
     pq = 0.0_sp
     pqf = 0.0_sp
@@ -480,6 +496,225 @@ contains
     call write_complex('XODST', reshape(xodst, [lod * lod]))
   end subroutine bravais_layer_case
 
+  !> SRTLAY and GHMAT, TAUMAT, or RTINV_SIMPLE on a composite layer, with the
+  !! arguments, array sizes and COMMON blocks of ref-calc.f. Mode O: one call
+  !! for all beams (offsets na = ns = 0); mode B: one call per beam set, with
+  !! the offset of the set in the beam list as na and the sum of the earlier
+  !! set sizes as ns.
+  subroutine composite_layer_case(routine)
+    character(len=*), intent(in) :: routine
+    type(lattice) :: lat
+    type(energy_point) :: point
+    integer :: nl, lmax, klm, l1, lmmax, lev, lod, lev2, nlm, ncaa
+    integer :: mlmax, mnsub, nlay, layt, nltype, iltype, nnsub, lmax1
+    integer :: nlay2, lmg, lmn, lm2n, lmni, l2m, lms, lmt, ntauv, nll
+    integer :: knbs, knt, npun, nt, np, mpu, ncalls, k, naa, mlmmax
+    real(sp) :: tstb
+    character(len=1) :: mode
+    character(len=16) :: label
+    integer, allocatable :: knb(:), npu(:), nb(:), npuc(:), jjs(:, :)
+    integer, allocatable :: lx(:), lxi(:), lt(:), lxm(:), lps(:), lpss(:)
+    integer, allocatable :: nord(:), mgh(:, :), nugh(:), ngeq(:), ngol(:), ipl(:)
+    real(sp), allocatable :: spq(:, :), spqf(:, :), pq(:, :), pqf(:, :)
+    real(sp), allocatable :: v(:, :), clm(:), caa(:), subpos(:, :, :)
+    real(sp), allocatable :: pos(:, :), poss(:, :), drl(:, :), sdrl(:, :), test(:)
+    complex(sp), allocatable :: flms(:, :), tsf(:, :), tau(:, :), gh(:, :)
+    complex(sp), allocatable :: th(:, :), flm(:), xev(:, :), xh(:), hghd(:)
+    complex(sp), allocatable :: amult(:), cylm(:, :), rtop(:, :), ttop(:, :)
+    complex(sp), allocatable :: rbot(:, :), tbot(:, :), rg(:, :, :), rgp(:)
+    complex(sp), allocatable :: ts(:), tg(:, :), vt(:), taug(:), taugm(:)
+    complex(sp), allocatable :: rg1(:), rg2(:), tstore(:, :, :), buffer(:)
+    ! the COMMON blocks of the legacy routines: blank (E, AK2, AK3, VPI, TV,
+    ! EMACH), /SL/ (the lattice), /MS/ and /MPT/
+    real(sp) :: e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
+    real(sp) :: sl_vectors(2, 6), eps_c, tsts_c, tv1_c, dcuts_c
+    integer :: sl_repetitions(2), lmax_c, liter_c
+    integer :: na_c, ns_c, id_c, lay_c, lm_c, ntau_c, nopt_c, new_c
+    common e_c, ak2_c, ak3_c, vpi_c, tv_c, emach_c
+    common /sl/ sl_vectors, sl_repetitions
+    common /ms/ lmax_c, eps_c, liter_c
+    common /mpt/ na_c, ns_c, id_c, lay_c, lm_c, ntau_c, tsts_c, tv1_c, dcuts_c, &
+                 nopt_c, new_c
+    external :: srtlay, ghmat, taumat, rtinv_simple, copypos
+
+    call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
+    sl_vectors(:, 1:2) = lat%substrate_vector
+    sl_vectors(:, 3:4) = lat%superlattice_vector
+    sl_vectors(:, 5:6) = lat%superlattice_reciprocal
+    sl_repetitions = lat%repetitions
+    read(5, *) mlmax, mnsub, nlay, layt, nltype, iltype
+    read(5, *) mode
+    e_c = read_real()
+    vpi_c = read_real()
+    ak2_c = read_real()
+    ak3_c = read_real()
+    tv1_c = read_real()
+    tsts_c = read_real()
+    tv_c = tv1_c
+    emach_c = 1.0e-6_sp
+    lmax_c = lmax
+    eps_c = 0.001_sp
+    liter_c = 10
+    l1 = lmax + 1
+    lmmax = l1 * l1
+    lev = l1 * (l1 + 1) / 2
+    lod = lmmax - lev
+    lev2 = 2 * lev
+    nlm = nlms(lmax)
+    ncaa = nca(lmax)
+    nnsub = mnsub
+    lmax1 = mlmax + 1
+    mlmmax = lmax1 * lmax1
+    l2m = 2 * mlmax + 1
+    lms = l2m * l2m
+    nlay2 = nlay * (nlay - 1) / 2
+    lmg = nlay2 * lmmax * 2
+    lmn = nlay * lmmax
+    lm2n = 2 * lmn
+    lmni = lmn
+    nll = merge(1, nl, layt == 1)
+    point = energy_point(e_c, [ak2_c, ak3_c], vpi_c)
+    dcuts_c = -5.0_sp * sqrt(2.0_sp * e_c) / (min(vpi_c, -0.05_sp))
+
+    allocate(subpos(nltype, mnsub, 3), pos(nlay, 3), poss(nlay, 3))
+    call read_array(subpos)
+    read(5, *) ntauv
+    allocate(lps(nlay), tsf(mnsub, lmax1), buffer(mnsub * lmax1))
+    read(5, *) lps
+    call read_complexes(buffer)
+    tsf = reshape(buffer, [mnsub, lmax1])
+    call read_beam_list(knbs, knb, knt, tstb, spq, spqf)
+    npun = 1
+    allocate(nb(knbs), npu(npun), npuc(npun), pq(2, knt), pqf(2, knt))
+    npu = 1
+    pq = 0.0_sp
+    pqf = 0.0_sp
+    nb = 0
+    npuc = -7
+    call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2_c, ak3_c, e_c, &
+                      tstb, nb, pq, pqf, npuc, mpu, nt, np)
+    call run_lattice_sums(point, lat, nl, lmax, klm, v, jjs, flms)
+
+    allocate(clm(nlm), lx(lmmax), lxi(lmmax), lt(lmmax), lxm(lmmax))
+    call x_tables(lmax, clm, lx, lxi, lt, lxm)
+    allocate(caa(ncaa))
+    call composite_layer_coefficients(lmax, caa)
+    call copypos(pos, subpos, nltype, nnsub, nlay, iltype)
+
+    id_c = 1
+    nopt_c = 1
+    new_c = 1
+    lay_c = layt
+    lm_c = l1
+    ntau_c = ntauv
+    lmt = ntauv * lmmax
+    allocate(mgh(nlay, nlay), drl(nlay2, 3), sdrl(nlay2, 3))
+    allocate(nugh(nlay2), ngeq(nlay2), ngol(nlay2), test(nlay2))
+    allocate(lpss(nlay), nord(nlay), gh(lmg, lmmax), hghd(l2m))
+    allocate(tg(2, 2 * mnsub * mlmmax), vt(2 * mnsub * mlmmax))
+    allocate(tau(lmt, lev), xev(lev, lev2), xh(lev), flm(klm))
+    mgh = 0
+    drl = 0.0_sp
+    sdrl = 0.0_sp
+    nugh = 0
+    ngeq = 0
+    ngol = 0
+    test = 0.0_sp
+    lpss = 0
+    nord = 0
+    gh = (0.0_sp, 0.0_sp)
+    hghd = (0.0_sp, 0.0_sp)
+    tg = (0.0_sp, 0.0_sp)
+    vt = (0.0_sp, 0.0_sp)
+    tau = (0.0_sp, 0.0_sp)
+    xev = (0.0_sp, 0.0_sp)
+    xh = (0.0_sp, 0.0_sp)
+    flm = (0.0_sp, 0.0_sp)
+    if (routine == 'RTINV') then
+      allocate(th(lmni, lmni), ipl(lmni), amult(nt), cylm(nt, lmmax))
+      allocate(rtop(nt, nt), ttop(nt, nt), rbot(nt, nt), tbot(nt, nt))
+      allocate(rg(2, nlay, nt), rgp(nt), ts(lmn), taug(lmt))
+      allocate(taugm(lmt), rg1(nlay), rg2(nlay), tstore(2, lmn, nt))
+      th = (0.0_sp, 0.0_sp)
+      ipl = 0
+      amult = (0.0_sp, 0.0_sp)
+      cylm = (0.0_sp, 0.0_sp)
+      rtop = (0.0_sp, 0.0_sp)
+      ttop = (0.0_sp, 0.0_sp)
+      rbot = (0.0_sp, 0.0_sp)
+      tbot = (0.0_sp, 0.0_sp)
+      rg = (0.0_sp, 0.0_sp)
+      rgp = (0.0_sp, 0.0_sp)
+      ts = (0.0_sp, 0.0_sp)
+      taug = (0.0_sp, 0.0_sp)
+      taugm = (0.0_sp, 0.0_sp)
+      rg1 = (0.0_sp, 0.0_sp)
+      rg2 = (0.0_sp, 0.0_sp)
+      tstore = (0.0_sp, 0.0_sp)
+    end if
+
+    ncalls = merge(1, knbs, mode == 'O')
+    na_c = 0
+    ns_c = 0
+    do k = 1, ncalls
+      naa = merge(nt, nb(k), mode == 'O')
+      select case (routine)
+      case ('GHMAT')
+        call srtlay(pos, poss, lps, lpss, mgh, nlay, drl, sdrl, nlay2, nugh, &
+                    ngeq, ngol, new_c, nord)
+        call ghmat(gh, lmg, lmmax, mgh, nlay, nugh, ngeq, ngol, nlay2, tsts_c, &
+                   test, vt, l2m, vt, lm_c, tg, lms, drl, tv1_c, lxm, lev, &
+                   dcuts_c, caa, ncaa, lay_c, hghd, pq(1, 1 + na_c))
+        call write_complex(numbered('GH', k), reshape(gh, [lmg * lmmax]))
+      case ('TAUMAT')
+        call taumat(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, lmmax, lmax, &
+                    flms, nl, klm, lm_c, clm, nlm, lxi, nt, pq, na_c, nll, flm, &
+                    nnsub, lmax1, xh)
+        call write_complex(numbered('TAU', k), reshape(tau, [lmt * lev]))
+        call write_complex(numbered('FLM', k), flm)
+      case default
+        call rtinv_simple(rtop, ttop, rbot, tbot, naa, amult, cylm, pq, nt, &
+                          flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
+                          lev2, tau, lmt, taug, taugm, clm, nlm, pos, poss, &
+                          mgh, nlay, drl, sdrl, nugh, ngeq, ngol, nlay2, test, &
+                          gh, lmg, rg, rgp, ts, lmn, tg, lm2n, vt, caa, ncaa, &
+                          th, lmni, ipl, tsf, lps, lpss, nord, nnsub, lmax1, &
+                          xh, hghd, l2m, rg1, rg2, tstore)
+      end select
+      if (mode == 'B') then
+        na_c = na_c + naa
+        ns_c = ns_c + naa
+      end if
+    end do
+
+    call write_int('NB', nb)
+    select case (routine)
+    case ('GHMAT')
+      call write_int('MGH', reshape(mgh, [nlay * nlay]))
+      call write_real('DRL', reshape(drl, [nlay2 * 3]))
+      call write_real('SDRL', reshape(sdrl, [nlay2 * 3]))
+      call write_real('POSS', reshape(poss, [nlay * 3]))
+      call write_int('LPSS', lpss)
+      call write_int('NORD', nord)
+      call write_int('NUGH', nugh)
+      call write_int('NGEQ', ngeq)
+      call write_int('NGOL', ngol)
+      call write_real('TEST', test)
+    case ('RTINV')
+      call write_complex('R_TOP', reshape(rtop, [nt * nt]))
+      call write_complex('T_TOP', reshape(ttop, [nt * nt]))
+      call write_complex('R_BOT', reshape(rbot, [nt * nt]))
+      call write_complex('T_BOT', reshape(tbot, [nt * nt]))
+      call write_complex('TSTORE', reshape(tstore, [2 * lmn * nt]))
+      call write_complex('TAU', reshape(tau, [lmt * lev]))
+      call write_complex('GH', reshape(gh, [lmg * lmmax]))
+      call write_real('POSS', reshape(poss, [nlay * 3]))
+      call write_int('NORD', nord)
+      call write_complex('AMULT', amult)
+      call write_complex('CYLM', reshape(cylm, [nt * lmmax]))
+    end select
+  end subroutine composite_layer_case
+
   !> The Gaunt coefficients PPP as ref-calc.f computes them.
   subroutine gaunt_table(lmax, ppp)
     integer, intent(in) :: lmax
@@ -492,13 +727,12 @@ contains
                                     ppp, fac)
   end subroutine gaunt_table
 
-  !> CLM and the (L,M) permutations LX and LXI as ref-calc.f computes them.
-  subroutine x_tables(lmax, clm, lx, lxi)
+  !> CLM and the (L,M) permutations LX, LXI, LT and LXM as ref-calc.f computes them.
+  subroutine x_tables(lmax, clm, lx, lxi, lt, lxm)
     integer, intent(in) :: lmax
     real(sp), intent(out) :: clm(:)
-    integer, intent(out) :: lx(:), lxi(:)
+    integer, intent(out) :: lx(:), lxi(:), lt(:), lxm(:)
     real(dp) :: fac(nfac)
-    integer :: lt(size(lx)), lxm(size(lx))
     fac = 0.0_dp
     clm = 0.0_sp
     call matrix_coefficients(lmax, clm, fac)

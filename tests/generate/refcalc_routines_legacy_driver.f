@@ -1,7 +1,8 @@
 C  Calls the legacy routines of lib/lib.tleed.f that set up the angular
 C  coefficients (CAAA, CELMG, LXGENT, CPPP) and the sublattices (SLIND),
 C  and those of the energy loop up to the layer diffraction matrices of
-C  a Bravais layer (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE), on the
+C  a Bravais layer (TSCATF, BEAMS, SPHRM_MOD, BEAMS_YLM, FMAT, RSMF_SIMPLE),
+C  and the composite layer (SRTLAY and GHMAT; TAUMAT; RTINV_SIMPLE), on the
 C  inputs read from stdin and prints their results. Same protocol as
 C  tier1/refcalc_routines/driver.f90 (see there).
       MODULE LEGHLP
@@ -88,6 +89,9 @@ C  FMAT with the cutoff distance of ref-calc.f
         CALL FMDRV
       ELSE IF (NAME.EQ.'RSMF') THEN
         CALL RSDRV
+      ELSE IF (NAME.EQ.'GHMAT' .OR. NAME.EQ.'TAUMAT' .OR.
+     +         NAME.EQ.'RTINV') THEN
+        CALL CPDRV(NAME)
       ELSE
         STOP 'unknown routine'
       ENDIF
@@ -260,8 +264,9 @@ C  PPP as ref-calc.f computes it: CELMG fills FAC, CPPP uses it
       CALL CPPP(PPP,NN1,NN2,NN3,NFAC,FAC)
       END
 
-      SUBROUTINE XTABLES(LMAX, CLM, NLM, LX, LXI, LMMAX)
-C  CLM and the (L,M) permutations LX, LXI as ref-calc.f computes them
+      SUBROUTINE XTABLES(LMAX, CLM, NLM, LX, LXI, LT, LXM, LMMAX)
+C  CLM and the (L,M) permutations LX, LXI, LT, LXM as ref-calc.f
+C  computes them
       IMPLICIT NONE
       INTEGER LMAX, NLM, LMMAX, LX(LMMAX), LXI(LMMAX), N, NN, NFAC
       INTEGER LT(LMMAX), LXM(LMMAX)
@@ -474,6 +479,7 @@ C  offset of the set in the beam list, all sublattices)
       CHARACTER*1 MODE
       INTEGER, ALLOCATABLE :: KNB(:), NPU(:), NB(:), NPUC(:)
       INTEGER, ALLOCATABLE :: JJS(:,:), LX(:), LXI(:), IPLE(:), IPLO(:)
+      INTEGER, ALLOCATABLE :: LT(:), LXM(:)
       REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:), PQ(:,:), PQF(:,:)
       REAL, ALLOCATABLE :: V(:,:), CLM(:)
       COMPLEX, ALLOCATABLE :: FLMS(:,:), SCC(:,:), SA(:)
@@ -507,8 +513,8 @@ C  offset of the set in the beam list, all sublattices)
       ALLOCATE(NB(KNBS), NPU(NPUN), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
       NPU = 1
 
-      ALLOCATE(CLM(NLM), LX(LMMAX), LXI(LMMAX))
-      CALL XTABLES(LMAX, CLM, NLM, LX, LXI, LMMAX)
+      ALLOCATE(CLM(NLM), LX(LMMAX), LXI(LMMAX), LT(LMMAX), LXM(LMMAX))
+      CALL XTABLES(LMAX, CLM, NLM, LX, LXI, LT, LXM, LMMAX)
 
       PQ = 0.
       PQF = 0.
@@ -611,4 +617,236 @@ C  leave alone show.
       CALL BEAMS_YLM(CYLM,XA,PQ,NT,N,1,E,AK2,AK3,VPI,LMAX,LMMAX,YLM)
       CALL WRC('XA_WINDOW', XA, N)
       CALL WRC('CYLM_WINDOW', CYLM, NT*LMMAX)
+      END
+
+      SUBROUTINE CPDRV(NAME)
+C  SRTLAY and GHMAT, TAUMAT, or RTINV_SIMPLE on a composite layer, with
+C  the arguments, array sizes and COMMON blocks of ref-calc.f. Mode O:
+C  one call for all beams (offsets NA = NS = 0); mode B: one call per
+C  beam set, with the offset of the set in the beam list as NA and the
+C  sum of the earlier set sizes as NS.
+      USE LEGHLP
+      IMPLICIT NONE
+      CHARACTER*16 NAME, LABEL
+      CHARACTER*1 MODE
+      REAL RDR1
+      INTEGER IDEG, NL, LMAX, KLM, L1, LMMAX, LEV, LOD, LEV2, NLM, NCAA
+      INTEGER MLMAX, MNSUB, NLAY, LAYT, NLTYPE, ILTYPE, NNSUB, LMAX1
+      INTEGER NLAY2, LMG, LMN, LM2N, LMNI, L2M, LMS, LMT, NTAUV, NLL
+      INTEGER KNBS, KNT, NPUN, NT, NP, MPU, NCALLS, K, NAA, MLMMAX
+      INTEGER NCA(18), NLMS(18), INFO
+      REAL E, AK2, AK3, VPI, TV, EMACH, TSTB, TSTS, TV1, DCUTS
+      COMMON E, AK2, AK3, VPI, TV, EMACH
+      INTEGER LMAXC, LITER
+      REAL EPS
+      COMMON /MS/ LMAXC, EPS, LITER
+      INTEGER NA, NS, ID, LAY, LM, NTAU, NOPT, NEW
+      COMMON /MPT/ NA, NS, ID, LAY, LM, NTAU, TSTS, TV1, DCUTS, NOPT,
+     +             NEW
+      INTEGER, ALLOCATABLE :: KNB(:), NPU(:), NB(:), NPUC(:), JJS(:,:)
+      INTEGER, ALLOCATABLE :: LX(:), LXI(:), LT(:), LXM(:), LPS(:)
+      INTEGER, ALLOCATABLE :: LPSS(:), NORD(:), MGH(:,:), NUGH(:)
+      INTEGER, ALLOCATABLE :: NGEQ(:), NGOL(:), IPL(:)
+      REAL, ALLOCATABLE :: SPQ(:,:), SPQF(:,:), PQ(:,:), PQF(:,:)
+      REAL, ALLOCATABLE :: V(:,:), CLM(:), CAA(:), SUBPOS(:,:,:)
+      REAL, ALLOCATABLE :: POS(:,:), POSS(:,:), DRL(:,:), SDRL(:,:)
+      REAL, ALLOCATABLE :: TEST(:)
+      COMPLEX, ALLOCATABLE :: FLMS(:,:), SCC(:,:), SA(:), TSF(:,:)
+      COMPLEX, ALLOCATABLE :: TAU(:,:), GH(:,:), TH(:,:), FLM(:)
+      COMPLEX, ALLOCATABLE :: XEV(:,:), XH(:), HGHD(:), AMULT(:)
+      COMPLEX, ALLOCATABLE :: CYLM(:,:), RTOP(:,:), TTOP(:,:)
+      COMPLEX, ALLOCATABLE :: RBOT(:,:), TBOT(:,:), RG(:,:,:), RGP(:)
+      COMPLEX, ALLOCATABLE :: TS(:), TG(:,:), VT(:), TAUG(:), TAUGM(:)
+      COMPLEX, ALLOCATABLE :: RG1(:), RG2(:), TSTORE(:,:,:)
+      DATA NCA/1,70,264,759,1820,3836,7344,13053,21868,34914,53560,
+     +     79443,114492,160952,221408,298809,396492,518206/
+      DATA NLMS/0,76,284,809,1925,4032,7680,13593,22693,36124,55276,
+     +     81809,117677,165152,226848,305745,405213,529036/
+
+      CALL SETLAT(IDEG, NL, LMAX, KLM, V, JJS, FLMS, SCC, SA)
+      READ(5,*) MLMAX, MNSUB, NLAY, LAYT, NLTYPE, ILTYPE
+      READ(5,*) MODE
+      E = RDR1()
+      VPI = RDR1()
+      AK2 = RDR1()
+      AK3 = RDR1()
+      TV1 = RDR1()
+      TSTS = RDR1()
+      TV = TV1
+      EMACH = 1.0E-6
+      LMAXC = LMAX
+      EPS = 0.001
+      LITER = 10
+      L1 = LMAX + 1
+      LMMAX = L1*L1
+      LEV = L1*(L1+1)/2
+      LOD = LMMAX - LEV
+      LEV2 = 2*LEV
+      NLM = NLMS(LMAX)
+      NCAA = NCA(LMAX)
+      NNSUB = MNSUB
+      LMAX1 = MLMAX + 1
+      MLMMAX = LMAX1*LMAX1
+      L2M = 2*MLMAX + 1
+      LMS = L2M*L2M
+      NLAY2 = NLAY*(NLAY-1)/2
+      LMG = NLAY2*LMMAX*2
+      LMN = NLAY*LMMAX
+      LM2N = 2*LMN
+      LMNI = LMN
+      IF (LAYT.EQ.1) THEN
+        NLL = 1
+      ELSE
+        NLL = NL
+      ENDIF
+      DCUTS = - 5.0 * SQRT(2.0*E)/(AMIN1(VPI, - 0.05))
+
+      ALLOCATE(SUBPOS(NLTYPE,MNSUB,3), POS(NLAY,3), POSS(NLAY,3))
+      CALL RDR(SUBPOS, 3*NLTYPE*MNSUB)
+      READ(5,*) NTAUV
+      ALLOCATE(LPS(NLAY), TSF(MNSUB,LMAX1))
+      READ(5,*) LPS
+      CALL RDC(TSF, MNSUB*LMAX1)
+      CALL RDBEAMS(KNBS, KNB, KNT, TSTB, SPQ, SPQF)
+      NPUN = 1
+      ALLOCATE(NB(KNBS), NPU(NPUN), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
+      NPU = 1
+      PQ = 0.
+      PQF = 0.
+      NB = 0
+      NPUC = -7
+      CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TSTB,NB,PQ,
+     +           PQF,NPUC,MPU,NT,NP)
+      CALL RUNFMAT(E, VPI, V, JJS, NL, IDEG, LMAX, KLM, FLMS, SCC, SA)
+
+      ALLOCATE(CLM(NLM), LX(LMMAX), LXI(LMMAX), LT(LMMAX), LXM(LMMAX))
+      CALL XTABLES(LMAX, CLM, NLM, LX, LXI, LT, LXM, LMMAX)
+      ALLOCATE(CAA(NCAA))
+      CAA = 0.
+      CALL CAAA(CAA, NCAA, LMMAX)
+      CALL COPYPOS(POS, SUBPOS, NLTYPE, NNSUB, NLAY, ILTYPE)
+
+      ID = 1
+      NOPT = 1
+      NEW = 1
+      LAY = LAYT
+      LM = L1
+      NTAU = NTAUV
+      LMT = NTAU*LMMAX
+      ALLOCATE(MGH(NLAY,NLAY), DRL(NLAY2,3), SDRL(NLAY2,3))
+      ALLOCATE(NUGH(NLAY2), NGEQ(NLAY2), NGOL(NLAY2), TEST(NLAY2))
+      ALLOCATE(LPSS(NLAY), NORD(NLAY), GH(LMG,LMMAX), HGHD(L2M))
+      ALLOCATE(TG(2,2*MNSUB*MLMMAX), VT(2*MNSUB*MLMMAX))
+      ALLOCATE(TAU(LMT,LEV), XEV(LEV,LEV2), XH(LEV), FLM(KLM))
+      MGH = 0
+      DRL = 0.
+      SDRL = 0.
+      NUGH = 0
+      NGEQ = 0
+      NGOL = 0
+      TEST = 0.
+      LPSS = 0
+      NORD = 0
+      GH = (0., 0.)
+      HGHD = (0., 0.)
+      TG = (0., 0.)
+      VT = (0., 0.)
+      TAU = (0., 0.)
+      XEV = (0., 0.)
+      XH = (0., 0.)
+      FLM = (0., 0.)
+      IF (NAME.EQ.'RTINV') THEN
+        ALLOCATE(TH(LMNI,LMNI), IPL(LMNI), AMULT(NT), CYLM(NT,LMMAX))
+        ALLOCATE(RTOP(NT,NT), TTOP(NT,NT), RBOT(NT,NT), TBOT(NT,NT))
+        ALLOCATE(RG(2,NLAY,NT), RGP(NT), TS(LMN), TAUG(LMT))
+        ALLOCATE(TAUGM(LMT), RG1(NLAY), RG2(NLAY))
+        ALLOCATE(TSTORE(2,LMN,NT))
+        TH = (0., 0.)
+        IPL = 0
+        AMULT = (0., 0.)
+        CYLM = (0., 0.)
+        RTOP = (0., 0.)
+        TTOP = (0., 0.)
+        RBOT = (0., 0.)
+        TBOT = (0., 0.)
+        RG = (0., 0.)
+        RGP = (0., 0.)
+        TS = (0., 0.)
+        TAUG = (0., 0.)
+        TAUGM = (0., 0.)
+        RG1 = (0., 0.)
+        RG2 = (0., 0.)
+        TSTORE = (0., 0.)
+      ENDIF
+
+      IF (MODE.EQ.'O') THEN
+        NCALLS = 1
+      ELSE
+        NCALLS = KNBS
+      ENDIF
+      NA = 0
+      NS = 0
+      DO K = 1, NCALLS
+        IF (MODE.EQ.'O') THEN
+          NAA = NT
+        ELSE
+          NAA = NB(K)
+        ENDIF
+        IF (NAME.EQ.'GHMAT') THEN
+          CALL SRTLAY(POS,POSS,LPS,LPSS,MGH,NLAY,DRL,SDRL,NLAY2,NUGH,
+     +                NGEQ,NGOL,NEW,NORD)
+          CALL GHMAT(GH,LMG,LMMAX,MGH,NLAY,NUGH,NGEQ,NGOL,NLAY2,TSTS,
+     +               TEST,VT,L2M,VT,LM,TG,LMS,DRL,TV1,LXM,LEV,DCUTS,
+     +               CAA,NCAA,LAY,HGHD,PQ(1,1+NA))
+          CALL NUMBERED('GH', K, LABEL)
+          CALL WRC(LABEL, GH, LMG*LMMAX)
+        ELSE IF (NAME.EQ.'TAUMAT') THEN
+          CALL TAUMAT(TAU,LMT,NTAU,XEV,LEV,LEV2,LOD,TSF,LMMAX,LMAX,
+     +                FLMS,NL,KLM,LM,CLM,NLM,LXI,NT,PQ,NA,NLL,FLM,
+     +                NNSUB,LMAX1,XH)
+          CALL NUMBERED('TAU', K, LABEL)
+          CALL WRC(LABEL, TAU, LMT*LEV)
+          CALL NUMBERED('FLM', K, LABEL)
+          CALL WRC(LABEL, FLM, KLM)
+        ELSE
+          CALL RTINV_SIMPLE(
+     +         RTOP, TTOP, RBOT, TBOT, NAA, AMULT, CYLM, PQ, NT, FLMS,
+     +         FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
+     +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY,
+     +         DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST, GH, LMG, RG,
+     +         RGP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
+     +         IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
+     +         L2M, RG1, RG2, TSTORE)
+        ENDIF
+        IF (MODE.EQ.'B') THEN
+          NA = NA + NAA
+          NS = NS + NAA
+        ENDIF
+      ENDDO
+
+      CALL WRI('NB', NB, KNBS)
+      IF (NAME.EQ.'GHMAT') THEN
+        CALL WRI('MGH', MGH, NLAY*NLAY)
+        CALL WRR('DRL', DRL, NLAY2*3)
+        CALL WRR('SDRL', SDRL, NLAY2*3)
+        CALL WRR('POSS', POSS, NLAY*3)
+        CALL WRI('LPSS', LPSS, NLAY)
+        CALL WRI('NORD', NORD, NLAY)
+        CALL WRI('NUGH', NUGH, NLAY2)
+        CALL WRI('NGEQ', NGEQ, NLAY2)
+        CALL WRI('NGOL', NGOL, NLAY2)
+        CALL WRR('TEST', TEST, NLAY2)
+      ELSE IF (NAME.EQ.'RTINV') THEN
+        CALL WRC('R_TOP', RTOP, NT*NT)
+        CALL WRC('T_TOP', TTOP, NT*NT)
+        CALL WRC('R_BOT', RBOT, NT*NT)
+        CALL WRC('T_BOT', TBOT, NT*NT)
+        CALL WRC('TSTORE', TSTORE, 2*LMN*NT)
+        CALL WRC('TAU', TAU, LMT*LEV)
+        CALL WRC('GH', GH, LMG*LMMAX)
+        CALL WRR('POSS', POSS, NLAY*3)
+        CALL WRI('NORD', NORD, NLAY)
+        CALL WRC('AMULT', AMULT, NT)
+        CALL WRC('CYLM', CYLM, NT*LMMAX)
+      ENDIF
       END

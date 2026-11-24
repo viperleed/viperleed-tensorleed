@@ -8,14 +8,16 @@ generate/make_refcalc_routine_values.py). Covered: the Clebsch-Gordan
 and Gaunt tables CAA, CLM and PPP, the permutations LX, LXI, LT and LXM for
 every LMAX from 2 to 18, and the sublattice tables V, VL and JJS of SLIND
 for several lattices; TSCATF (with PSTEMP and BESSEL) and the average of its
-results over the elements of a site; BEAMS; SPHRM_MOD; FMAT; and BEAMS, FMAT
-and RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc. Large
+results over the elements of a site; BEAMS; SPHRM_MOD; FMAT; BEAMS, FMAT
+and RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc; and the
+composite layer: SRTLAY with GHMAT, TAUMAT, and RTINV_SIMPLE. Large
 arrays are compared by a digest of their bits and their leading values.
 For the cases in STOPS the routines stop with an error instead; their
 values in values.json record what the legacy routines gave.
 
 The arrays listed as live in values.json (RA and TA of the cases of
-RSMF_SIMPLE, whose legacy values depend on the BLAS/LAPACK the program runs
+RSMF_SIMPLE, and R_TOP, T_TOP, R_BOT, T_BOT and TSTORE of those of
+RTINV_SIMPLE, whose legacy values depend on the BLAS/LAPACK the program runs
 with) have no stored values: the legacy driver of the generator is built
 from the baseline tree (--baseline-tl-root or baseline_tl_root; it must be
 at the baseline commit) and run on the same inputs, with the same
