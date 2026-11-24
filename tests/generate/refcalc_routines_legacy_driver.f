@@ -360,7 +360,9 @@ C  BEAMS at several energies on one beam list
       NPUN = SIZE(NPU)
       ALLOCATE(NB(KNBS), NPUC(NPUN), PQ(2,KNT), PQF(2,KNT))
       READ(5,*) NE
-C  NPUC is not reset between energies, as in ref-calc
+C  NPUC is not reset between energies, as in ref-calc. -7 is a sentinel
+C  that no beam number takes, so an entry the routine leaves unset shows
+C  in the output.
       NPUC = -7
       DO IE = 1, NE
         E = RDR1()
@@ -519,6 +521,7 @@ C  offset of the set in the beam list, all sublattices)
       PQ = 0.
       PQF = 0.
       NB = 0
+C  Sentinel that no beam number takes: an unset entry shows in the output
       NPUC = -7
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)
@@ -593,6 +596,7 @@ C  leave alone show.
       PQ = 0.
       PQF = 0.
       NB = 0
+C  Sentinel that no beam number takes: an unset entry shows in the output
       NPUC = -7
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TST,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)
@@ -714,6 +718,7 @@ C  sum of the earlier set sizes as NS.
       PQ = 0.
       PQF = 0.
       NB = 0
+C  Sentinel that no beam number takes: an unset entry shows in the output
       NPUC = -7
       CALL BEAMS(KNBS,KNB,SPQ,SPQF,KNT,NPU,NPUN,AK2,AK3,E,TSTB,NB,PQ,
      +           PQF,NPUC,MPU,NT,NP)

@@ -219,7 +219,8 @@ contains
     allocate(nb(knbs), npuc(npun), pq(2, knt), pqf(2, knt))
     read(5, *) ne
     ! npuc is not reset between energies, as in ref-calc: the routine must
-    ! overwrite every entry it reports
+    ! overwrite every entry it reports. -7 is a sentinel that no beam number
+    ! takes, so an entry the routine leaves unset shows in the output.
     npuc = -7
     do ie = 1, ne
       e = read_real()
@@ -362,6 +363,7 @@ contains
     pq = 0.0_sp
     pqf = 0.0_sp
     nb = 0
+    ! Sentinel that no beam number takes: an unset entry shows in the output
     npuc = -7
     call select_beams(knbs, knb, spq, spqf, knt, npu, npun, point%k_parallel(1), &
                       point%k_parallel(2), point%energy, tst, nb, pq, pqf, &
@@ -453,6 +455,7 @@ contains
     pq = 0.0_sp
     pqf = 0.0_sp
     nb = 0
+    ! Sentinel that no beam number takes: an unset entry shows in the output
     npuc = -7
     call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2, ak3, e, tst, &
                       nb, pq, pqf, npuc, mpu, nt, np)
@@ -589,6 +592,7 @@ contains
     pq = 0.0_sp
     pqf = 0.0_sp
     nb = 0
+    ! Sentinel that no beam number takes: an unset entry shows in the output
     npuc = -7
     call select_beams(knbs, knb, spq, spqf, knt, npu, npun, ak2_c, ak3_c, e_c, &
                       tstb, nb, pq, pqf, npuc, mpu, nt, np)

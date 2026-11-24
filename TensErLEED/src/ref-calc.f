@@ -1109,7 +1109,7 @@ C  store X-matrix separately
             ENDDO
           END IF
 
-        ELSE  ! NSUB(ILTYPE) == 2, i.e., composite layer
+        ELSE  ! NSUB(ILTYPE) > 1, i.e., composite layer
 
 C  For a composite layer use RTINV instead of RSMF
 C  set some default quantities
