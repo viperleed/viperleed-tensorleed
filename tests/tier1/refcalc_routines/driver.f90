@@ -57,7 +57,7 @@ program refcalc_routines_driver
   use bravais_layer, only: sublattice_equivalences, lattice_sums, &
                            spherical_harmonics, bravais_layer_matrices, &
                            beams_ylm
-  use composite_layer, only: sort_subplanes
+  use composite_layer, only: sort_subplanes, interplanar_propagators
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -536,7 +536,7 @@ contains
     common /ms/ lmax_c, eps_c, liter_c
     common /mpt/ na_c, ns_c, id_c, lay_c, lm_c, ntau_c, tsts_c, tv1_c, dcuts_c, &
                  nopt_c, new_c
-    external :: ghmat, taumat, rtinv_simple, copypos
+    external :: taumat, rtinv_simple, copypos
 
     call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
     sl_vectors(:, 1:2) = lat%substrate_vector
@@ -661,9 +661,10 @@ contains
       case ('GHMAT')
         call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
                             ngeq, nord)
-        call ghmat(gh, lmg, lmmax, mgh, nlay, nugh, ngeq, nlay2, tsts_c, &
-                   test, vt, l2m, vt, lm_c, tg, lms, drl, tv1_c, lxm, lev, &
-                   dcuts_c, caa, ncaa, lay_c, hghd, pq(1, 1 + na_c))
+        call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tsts_c, &
+                                     test, vt, l2m, lm_c, tg, lms, drl, tv1_c, &
+                                     lxm, dcuts_c, caa, ncaa, lay_c, hghd, &
+                                     pq(:, 1 + na_c), lat, point)
         call write_complex(numbered('GH', k), reshape(gh, [lmg * lmmax]))
       case ('TAUMAT')
         call taumat(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, lmmax, lmax, &
@@ -674,13 +675,16 @@ contains
       case default
         call sort_subplanes(pos, poss, lps, lpss, mgh, nlay, drl, nlay2, nugh, &
                             ngeq, nord)
+        call interplanar_propagators(gh, lmg, lmmax, nugh, ngeq, nlay2, tsts_c, &
+                                     test, vt, l2m, lm_c, tg, lms, drl, tv1_c, &
+                                     lxm, dcuts_c, caa, ncaa, lay_c, hghd, &
+                                     pq(:, 1 + na_c), lat, point)
         call rtinv_simple(rtop, ttop, rbot, tbot, naa, amult, cylm, pq, nt, &
                           flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
                           lev2, tau, lmt, taug, taugm, clm, nlm, poss, mgh, &
-                          nlay, drl, nugh, ngeq, nlay2, test, gh, lmg, rg, &
-                          rgp, ts, lmn, tg, lm2n, vt, caa, ncaa, th, lmni, ipl, &
-                          tsf, lpss, nord, nnsub, lmax1, xh, hghd, l2m, rg1, &
-                          rg2, tstore)
+                          nlay, gh, lmg, rg, rgp, ts, lmn, lm2n, vt, th, lmni, &
+                          ipl, tsf, lpss, nord, nnsub, lmax1, xh, rg1, rg2, &
+                          tstore)
       end select
       if (mode == 'B') then
         na_c = na_c + naa

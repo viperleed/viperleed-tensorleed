@@ -54,7 +54,8 @@ C  modules of the setup routines
       USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
      +                         bravais_layer_matrices
-      USE composite_layer, ONLY: sort_subplanes
+      USE composite_layer, ONLY: sort_subplanes,
+     +                           interplanar_propagators
 
 C  include parameter statements for dimensions etc
 
@@ -454,7 +455,7 @@ C  RG   : inter-subplanar plane-wave phase shifts
 C  TS,TG,VT,TH: working spaces for rtinv
 C  IPL  : working space for matrix inversions
 C  XH   : working space for subroutine CXMTXT
-C  HGHD : working space for subroutine GHD
+C  HGHD : working space for subroutine interplanar_propagators
 C  RG1,RG2: working spaces for subroutine MFOLT
 C  TENSOV: storage for intra-layer wavefield components of composite layer type
 C         LCOMP(ILTYPE). In subroutines, Tensov is used as a pointer to the current
@@ -1171,15 +1172,18 @@ C  copy sublayer positions onto correct grid POS
 
             CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
      +                          NLAY2, NUGH, NGEQ, NORD)
+            CALL INTERPLANAR_PROPAGATORS(GH, LMG, LMMAX, NUGH, NGEQ,
+     +                          NLAY2, TSTS, TEST, VT, L2M, L1, TG,
+     +                          L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
+     +                          NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
 
             CALL RTINV_SIMPLE(
      +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
      +         FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
      +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
-     +         DRL, NUGH, NGEQ, NLAY2, TEST, GH, LMG, RG,
-     +         RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +         IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
-     +         L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+     +         GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
+     +         IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH,
+     +         RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +         )
 
           ELSE IF (LAY.eq.2) THEN        ! bulk
@@ -1194,15 +1198,18 @@ C  copy sublayer positions onto correct grid POS
 
               CALL SORT_SUBPLANES(POS, POSS, LPS, LPSS, MGH, NLAY, DRL,
      +                            NLAY2, NUGH, NGEQ, NORD)
+              CALL INTERPLANAR_PROPAGATORS(GH, LMG, LMMAX, NUGH, NGEQ,
+     +                            NLAY2, TSTS, TEST, VT, L2M, L1, TG,
+     +                            L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
+     +                            NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
 
               CALL RTINV_SIMPLE(
      +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
      +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
      +           TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
-     +           DRL, NUGH, NGEQ, NLAY2, TEST, GH, LMG, RG,
-     +           RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +           IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
-     +           L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+     +           GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
+     +           IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH,
+     +           RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +           )
 
               NA  = NA + NB(IBS)
