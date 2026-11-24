@@ -36,6 +36,23 @@ stays the same and only the input form differs:
   and C1..C4 are those of the format-1 header. C5..C8 only enter for EM > 0
   and are 0. PSL1 is read but never used; it is set to the number of phase
   shifts per energy. The title line (PAR1) is only printed.
+- ir100_2x1_o_thick_oblique: runs E050_L06 and E110-122_L07 of
+  ir100_2x1_o_thick at oblique incidence (THETA, FI as ag100_oblique,
+  OBLIQUE_INCIDENCE). It is the only case with a Bravais tensor layer
+  above a bulk with several beam sets (KNBS > 1) and more than one layer
+  computation per energy: off normal incidence, DECIDE recomputes the
+  layer matrices for later exit beams too, so the CYLM that FINAL1 gets
+  must be complete after each of them, not only after the first. The
+  structure differs from the source case, so its outputs are its own.
+- ir100_2x1_o_thick_partial: run E050_L06 of ir100_2x1_o_thick_oblique
+  with tensor output requested for only some stack layers (the flag
+  'Tensor output is required' of the other layers set to 0 and their file
+  names removed): run top_E050_L06 only for the top layer (Bravais O),
+  run layer3_E050_L06 only for layer 3 (a composite layer, below the layers
+  at which FINAL1 can be called). Every other case requests tensors for all
+  layers, so ANY_TENS of ref-calc (guard of the CYLM call and of ADREF2T)
+  is otherwise never tested with a partial request. The outputs are their
+  own: only the requested T_* files exist.
 - ag100_rfactor_hand: the pendry run of ag100_rfactor, edited in WEXPEL.
   pseudo_exp sets EOT = 1, so rfactor reads the experiment with READT as a
   pseudo-experiment in the layout of a theory spectrum: one geometry of the
@@ -81,6 +98,9 @@ HARTREE = 27.211396   # eV, as in TensErLEED's GLOBAL
 # from 1.1504 so that the three sublayers of the composite layer have
 # distinct heights
 DEEPER_IR_X = 1.2004
+# ir100_2x1_o_thick_oblique: THETA, FI (degrees) of the incident beam, as
+# in ag100_oblique
+OBLIQUE_INCIDENCE = (12.0, 33.0)
 
 
 def _source_runs(program, source, run_names):
@@ -139,6 +159,36 @@ def set_sublayer_x(fin, ltype, sublayer, x):
     i = lines.index(f"-   layer type {ltype} ---") + 2 + sublayer
     lines[i] = lines[i][:3] + f"{x:9.4f}" + lines[i][12:]
     return "\n".join(lines)
+
+
+def set_incidence(fin, theta, fi):
+    """Set the polar and azimuthal angles of the incident beam in a ref-calc
+    FIN (the THETA FI line, 2F9.4)."""
+    lines = fin.split("\n")
+    (i,) = [n for n, line in enumerate(lines) if line.rstrip().endswith("THETA FI")]
+    lines[i] = f"{theta:9.4f}{fi:9.4f}" + lines[i][18:]
+    return "\n".join(lines)
+
+
+def keep_tensors_of_layers(fin, layers):
+    """Request tensor output in a ref-calc FIN only for the stack layers
+    (1-based, from the top) in `layers`: the flag of every other layer is set
+    to 0 and its tensor file names are removed."""
+    out, lines, i = [], fin.split("\n"), 0
+    while i < len(lines):
+        out.append(lines[i])
+        if "Tensor output is required" in lines[i]:
+            (layer,) = re.findall(r"layer (\d+): layer type", lines[i - 1])
+            names = 0
+            while lines[i + 1 + names].startswith("T_"):
+                names += 1
+            if int(layer) in layers:
+                out += lines[i + 1:i + 1 + names]
+            else:
+                out[-1] = "  0" + lines[i][3:]
+            i += names
+        i += 1
+    return "\n".join(out)
 
 
 def phase_shifts_to_format2(fin):
@@ -218,6 +268,38 @@ def ir100_2x1_o_unsorted():
             "runs": runs, "inputs": inputs}
 
 
+def ir100_2x1_o_thick_oblique():
+    """Spec of ir100_2x1_o_thick_oblique: ir100_2x1_o_thick at oblique incidence."""
+    case, source = "ir100_2x1_o_thick_oblique", "ir100_2x1_o_thick"
+    runs, inputs = _source_runs("refcalc", source, ["E050_L06", "E110-122_L07"])
+    for run in runs:
+        inputs[run["stdin"]] = set_incidence(
+            set_first_line_title(inputs[run["stdin"]], f"tl-test {case}"),
+            *OBLIQUE_INCIDENCE)
+    return {"program": "refcalc", "name": case,
+            "description": "Ir(100)-(2x1)-O as ir100_2x1_o_thick (Bravais tensor layer "
+                           "above a bulk with several beam sets) at oblique incidence",
+            "covers": ["oblique-incidence", "decide-kpar", "several-beam-sets", "tensors"],
+            "runs": runs, "inputs": inputs}
+
+
+def ir100_2x1_o_thick_partial():
+    """Spec of ir100_2x1_o_thick_partial: tensors for only some stack layers."""
+    case, source = "ir100_2x1_o_thick_partial", "ir100_2x1_o_thick_oblique"
+    (source_run,), source_inputs = _source_runs("refcalc", source, ["E050_L06"])
+    fin = set_first_line_title(source_inputs[source_run["stdin"]], f"tl-test {case}")
+    runs, inputs = [], {source_run["param"]: source_inputs[source_run["param"]]}
+    for name, layers in (("top_E050_L06", {1}), ("layer3_E050_L06", {3})):
+        run = {**source_run, "name": name, "stdin": f"inputs/FIN_{name}"}
+        inputs[run["stdin"]] = keep_tensors_of_layers(fin, layers)
+        runs.append(run)
+    return {"program": "refcalc", "name": case,
+            "description": "Ir(100)-(2x1)-O as ir100_2x1_o_thick_oblique with tensor "
+                           "output requested only for the top layer, resp. only for layer 3",
+            "covers": ["oblique-incidence", "partial-tensors"],
+            "runs": runs, "inputs": inputs}
+
+
 def wexpel_head(wexpel):
     """The lines of an rfactor WEXPEL up to and including the title (the line
     after the &NL3 block), without the experimental data after it."""
@@ -263,7 +345,8 @@ def ag100_rfactor_hand():
             "runs": [pseudo, norm_max], "inputs": inputs}
 
 
-CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ag100_psformat2, ag100_rfactor_hand)}
+CASES = {f.__name__: f for f in (ir100_2x1_o_unsorted, ir100_2x1_o_thick_oblique,
+                                 ir100_2x1_o_thick_partial, ag100_psformat2, ag100_rfactor_hand)}
 
 
 def _write(spec, cases_dir):

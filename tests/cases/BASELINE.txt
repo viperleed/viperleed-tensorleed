@@ -1,4 +1,4 @@
-commit: 22e399826f67837378a95af077eaa3fb048d5cdf
+commit: aa56296b79a9e50e239bc3720bb001bfcec2987d
 tree: --tl-root, TensErLEED/ unmodified at this commit
 compiler: GNU Fortran (Ubuntu 15.2.0-16ubuntu1) 15.2.0
 blas/lapack:
@@ -8,4 +8,4 @@ blas/lapack:
   libblas.so (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/libblas.so
 compile flags: -O2
 link flags: -llapack -lpthread -lblas -fbacktrace
-date: 2026-10-13
+date: 2026-11-24
