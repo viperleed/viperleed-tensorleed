@@ -7,10 +7,10 @@ covers = ["oblique-incidence", "partial-tensors"]
 name = "top_E050_L06"
 stdin = "inputs/FIN_top_E050_L06"
 param = "inputs/PARAM_L06"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
 
 [[runs]]
 name = "layer3_E050_L06"
 stdin = "inputs/FIN_layer3_E050_L06"
 param = "inputs/PARAM_L06"
-outputs = ["fd.out", "amp.out", "T_*"]
+outputs = ["fd.out", "amp.out", "T_*", "stdout.exact"]
