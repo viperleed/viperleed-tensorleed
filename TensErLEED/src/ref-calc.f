@@ -634,6 +634,18 @@ C  2D lateral unit mesh)
      +             TSLAB,ASA,TOPLAYB,BOTLAYB,ASBULK,LTYPE,LDIST,TENS,
      +             LAYFILE,ASB,NL)
 
+C  ANY_TENS = 1 if a tensor is requested for any layer (2021-08-26
+C  Michele Riva). It decides whether ADREF2T recomputes the amplitudes
+C  for NEXIT > 0 and whether CYLM is computed for all beams before
+C  FINAL1.
+      ANY_TENS = 0
+      DO ISTACK = 1, NSTACK
+        IF (TENS(ISTACK).EQ.1) THEN
+          ANY_TENS = 1
+          EXIT
+        ENDIF
+      ENDDO
+
 C*************************************************************
 C open output files, write title and general information
 C*************************************************************
@@ -827,18 +839,6 @@ c        DO IL=1,LMAX1
 c          write(6,*) ISITE,IL,TMAT(ISITE,IL)
 c        ENDDO
 c      ENDDO
-
-!    2021-08-26 Michele Riva, added: Check whether we want any tensor,  << TODO: this whole bunch of code can move all the way out of the energy loop, right after reading in stuff
-!    as this requires recomputing amplitudes via ADREF2T below
-!    Set here, before the NEXIT loop, as it also decides below whether
-!    CYLM is computed for all beams (needed only by FINAL1).
-      ANY_TENS = 0
-      DO ISTACK = 1, NSTACK
-        IF (TENS(ISTACK).EQ.1) THEN
-          ANY_TENS = 1
-          EXIT
-        ENDIF
-      ENDDO
 
 C*****************************************************************
 C  begin loop over Tensor LEED output beams (incl. incident beam, NEXIT = 0)
