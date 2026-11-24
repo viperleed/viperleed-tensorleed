@@ -28,7 +28,8 @@ RTINV_SIMPLE (THMAT, TAUY_SIMPLE, MFOLT_SIMPLE; R/T top and bottom, TSTORE)
 on sublayer stacks of Ir(100)-(2x1)-O (three sublayers; coplanar sublayers
 in arrays for three; four sublayers with equal interplanar vectors, and with
 vectors that differ only in z;
-sublayers out of order along the normal), at normal and oblique incidence,
+sublayers out of order along the normal; t-matrices scaled up so that the
+elimination of CXMTXT interchanges rows), at normal and oblique incidence,
 for LMAX < MLMAX, for one call over all beams and for one call per beam set
 (offsets NA, NS > 0), as overlayer and as bulk layer; and FMAT with a
 superlattice vector 0.15 % longer than the substrate vector (first and second). Phase shifts
@@ -338,6 +339,8 @@ def _composite_stdin(name, fin, layers, setup):
             for l in range(lmax + 1):
                 d = fin["phases"][0][site - 1][l]
                 tsf[sites[site] - 1][l] = (np.sin(d) * np.cos(d), np.sin(d) * np.sin(d))
+                tsf[sites[site] - 1][l] = tuple(
+                    _F32(setup.get("tsf_scale", 1)) * x for x in tsf[sites[site] - 1][l])
         lps.append(sites[site])
     tsf_flat = [x for l in range(mlmax + 1) for row in tsf for x in row[l]]
     head, spq, spqf = _beam_lines(fin)
@@ -518,6 +521,11 @@ _COMPOSITE_SETUPS = [
      "incidence",
      _IR, _Z_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
                                angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_strong_scatterers", "the top layer with t-matrices 20 times as large "
+     "(not physical: the pivot search of the elimination in CXMTXT interchanges rows), "
+     "oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(20.0, 10.0),
+                           mode="O", tsf_scale=20, **_IR_LATTICE)),
     ("ir100_lmax5_mlmax7", "the top layer at LMAX 5 with arrays for MLMAX 7 "
      "(LMAX < MLMAX), oblique incidence",
      _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=7, mnsub=3, ev=90.0, angles=(12.0, 33.0),
