@@ -247,7 +247,7 @@ C  NCAA : dimension for composite layer Clebsh-Gordans, from composite_layer_coe
 C  CAA  : Clebsh-Gordon-coefficients for composite layer
 C  NLM  : dimension of CLM (as NLMS)
 C  NLMS : lmax-dependent dimension of X and TAU Clebsh-Gordans CLM
-C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (RSMF,RTINV)
+C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (bravais_layer_matrices, composite_layer_matrices)
 C  NFAC : variable dimension for array FAC
 C  FAC  : array that contains values n! - formerly dragged through code
 C         via a common block
@@ -306,7 +306,7 @@ C         if ever used, please set in input!
 C  DRPER,DRPAR: working vibrational amplitudes for TSCATF
 C  AF,CAF : zero-temperature and temperature-corrected atomic
 C         t-matrices for current element IEL in tscatf; used differently
-C         in RSMF
+C         in bravais_layer_matrices
 C  PHS,DEL,CTAB,SUM,BJ: working spaces for TSCATF and PSTEMP
 C  TMAT : storage array for site-specific atomic t-matrices including ATA
 
@@ -376,25 +376,23 @@ C  FLMS : output lattice sums F_s(l,m) from lattice_sums
       COMPLEX FLMS
       DIMENSION FLMS(MNL,MKLM)
 
-C  subroutine bravais_layer_matrices (and rtinv)
+C  subroutine bravais_layer_matrices (and composite_layer_matrices)
 
 C  IT   : leave set to zero
-C  ID   : compute scattering matrices for registries 1, ..., ID - currently
-C         not enabled. Might be useful for substrate type layer in subref, hcp stacking
 C  LAY  : substrate (1) or overlayer (2) type layer - LAY = LATT(ILTYPE)
 C  NLL  : number of sublattices for bravais_layer_matrices (NL for substrate, 1 for overlayer)
-C  NA   : offset in beam list PQ for subsequent rsmf (to treat beam sets separately)
-C  NS   : offset in scattering matrices for subsequent rsmf (to treat beam sets separately)
-C  NM   : internal layer diffraction matrix dimension for rsmf
-C  NAA  : number of beams in subsequent rsmf calculation
-C  ROP,TOP: reflection and transmission matrices for bravais layer by rsmf
+C  NA   : offset in beam list PQ for subsequent bravais_layer_matrices (to treat beam sets separately)
+C  NS   : offset in scattering matrices for subsequent bravais_layer_matrices (to treat beam sets separately)
+C  NM   : internal layer diffraction matrix dimension for bravais_layer_matrices
+C  NAA  : number of beams in subsequent bravais_layer_matrices calculation
+C  ROP,TOP: reflection and transmission matrices for bravais layer by bravais_layer_matrices
 C  AMULT,CYLM: complex working spaces
 C  FLM  : total lattice sum, added from individual FLMS
 C  XEV,XOD: meant to be even and odd (lm)-components of X-matrix - note XEV has confusing
-C         dimensions since also used in rtinv in a different fashion
+C         dimensions since also used in composite_layer_matrices in a different fashion
 C  YLM  : used as Y-function & aux. array
 C  YLME,YLMO: working spaces (angular eigenfunctions etc)
-C  XEVST,XODST: intermediate storage for X-matrix from rsmf
+C  XEVST,XODST: intermediate storage for X-matrix from bravais_layer_matrices
 C  IPLE,IPLO: also "working spaces"
 C  REPSTO,TRAPSTO,REMSTO,TRAMSTO: storage arrays for layer diffraction matrices
 C         (reflection, incidence from +x, transmission, inc. +x,
@@ -403,7 +401,7 @@ C  XEVSTO,XODSTO: permanent storage array for msmf x-matrices for each layer
 C         unlike TENSOV, these must not be used as pointers.
 
       INTEGER IT
-      INTEGER ID,LAY,NLL,NA,NS,NM,NAA
+      INTEGER LAY,NLL,NA,NS,NM,NAA
       COMPLEX ROP,TOP
       DIMENSION ROP(MKNT,MKNT),TOP(MKNT,MKNT)
       COMPLEX AMULT,CYLM,FLM
@@ -422,45 +420,42 @@ C         unlike TENSOV, these must not be used as pointers.
       COMPLEX XEVSTO,XODSTO
       DIMENSION XEVSTO(MLEV,MLEV,MNBRAV2),XODSTO(MLOD,MLOD,MNBRAV2)
 
-C  subroutine rtinv
+C  subroutine composite_layer_matrices
 
-C  NOPT : 1 should be default (calc matrix for all beams) - 2 would assume a symmetric
-C         layer, 3 just 1 inc beam. 2 and 3 can not be used in Tensor LEED calculation.
-C  NLAY : dimension - number of sublayers in current rtinv
-C  NLAY2,LMG,L2M: variable dimensions for rtinv
-C  NTAU : number of different site types (t-matrices) in next rtinv call
-C  TAUNO: ID of site type ISITE in current rtinv (t-matrices are passed via LPS and TSF,
+C  NLAY : dimension - number of sublayers in current composite_layer_matrices
+C  NLAY2,LMG,L2M: variable dimensions for composite_layer_matrices
+C  NTAU : number of different site types (t-matrices) in next composite_layer_matrices call
+C  TAUNO: ID of site type ISITE in current composite_layer_matrices (t-matrices are passed via LPS and TSF,
 C         contracted versions of STYPE and TMAT, to avoid unnecessary calls to TAUMAT)
-C  TSF  : temperature-corrected atomic t-matrices for use in RTINV
-C         - contains only t-matrices actually used in next rtinv
+C  TSF  : temperature-corrected atomic t-matrices for use in composite_layer_matrices
+C         - contains only t-matrices actually used in next composite_layer_matrices
 C  LPS  : contains ID of t-matrix TSF(LPS(ISUB),...) belonging to subplane ISUB
-C  LPSS : later storage array for reordered sublayer chemistry (subroutine srtlay)
+C  LPSS : later storage array for reordered sublayer chemistry (subroutine sort_subplanes)
 C  NORD : map between input sublayer number NORD(ILAY) and sublayer number ILAY
 C         after srtlay reordering
-C  POS  : internal array for RTINV that contains positions of sublayers of current layer
+C  POS  : internal array for composite_layer_matrices that contains positions of sublayers of current layer
 C  POSS : same as POS, but ordered by rising z (sim. to LPSS)
-C  LMT  : variable dimension for tau-matrix in rtinv (should be NTAU*LMMAX)
+C  LMT  : variable dimension for tau-matrix in composite_layer_matrices (should be NTAU*LMMAX)
 C  TV1  : unit cell area of composite layer
 C  ROM,TOM: reflection and transmission matrix for composite layer, but incidence from
-C           -x (cf. ROP TOP, declared for rsmf)
-C  TAU  : contains tau-matrices for the sublayers of rtinv
-C  TAUG,TAUGM: derivates of tau matrix used during rtinv
+C           -x (cf. ROP TOP, declared for bravais_layer_matrices)
+C  TAU  : contains tau-matrices for the sublayers of composite_layer_matrices
+C  TAUG,TAUGM: derivates of tau matrix used during composite_layer_matrices
 C  MGH  : contains identification of sublayer propagator positions in matrix GH
 C  DRL  : inter-subplanar vectors after reordering by sort_subplanes
-C  TEST : cutoff for rec. lattice sum in rtinv
+C  TEST : cutoff for rec. lattice sum in composite_layer_matrices
 C  GH   : matrix containing inter-subplanar propagators for composite layer
 C  RG   : inter-subplanar plane-wave phase shifts
-C  TS,TG,VT,TH: working spaces for rtinv
+C  TS,TG,VT,TH: working spaces for composite_layer_matrices
 C  IPL  : working space for matrix inversions
-C  XH   : working space for subroutine CXMTXT
+C  XH   : working space for subroutine solve_pivoted
 C  HGHD : working space for subroutine interplanar_propagators
-C  RG1,RG2: working spaces for subroutine MFOLT
+C  RG1,RG2: working spaces for subroutine reflection_transmission_element
 C  TENSOV: storage for intra-layer wavefield components of composite layer type
 C         LCOMP(ILTYPE). In subroutines, Tensov is used as a pointer to the current
 C         Tensor location. While not conforming to structured programming, this
 C         method saves a considerable amount of time.
 
-      INTEGER NOPT
       INTEGER NLAY,NLAY2,LMG,NTAU,L2M
       INTEGER TAUNO
       DIMENSION TAUNO(MNSITE)
@@ -1036,7 +1031,6 @@ C  DRPER,DRPAR,DR0 not used - leave IT = 0 !
             AF(IL) = TMAT(STYPE(ILTYPE,1),IL)
           ENDDO
 
-          ID  = 1
           NM  = NT
           LAY = LATT(ILTYPE)
 
@@ -1111,11 +1105,8 @@ C  store X-matrix separately
 
         ELSE  ! NSUB(ILTYPE) > 1, i.e., composite layer
 
-C  For a composite layer use RTINV instead of RSMF
+C  For a composite layer use composite_layer_matrices instead of bravais_layer_matrices
 C  set some default quantities
-
-          ID   = 1
-          NOPT = 1
 
           NM   = NT
 
