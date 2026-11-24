@@ -126,20 +126,20 @@ Column "I/O" marks routines that read or write files; their I/O moves to
 | `MFOLD_SIMPLE` | `lib.tleed.f` | `bravais_layer` | 4, done | `matrix_elements` (private) |
 | `XM` | `lib.tleed.f` | `bravais_layer` | 4, done | `intralayer_matrix` (private) |
 | `SPHRM_MOD` | `lib.tleed.f` | `bravais_layer` | 4, done | `spherical_harmonics`; the error message goes to stderr |
-| `BEAMS_YLM` | `lib.tleed.f` | `bravais_layer` | 4, done | `beams_ylm`, on top of `spherical_harmonics`, with an `energy_point` instead of `E,AK2,AK3,VPI`; called by `bravais_layer_matrices` before it forms the prefactors `AMULT` from the returned `XA`, as `RSMF_SIMPLE` does. also called by `composite_layer_matrices` and by the driver before `FINAL1` |
+| `BEAMS_YLM` | `lib.tleed.f` | `bravais_layer` | 4, done | `beams_ylm`, on top of `spherical_harmonics`, with an `energy_point` instead of `E,AK2,AK3,VPI`; called by `bravais_layer_matrices` before it forms the prefactors `AMULT` from the returned `XA`, as `RSMF_SIMPLE` does. Also called by `composite_layer_matrices` and by the driver before `FINAL1` |
 | `COPYPOS` | `lib.tleed.f` | `composite_layer` | 5, done | `copy_subplane_positions` |
-| `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5, done | `composite_layer_matrices`; takes the `lattice` type and an `energy_point`; `/MPT/` and `/MFB/` are arguments (section 4.1); writes the tensor amplitudes to `tstore`, packed as `TSTORE(2,LMN,NT)` and indexed by the beam within its set, without the beam-set offset (with several beam sets of a composite bulk-type layer each call overwrites the columns of the previous one; kept). The `SRTLAY`, `GHMAT` and `TAUMAT` calls stay inside it, the dead `NEW = 0` branches are gone |
+| `RTINV_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5, done | `composite_layer_matrices`; takes the `lattice` type and an `energy_point`; `/MPT/` and `/MFB/` are arguments (section 4.1); writes the tensor amplitudes to `tstore`, packed as `TSTORE(2,LMN,NT)` and indexed by the beam within its set, without the beam-set offset (with several beam sets of a composite bulk-type layer each call overwrites the columns of the previous one; kept: no output can show it, because the input reader rejects tensor output for a composite layer of the overlayer type (`LAY = 2`) with a non-trivial superlattice, `leed_input.f90`, so only the routine test sees the offset). The `SRTLAY`, `GHMAT` and `TAUMAT` calls stay inside it; the branches that `NEW.EQ.1` (`RTINV_SIMPLE`) and `NEW+1` (`SRTLAY`) never take are gone |
 | `MFOLT_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5, done | `reflection_transmission_element` (private); `GP` and `LM` (`lmax + 1`) are arguments |
 | `TAUMAT` | `lib.tleed.f` | `composite_layer` | 5, done | `subplane_scattering`; takes the `lattice` type and an `energy_point` |
 | `TAUY_SIMPLE` | `lib.tleed.f` | `composite_layer` | 5, done | `tau_ylm` (private) |
 | `THMAT` | `lib.tleed.f` | `composite_layer` | 5, done | `beeby_matrix` (private) |
-| `GHMAT` | `lib.tleed.f` | `composite_layer` | 5, done | `interplanar_propagators`; one work buffer with both shapes explicit (section 4.2); `NUGH` is modified in place, as in the legacy routine; `L2M = 2*MLMAX + 1` sizes the direct-sum loops, so extra terms are computed and unused (kept; no effect on any output) |
+| `GHMAT` | `lib.tleed.f` | `composite_layer` | 5, done | `interplanar_propagators`, with the private helpers `add_reciprocal_terms` and `fill_symmetric_elements` (the symmetric fill-in shared with `propagator_from_sum`) and `decode_lm` (the (l,m) decoding); one work buffer with both shapes explicit (section 4.2); `NUGH` is modified in place, as in the legacy routine; `L2M = 2*MLMAX + 1` sizes the direct-sum loops, so extra terms are computed and unused (kept; no effect on any output) |
 | `GHD` | `lib.tleed.f` | `composite_layer` | 5, done | `direct_propagator_sum` (private) |
 | `GHSC` | `lib.tleed.f` | `composite_layer` | 5, done | `propagator_from_sum` (private) |
-| `SB` | `lib.tleed.f` | `composite_layer` | 5, done | `spherical_bessel` (private; `atomic_scattering` has its own) |
+| `SB` | `lib.tleed.f` | `composite_layer` | 5, done | `spherical_hankel` (private; computes the Hankel functions of the first kind, `atomic_scattering` has its own `spherical_bessel`) |
 | `SH` | `lib.tleed.f` | `composite_layer` | 5, done | `harmonics_table` (private); `REAL*8`/`COMPLEX*16` locals: `dp` |
 | `SRTLAY` | `lib.tleed.f` | `composite_layer` | 5, done | `sort_subplanes`; called by `composite_layer_matrices` before `interplanar_propagators` |
-| `CXMTXT` | `lib.tleed.f` | `composite_layer` | 5, done | `solve_pivoted` (private); the real-modulus pivot search and thresholds are kept; the inverse and determinant options, unused by `TAUMAT`, are dropped |
+| `CXMTXT` | `lib.tleed.f` | `composite_layer` | 5, done | `solve_pivoted` (private); the real-modulus pivot search and its elimination threshold `1.0E-10` are kept; only the solve path (`INOPT = -1`) that `TAUMAT` uses is ported: the inverse and determinant options and the singularity threshold, which only set the determinant mark, are dropped |
 | `XMT` | `lib.tleed.f` | `composite_layer` | 5, done | `multiple_scattering_matrix` (private) |
 | `DBLGAS_MOD` | `lib.tleed.f` | `layer_stacking` | 6 | |
 | `SUBRAS_BLAS` | `lib.tleed.f` | `layer_stacking` | 6 | messages on stdout |
@@ -221,9 +221,10 @@ Hazards of each block:
   renames: `L1` becomes `LM`, `TSTS` `TST`, `TV1` `TV`, `DCUTS` `DCUT`.
   `LEED` also passes `TSTS` as an actual argument to `READIN`, which sets
   it. `LEED` sets `ID`, `NOPT` and `NEW` to 1; `RTINV_SIMPLE` does not use
-  `ID` or `NOPT`, and `NEW` is read only to choose between two branches
-  of `SRTLAY`, `GHMAT` and `RTINV_SIMPLE` of which the `NEW = 0` one is dead;
-  the port keeps the `NEW = 1` branches and no `NEW`.
+  `ID` or `NOPT`. `NEW` is read only by `RTINV_SIMPLE` (tests `NEW.EQ.1`)
+  and `SRTLAY` (arithmetic IF on `NEW+1`), whose other branches are dead
+  because `NEW` is always 1; `GHMAT` does not read it. The port keeps the
+  live branches and no `NEW`.
 - **`/MFB/`.** Hidden state between two library routines: `RTINV_SIMPLE`
   sets `GP` (the k-parallel offset of incident beam `JGP`) inside its beam
   loop just before calling `MFOLT_SIMPLE`, which reads it through COMMON;
@@ -256,7 +257,7 @@ Hazards of each block:
   with `PARAM` maxima and passes to `RTINV_SIMPLE`, which declares them with
   the dimensions of the current layer: `TAU(MLMT,MLEV)` as `TAU(LMT,LEV)`,
   `XEV(MLEV,MLEV2)` as `XEV(LEV,LEV2)`, `GH(MLMG,MLMMAX)` as
-  `GH(LMG,LMMAX)`, `TH(MLMNI,MLMNI)` as `TH(LMNI,LMNI)` and the vectors
+  `GH(LMG,LMMAX)`, `TH(MLMNI,MLMNI)` as `TH(LMNI,LMNI)` (`th(lmn,lmn)` in the port) and the vectors
   `TS`, `TAUG`, `TAUGM`, `XH`, `RG1`, `RG2` and `HGHD`. The port keeps these
   as packed leading parts of the larger arrays (sized by stage 8 from the
   derived values, they are packed exactly).
@@ -274,8 +275,8 @@ Hazards of each block:
     declares `PQ(2)`: the k-parallel offset of the first beam of the
     current beam set.
   The port passes explicit sections (`tensov(:,:,:,k)`,
-  `efscam(:,:,istack)`, `pq(:,1+na)`; the composite layer takes
-  `pq(:,1+na)`) to dummies of matching shape, or
+  `efscam(:,:,istack)`; `composite_layer_matrices` takes `pq` whole and
+  hands `pq(:,1+na)` on) to dummies of matching shape, or
   keeps contiguous packed buffers on purpose; never element-as-array.
 - **One actual for two dummies.** `RTINV_SIMPLE` passes its work array
   `VT(LM2N)` to `GHMAT` twice, as `Y1(L2M,L2M)` (handed to `GHD`) and as
@@ -408,10 +409,10 @@ Choices made here:
    `energy_point` instead of blank COMMON.
 3. `CPPP` in stage 3 (called once before the energy loop), `TSCATF`,
    `PSTEMP`, `BESSEL` in stage 4.
-4. `SPHRM_MOD` in `bravais_layer` (stage 4). The legacy copy stayed in
-   `lib.tleed.f` for `RTINV_SIMPLE` until stage 5, which moved it to
-   `composite_layer` on top of `spherical_harmonics`; the legacy `SPHRM_MOD`
-   and `BEAMS_YLM` are gone.
+4. `SPHRM_MOD` in `bravais_layer` (stage 4), as `spherical_harmonics`. The
+   legacy copy stayed in `lib.tleed.f` for `RTINV_SIMPLE` until stage 5,
+   which replaced its use by `beams_ylm` in `bravais_layer`, built on
+   `spherical_harmonics`; the legacy `SPHRM_MOD` and `BEAMS_YLM` are gone.
 5. `leed_output` created in stage 2 for the input echo on stdout of
    `READIN`/`READGEO`; the output files in stage 7.
 6. The driver stays fixed-form `src/ref-calc.f` until stage 8, which
