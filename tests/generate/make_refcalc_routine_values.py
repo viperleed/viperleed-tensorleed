@@ -27,7 +27,8 @@ layer: SRTLAY with GHMAT (GHD, SH, SB, GHSC), TAUMAT (XMT, CXMTXT) and
 RTINV_SIMPLE (THMAT, TAUY_SIMPLE, MFOLT_SIMPLE; R/T top and bottom, TSTORE)
 on sublayer stacks of Ir(100)-(2x1)-O (three sublayers; coplanar sublayers
 in arrays for three; four sublayers with equal interplanar vectors, and with
-vectors that differ only in z;
+vectors that differ only in the third or only in the first (normal)
+component;
 sublayers out of order along the normal; t-matrices scaled up so that the
 elimination of CXMTXT interchanges rows), at normal and oblique incidence,
 for LMAX < MLMAX, for one call over all beams and for one call per beam set
@@ -65,6 +66,7 @@ __created__ = '2026-11-11'
 __license__ = 'GPLv3+'
 
 import json
+import struct
 import subprocess
 from pathlib import Path
 
@@ -481,11 +483,22 @@ _THICK_LAYERS = _read_layers("ir100_2x1_o_thick", "E118_L07")
 # square cell, 1.9174 Angstrom apart along the normal, shifted by half a cell
 _BULK_LAYERS = [{"lay": 2, "subs": [(3, 0.0, 0.0, 0.0), (3, 1.9174, 1.3558, 1.3558)]}]
 # the thick layer with its last sublayer moved to (1.9174, 0, 2.7116): the
-# interplanar vectors to it and to the one before differ only in z
-_Z_ONLY_LAYERS = [
+# interplanar vectors to it and to the one before differ only in the third
+# component (z of the layer files, in the surface plane)
+_COMP3_ONLY_LAYERS = [
     *_THICK_LAYERS[:1],
     {**_THICK_LAYERS[1], "subs": [*_THICK_LAYERS[1]["subs"][:3],
                                   (3, 1.9174, 0.0, 2.7116)]},
+    *_THICK_LAYERS[2:],
+]
+# the thick layer with its last sublayer moved to (2.75, 2.7116, 1.3558), 0.8326
+# Angstrom further along the normal: its vector from the first sublayer and
+# that from the second to the third have equal in-plane components and
+# differ only in the first (normal) component
+_NORMAL_ONLY_LAYERS = [
+    *_THICK_LAYERS[:1],
+    {**_THICK_LAYERS[1], "subs": [*_THICK_LAYERS[1]["subs"][:3],
+                                  (3, 2.75, 2.7116, 1.3558)]},
     *_THICK_LAYERS[2:],
 ]
 # a composite bulk layer of two coplanar sublayers (direct lattice sum only)
@@ -519,11 +532,16 @@ _COMPOSITE_SETUPS = [
      "lattice sum only), oblique incidence, in arrays for three sublayers",
      _IR, _BULK_COPLANAR_LAYERS, dict(layer=1, lmax=6, mlmax=6, mnsub=3, ev=100.0,
                                       angles=(20.0, 10.0), mode="O", **_IR_LATTICE)),
-    ("ir100_thick_z_only_vectors", "the same four sublayers with the last one moved so "
-     "that some interplanar vectors differ only in the third component, oblique "
+    ("ir100_thick_comp3_only_vectors", "the same four sublayers with the last one moved "
+     "so that some interplanar vectors differ only in the third component, oblique "
      "incidence",
-     _IR, _Z_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
-                               angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+     _IR, _COMP3_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                                   angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_thick_normal_only_vectors", "the same four sublayers with the last one moved "
+     "so that two interplanar vectors differ only in the first (normal) component, "
+     "oblique incidence",
+     _IR, _NORMAL_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                                    angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
     ("ir100_strong_scatterers", "the top layer with t-matrices 20 times as large "
      "(not physical: the pivot search of the elimination in CXMTXT interchanges rows), "
      "oblique incidence",
@@ -636,17 +654,35 @@ def run_legacy_driver(exe, stdin):
     return summarize(run_driver(exe, stdin))
 
 
+def _differ_only_in(component, poss_bits):
+    """Whether two interplanar vectors of the sublayer positions POSS (bits,
+    column-major, one row per sublayer) differ only in the given component
+    (0-based) by more than the 0.001 of the equal-vector test of SRTLAY."""
+    poss = [struct.unpack(">f", bytes.fromhex(bits))[0] for bits in poss_bits]
+    nsub = len(poss) // 3
+    vectors = [[poss[c * nsub + i] - poss[c * nsub + j] for c in range(3)]
+               for i in range(nsub) for j in range(i + 1, nsub)]
+    return any(abs(u[component] - v[component]) > 0.001
+               and all(abs(u[c] - v[c]) <= 0.001 for c in range(3) if c != component)
+               for n, u in enumerate(vectors) for v in vectors[:n])
+
+
 def _check_composite_cases():
     """Raise GeneratorError unless the GHMAT cases show what they are for:
     equal interplanar vectors (NGEQ), interplanar vectors that differ only in
-    the third component and are not equal (all NGEQ zero), sublayers sorted by
+    the third component, and others only in the first (normal) component, and
+    are not equal (all NGEQ zero), sublayers sorted by
     SRTLAY (NORD), and coplanar sublayers (the x component of the interplanar
     vector is zero)."""
     cases = {case["id"]: case["expected"] for case in json.loads(VALUES.read_text())["cases"]}
     heads = lambda case_id, array: cases[f"ghmat_ir100_{case_id}"][array]["head"]
     checks = [
         ("thick_equal_vectors", any(n != "0" for n in heads("thick_equal_vectors", "NGEQ"))),
-        ("thick_z_only_vectors", all(n == "0" for n in heads("thick_z_only_vectors", "NGEQ"))),
+        ("thick_comp3_only_vectors",
+         all(n == "0" for n in heads("thick_comp3_only_vectors", "NGEQ"))),
+        ("thick_normal_only_vectors",
+         all(n == "0" for n in heads("thick_normal_only_vectors", "NGEQ"))
+         and _differ_only_in(0, heads("thick_normal_only_vectors", "POSS"))),
         ("unsorted_oblique", heads("unsorted_oblique", "NORD") != ["1", "2", "3"]),
         ("coplanar", heads("coplanar", "DRL")[0] == "00000000"),
         ]
