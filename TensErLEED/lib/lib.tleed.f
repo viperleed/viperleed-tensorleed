@@ -502,125 +502,6 @@ C  DIMENSION 42 REQUIRES N1+N2+N3-1 = 4*LMAX+2 .LE. 42
       RETURN
       END
 
-C-----------------------------------------------------------------------
-C  SUBROUTINE CXMTXT SOLVES A SET OF LINEAR EQUATIONS.                 ! << TODO Called inside TAUMAT with INOPT == -1. Could it be replaced with CGERF/CGERS?
-C     A = INPUT MATRIX.  A  IS DESTROYED DURING THE COMPUTATION AND
-C         IS REPLACED BY THE UPPER TRIANGULAR MATRIX RESULTING FROM THE
-C         GAUSSIAN ELIMINATION PROCESS (WITH PARTIAL PIVOTING).
-C     NC = FIRST DIMENSION OF A IN CALLING ROUTINE. NC.GE.NR.
-C     NR = ORDER OF A
-C     NSYS = NO. OF SYSTEMS TO BE SOLVED.  IF INVERSE OPTION IS CHOSEN
-C            NSYS MUST BE AT LEAST AS LARGE AS NR .
-C            COEFFICIENT MATRIX MUST BE STORED IN A(I,J), I=1,NR, J=1,NR
-C            CONSTANT VECTORS MUST BE STORED IN A(I,NR+1), I=1,NR:
-C            A(I,NR+2), I=1,NR  .... A(I,NR+NSYS), I=1,NR.
-C            RESULT OVERWRITES CONSTANT VECTORS
-C     NTOT = NR + NSYS
-C     MARK = SINGULARITY INDICATOR (MARK=1 FOR SINGULAR A)
-C     DET = DET(A)
-C     INOPT = -1 FOR SYSTEM SOLN. AND DET
-C              0 FOR DET ONLY
-C             +1 FOR INVERSE AND DET
-C     X is auxiliary array carried through only to ensure proper dimensions
-C     DIM. OF X ARRAY MUST BE AT LEAST AS LARGE AS FIRST DIM. OF A ARRAY
-      SUBROUTINE  CXMTXT (A, NC,NR, NSYS, NTOT, MARK, DET, INOPT, X)
-      REAL  AMAX, QZ
-      COMPLEX  A, X
-      COMPLEX  AGG, DET, CONST, SIGN, TEMP
-      DIMENSION A(NC, NTOT), X(NC)
-  300 FORMAT(5X,6HDETC= ,2E20.5)
-  310 FORMAT(//, 1X, 16HSINGULAR MATRIX , //)
-C
-C     PRESET PARAMETERS
-      SIGN = (1.0E + 00,0.0E + 00)
-      MARK = 0
-      IFLAG = INOPT
-      N = NR
-      NPL = N + 1
-      NMI = N - 1
-      NN = N + N
-      NPLSY = N + NSYS
-      IF (IFLAG)  950, 950, 920
-C
-C     INVERSE OPTION - PRESET AUGMENTED PART TO I
-  920 DO 930 I = 1, N
-      DO 930 J = NPL, NN
-  930 A(I,J) = (0.0E + 00,0.0E + 00)
-      DO 940 I = 1, N
-      J = I + N
-  940 A(I,J) = (1.0E + 00,0.0E + 00)
-      NPLSY = NN
-C
-C     TRIANGULARIZE A
-  950 DO 1020 I = 1, NMI
-      IPL = I + 1
-C     DETERMINE PIVOT ELEMENT
-      MAX = I
-      AMAX = CABS(A(I,I))
-      DO 970 K = IPL, N
-      QZ = CABS(A(K,I))
-      IF (AMAX-QZ)  960, 970, 970
-  960 MAX = K
-      AMAX = CABS(A(K,I))
-  970 CONTINUE
-      IF (MAX-I)  980, 1000, 980
-C     PIVOTING NECESSARY - INTERCHANGE ROWS
-  980 DO 990 L = I, NPLSY
-      TEMP = A(I,L)
-      A(I,L) = A(MAX,L)
-  990 A(MAX,L) = TEMP
-      SIGN =  - SIGN
-C     ELIMINATE A(I+1,I)---A(N,I)
- 1000 DO 1020 J = IPL, N
-      TEMP = A(J,I)
-      QZ = CABS(TEMP)
-      IF(QZ .LT. 1.0E-10) GO TO 1020
-      CONST =  - TEMP/A(I,I)
-      DO 1010 L = I, NPLSY
- 1010 A(J,L) = A(J,L) + A(I,L) * CONST
- 1020 CONTINUE
-C
-C     COMPUTE VALUE OF DETERMINANT
-      TEMP = (1.0E + 00,0.0E + 00)
-      DO 1030 I = 1, N
-      AGG = A(I,I)
-      QZ = CABS(AGG)
-      IF(QZ .GT. 1.0E-10) GO TO 1030
-C     MATRIX SINGULAR
-C     WRITE(6,310)
-      MARK = 1
-      GO TO 1040
- 1030 TEMP = TEMP * AGG
-      DET = SIGN * TEMP
-C     WRITE(6,300) DET
-C
-C     EXIT IF DET ONLY OPTION
- 1040 IF (IFLAG)  1050, 1160, 1050
-C     CHECK FOR INVERSE OPTION OR SYSTEMS OPTION
- 1050 IF (IFLAG-1)  1070, 1060, 1070
-C     INVERSE OPTION - ABORT IF A IS SINGULAR
- 1060 IF (MARK-1)  1070, 1160, 1070
-C
-C     BACK SUBSTITUTE TO OBTAIN INVERSE OR SYSTEM SOLUTION(S)
- 1070 DO 1150 I = NPL, NPLSY
-      K = N
- 1080 TEMP = A(K,I)                                                     100589
-      IF (K-N)  1090, 1110, 1090
- 1090 DO 1100 J = KPL, N
- 1100 TEMP = TEMP - A(K,J) * X(J)                                       100589
- 1110 X(K) = TEMP/A(K,K)                                                100589
-      IF (K-1)  1120, 1130, 1120
- 1120 KPL = K
-      K = K - 1
-      GO TO 1080
-C     PUT SOLN. VECT. INTO APPROPRIATE COLUMN OF A
- 1130 DO 1140 L = 1, N
- 1140 A(L,I) = X(L)
- 1150 CONTINUE
-C
- 1160 RETURN
-      END
-
 !-----------------------------------------------------------------------
 !  SUBROUTINE DBGT_MOD COMPUTES THE REFLECTION MATRIX FOR A PAIR OF LAYERS   ! TODO: optimize?
 !  FOR INCIDENCE FROM ONE SIDE ONLY. LAYER DOUBLING IS USED. NO
@@ -1856,36 +1737,31 @@ C    the sake of compatibility with van Hove / Tong book only.
 !    * /SL/ common block
       SUBROUTINE RTINV_SIMPLE(
      &                 R_TOP,T_TOP,R_BOT,T_BOT, N,
-     &                 AMULT, CYLM, PQ, NT, FLMS, FLM, NL,
-     &                 LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     &                 TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH,
+     &                 AMULT, CYLM, PQ, NT,
+     &                 LT, LXM, LMMAX, LEV,
+     &                 TAU, LMT, TAUG, TAUGM, POSS, MGH,
      &                 NLAY, GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT,
-     &                 TH, LMNI, IPL, TSF, LPSS, NORD,
-     &                 NNSUB, LMAX1, XH, RG1, RG2, TSTORE)
-      COMPLEX XEV, R_TOP, T_TOP, R_BOT, T_BOT, CYLM, AMULT, XA, ST,
-     +        CI, RU, CZ, AM, FLMS, FLM, MFOLT_RT
+     &                 TH, LMNI, IPL, LPSS, NORD,
+     &                 NNSUB, RG1, RG2, TSTORE)
+      COMPLEX R_TOP, T_TOP, R_BOT, T_BOT, CYLM, AMULT, XA, ST,
+     +        CI, RU, CZ, AM, MFOLT_RT
       COMPLEX SQRT,EXP
       COMPLEX TH(LMNI, LMNI), TSTORE(2, LMN, NT)
       COMPLEX TAU(LMT, LEV), GH(LMG, LMMAX), RG(2, NLAY, N)            ! May be worth to have 2 as last?
       COMPLEX RG_PERP(N)
       COMPLEX TS(LMN), VT(LM2N), TAUG(LMT), TAUGM(LMT)
-      DIMENSION  FLM(KLM)  ! Used in TAUMAT as working space?            BUG? SIZE WAS 4!
       DIMENSION  R_TOP(NT, NT), T_TOP(NT, NT), R_BOT(NT, NT),
      +           T_BOT(NT, NT), AMULT(N)
-      DIMENSION  XEV(LEV, LEV2), CYLM(NT, LMMAX), PQ(2, NT)            ! Swap CYLM indices?
-      DIMENSION  CLM(NLM), GP(2)
-      DIMENSION  FLMS(NL, KLM)
-      DIMENSION  LX(LMMAX), LXI(LMMAX), LT(LMMAX), LXM(LMMAX)
+      DIMENSION  CYLM(NT, LMMAX), PQ(2, NT)                            ! Swap CYLM indices?
+      DIMENSION  GP(2)
+      DIMENSION  LT(LMMAX), LXM(LMMAX)
       DIMENSION  POSS(NLAY, 3)
       DIMENSION  MGH(NLAY, NLAY)
       DIMENSION  IPL(LMNI), MFOLT_RT(2)
 CVB
-      INTEGER NNSUB, LMAX1
-      COMPLEX TSF
-      DIMENSION TSF(NNSUB, LMAX1)
+      INTEGER NNSUB
       INTEGER LPSS, NORD
       DIMENSION LPSS(NNSUB), NORD(NNSUB)
-      COMPLEX XH(LEV)
       COMPLEX RG1(NLAY), RG2(NLAY), TEMP
 
       COMMON  E, AK2, AK3, VPI
@@ -1902,24 +1778,10 @@ CVB
       CZ = CMPLX(0.0, 0.0)
       RU = CMPLX(1.0, 0.0)
 
-      IF (LAY.EQ.1) THEN
-        NLL = 1     ! Overlayer
-      ELSE
-        NLL = NL    ! Substrate (bulk)
-      ENDIF
-
-!     Check whether TAU needs recomputing since last call to RTINV_SIMPLE
-!     NB: NEW is always == 1, so the next bit is always executed.
-      IF (NEW.EQ.1) THEN
-!       Compute TAU for each chemical element
-        CALL TAUMAT(TAU, LMT, NTAU, XEV, LEV, LEV2, LOD, TSF, LMMAX,
-     &              LMAX, FLMS, NL, KLM, LM, CLM, NLM, LXI, NT, PQ, NA,
-     &              NLL, FLM, NNSUB, LMAX1, XH)
-      ENDIF
-
-!     The subplanes are sorted (POSS, LPSS, NORD), and the interlayer
-!     propagators in (LM)-space (GH, MGH) are computed, by the caller:
-!     SORT_SUBPLANES, then INTERPLANAR_PROPAGATORS.
+!     The subplanes are sorted (POSS, LPSS, NORD), the interlayer
+!     propagators in (LM)-space (GH, MGH) are computed, and TAU is
+!     computed for each chemical element, by the caller: SORT_SUBPLANES,
+!     INTERPLANAR_PROPAGATORS, SUBPLANE_SCATTERING.
 
 !     Create matrix TH to be inverted in Beeby\s scheme
       CALL THMAT(TH, LMNI, GH, LMG, LMMAX, MGH, NLAY, TAU, LMT,
@@ -2330,122 +2192,6 @@ CDIR$ SHORTLOOP
       RETURN
       END
 
-C-----------------------------------------------------------------------
-C  SUBROUTINE TAUMAT COMPUTES THE MATRIX TAU (INTRA-SUBPLANE MULTIPLE    111181
-C  SCATTERING IN (L,M)-REPRESENTATION) FOR A SINGLE BRAVAIS-LATTICE
-C  LAYER FOR EACH OF SEVERAL CHEMICAL ELEMENTS. THE MATRIX ELEMENTS ARE
-C  ORDERED THUS  THE (L,M) SEQUENCE IS THE \SYMMETRIZED\ ONE (CF. BOOK).
-C  TAU IS SPLIT INTO BLOCK-DIAGONAL PARTS CORRESPONDING TO EVEN L+M
-C  AND ODD L+M OF DIMENSIONS LEV AND LOD, RESP. IN THE MATRIX TAU THE
-C  PART FOR L+M= ODD IS LEFT-JUSTIFIED AND THE MATRIX REDUCED IN WIDTH
-C  FOR STORAGE EFFICIENCY. THE TAU MATRICES FOR DIFFERENT CHEMICAL
-C  ELEMENTS ARE ARRANGED UNDER EACH OTHER IN COLUMNAR FASHION  AT THE
-C  TOP IS THE TAU BASED ON THE ATOMIC T-MATRIX ELEMENTS TSF(1,L),
-C  FOLLOWED BY THE TAU\S BASED ON TSF(2,L), TSF(3,L), ETC.
-C  FOR QUANTITIES NOT EXPLAINED BELOW SEE MPERTI OR MTINV.
-C   TAU= OUTPUT MATRIX (SEE ABOVE).
-C   LMT= NTAU*LMMAX.
-C   NTAU= NO. OF CHEMICAL ELEMENTS TO BE USED.
-C   X= WORKING SPACE.
-C   TSF= ATOMIC T-MATRIX ELEMENTS.
-C   FLMS= LATTICE SUMS FROM SUBROUTINE FMAT.
-C   NL=NO. OF SUBLATTICES CONSIDERED IN FMAT (ONLY THE FIRST SUBLATTICE
-C    SUM IS USED BY TAUMAT).
-C   CLM= CLEBSCH-GORDON COEFFICIENTS FROM SUBROUTINE CELMG.
-C   NLM= DIMENSION OF CLM (SEE MAIN PROGRAM).
-C   LXI= PERMUTATION OF (L,M) SEQUENCE FROM SUBROUTINE LXGENT.
-C   NT,PQ,NA,NLL- SEE MPERTI,MTINV.                                     111181
-C   FLM- WORKING SPACE.
-C   XH - working space carried through to ensure proper dimensions                                                 111181
-C  IN COMMON BLOCKS
-C   E,VPI= CURRENT COMPLEX ENERGY.
-      SUBROUTINE TAUMAT(TAU,LMT,NTAU,X,LEV,LEV2,LOD,TSF,
-     +LMMAX,LMAX,FLMS,NL,KLM,LM,CLM,NLM,LXI,NT,PQ,NA,NLL,FLM,
-     +NNSUB,LMAX1,XH)
-      INTEGER NNSUB,LMAX1
-      DIMENSION CLM(NLM),LXI(LMMAX),PQ(2,NT)                            111181
-      DIMENSION BR1(2),BR2(2),AR1(2),AR2(2),RAR1(2),RAR2(2)             111181
-      COMPLEX AK,CZ,TAU(LMT,LEV),X(LEV,LEV2),TSF(NNSUB,LMAX1),
-     1FLMS(NL,KLM),DET,FLM(KLM),CI,XA                                   111181
-      COMPLEX XH(LEV)
-      COMMON E,AK2,AK3,VPI
-      COMMON /SL/BR1,BR2,AR1,AR2,RAR1,RAR2,NL1,NL2                      111181
-      CZ=(0.0,0.0)
-      CI=(0.0,1.0)                                                      111181
-      AK=-0.5/SQRT(CMPLX(2.0*E,-2.0*VPI+0.000001))
-      DO 100 K=1,KLM                                                    111181
-  100 FLM(K)=CZ                                                           .
-      BK2=PQ(1,1+NA)
-      BK3=PQ(2,1+NA)
-      JS=1
-      S1=0.
-      DO 130 J=1,NL1
-      S2=0.
-      DO 120 K=1,NL2
-      ADR1=S1*BR1(1)+S2*BR2(1)
-      ADR2=S1*BR1(2)+S2*BR2(2)
-      ABR=ADR1*BK2+ADR2*BK3
-      XA=EXP(ABR*CI)
-      DO 110 I=1,KLM
-110   FLM(I)=FLM(I)+FLMS(JS,I)*XA
-      IF (NLL.EQ.1) GO TO 140
-      JS=JS+1
-  120 S2=S2+1.
-  130 S1=S1+1.                                                            .
-  140 CONTINUE                                                          111181
-      DO 13 IT=1,NTAU
-      DO 13 IL=1,2
-      DO 1 I=1,LEV
-      DO 1 J=1,LEV2
-1     X(I,J)=CZ
-      LL=LOD
-      IF (IL.EQ.2) LL=LEV
-C  GENERATE MATRIX 1-X FOR L+M= ODD (IL=1), LATER FOR L+M= EVEN (IL=2)
-      CALL XMT(IL,FLM,1,X,LEV,LL,TSF,NTAU,IT,LM,LXI,LMMAX,              111181
-     1KLM,CLM,NLM,NST,NNSUB,LMAX1)
-C
-C  PREPARE QUANTITIES INTO WHICH INVERSE OF 1-X WILL BE MULTIPLIED
-      IF (IL-2) 6,2,2
-2     IS=0
-      LD1=0
-      L=0
-3     LD=LD1+1
-      LD1=LD+L
-      DO 4 I=LD,LD1
-4     X(I,I+LEV)=AK*TSF(IT,L+1)
-      L=L+2
-      IF (L-LMAX) 3,3,5
-5     IS=IS+1
-      L=1
-      IF (IS-1) 3,3,10
-C
-6     IS=0
-      LD1=0
-      L=1
-7     LD=LD1+1
-      LD1=LD+L-1
-      DO 8 I=LD,LD1
-8     X(I,I+LOD)=AK*TSF(IT,L+1)
-      L=L+2
-      IF (L-LMAX) 7,7,9
-9     IS=IS+1
-      L=2
-      IF (IS-1) 7,7,10
-10    LL2=LL+LL
-C
-C  PERFORM INVERSION AND MULTIPLICATION
-      CALL CXMTXT(X,LEV,LL,LL,LL2,MARK,DET,-1,XH)    ! TODO Michele: Judge if this can be replaced with CGETRF/CGETRS (likely better optimized?)
-C
-      LD=(IT-1)*LMMAX
-      IF (IL.EQ.1) LD=LD+LEV
-      DO 11 I=1,LL
-      DO 11 J=1,LL
-C  PUT RESULT IN TAU
-11    TAU(LD+I,J)=X(I,J+LL)
-13    CONTINUE
-      RETURN
-      END
-
 !-----------------------------------------------------------------------
 !  SUBROUTINE TAUY_SIMPLE PRODUCES THE QUANTITIES TAU*YLM(G) FOR ALL CHEMICAL
 !  ELEMENTS AND, IF BEEBY-TYPE INVERSION IS CALLED FOR IN THE RSP
@@ -2839,80 +2585,6 @@ C  PRODUCE TEMPERATURE-DEPENDENT T-MATRIX ELEMENTS
       RETURN
   850 WRITE(6,700)
       STOP
-      END
-
-C-----------------------------------------------------------------------
-C  SUBROUTINE XMT PRODUCES THE INTRA-LAYER MULTIPLE-SCATTERING MATRIX
-C  1-X FOR SUBROUTINE TAUMAT, OUTPUT IN THE TONG CONVENTION USING
-C  INPUT IN THE PENDRY CONVENTION. XMT MUST BE CALLED TWICE, FIRST TO
-C  PRODUCE THE VALUES FOR L+M= ODD, THEN FOR L+M= EVEN (IN THAT ORDER).
-C  FOR QUANTITIES NOT EXPLAINED BELOW SEE SUBROUTINE TAUMAT.
-C   IL=1 FOR L+M= ODD.
-C   IL=2 FOR L+M= EVEN.
-C   X= OUTPUT MATRIX 1-X, BLOCK-DIAGONALIZED, 2ND BLOCK LEFT-ADJUSTED.
-C   LL= INPUT EITHER LOD OR LEV.
-C   TSF= ATOMIC T-MATRIX ELEMENTS.
-C   NTAU= NO. OF CHEMICAL ELEMENTS CONSIDERED.
-C   IT= INDEX OF CURRENT CHEMICAL ELEMENT (.LE.NTAU).
-C   N= RUNNING INDEX OF CLM  MAY NOT BE RESET BETWEEN THE TWO CALLS TO
-C    XMT IN TAUMAT.
-      SUBROUTINE XMT(IL,FLMS,NL,X,LEV,LL,TSF,NTAU,IT,LM,LXI,LMMAX,
-     1 KLM,CLM,NLM,N,NNSUB,LMAX1)
-      COMPLEX TSF(NNSUB,LMAX1)
-      COMPLEX X,FLMS,CZERO,ACC,CI,ST,SU,RU
-      DIMENSION CLM(NLM),X(LEV,LL),FLMS(NL,KLM),LXI(LMMAX)
-      LMAX = LM-1
-      RU=(1.0,0.0)
-      CZERO = CMPLX(0.0,0.0)
-      CI=CMPLX(0.0,1.0)
-      L2MAX = LMAX + LMAX
-C  IF IL=1, CONSIDER L+M= ODD ONLY
-C  IF IL=2, CONSIDER L+M= EVEN ONLY
-      IF (IL-2) 455,450,450
-450   JSET=0
-      MM=0
-      GO TO 457
-455   JSET = 1
-      MM = LEV
-      N=1
-457   CONTINUE
-  460 J = 1
-      L = JSET
-  470 M =  - L + JSET
-      JL = L + 1
-      ST=(-CI)**MOD(L,4)
-  480 K = 1
-      LPP = JSET
-  490 MPP =  - LPP + JSET
-      JLPP=LPP+1
-      SU=((-CI)**MOD(LPP,4))/ST
-  500 MPA = IABS(MPP - M)
-      LPA = IABS(LPP - L)
-      IF (LPA-MPA)  520, 520, 510
-  510 MPA = LPA
-  520 MP1 = MPP - M + L2MAX + 1
-      LP1 = L + LPP + 1
-      ACC = CZERO
-  530 JLM = (LP1 * LP1 + MP1 - L2MAX)/2
-      ACC=ACC+CLM(N)*FLMS(1,JLM)
-      N = N + 1
-      LP1 = LP1 - 2
-      IF (LP1-1-MPA)  540, 530, 530
-  540 JX = LXI(J + MM)
-      KX = LXI(K + MM)
-      X(KX,JX) = -ACC * TSF(IT,JLPP)*SU
-      IF (J.EQ.K) X(KX,JX)=X(KX,JX)+RU
-      K = K + 1
-      MPP = MPP + 2
-      IF (LPP-MPP)  550, 500, 500
-  550 LPP = LPP + 1
-      IF (LMAX-LPP)  560, 490, 490
-  560 J = J + 1
-      M = M + 2
-      IF (L-M)  570, 480, 480
-  570 L = L + 1
-      IF (LMAX-L)  610, 470, 470
-  610 RETURN
       END
 
 C-----------------------------------------------------------------------

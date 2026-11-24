@@ -6,7 +6,8 @@
 !! it follows, and its results are bit-for-bit those of the legacy code
 !! (tests/tier1/test_refcalc_routines.py).
 
-!> Subplanes of a composite layer and the propagators between them.
+!> Subplanes of a composite layer, the propagators between them and the
+!! multiple scattering within them.
 module composite_layer
   use constants, only: pi
   use kinds, only: sp, dp
@@ -15,7 +16,7 @@ module composite_layer
 
   private
 
-  public :: sort_subplanes, interplanar_propagators
+  public :: sort_subplanes, interplanar_propagators, subplane_scattering
 
   !> The literal for pi in the estimate of the number of reciprocal-lattice
   !! points of interplanar_propagators; it differs from constants::pi in the
@@ -445,6 +446,315 @@ contains
       end do
     end do
   end subroutine interplanar_propagators
+
+  !> Intra-subplane multiple scattering in (l,m) space for one Bravais
+  !! lattice layer, for each of several chemical elements (legacy TAUMAT).
+  !! Author: Pendry.
+  !!
+  !! The (l,m) sequence is the symmetrized one. tau is split into
+  !! block-diagonal parts for even and odd l+m, of dimensions lev and lod;
+  !! in tau the odd part is left-justified and reduced in width for storage
+  !! efficiency. The tau matrices of the different chemical elements are
+  !! stacked on top of each other: first the one built from the atomic
+  !! t-matrix elements tsf(1, l), then those from tsf(2, l), and so on. Only
+  !! the lattice sum of the first sublattice is used.
+  !!
+  !! The work arrays x, xh and flm are overwritten.
+  subroutine subplane_scattering(tau, lmt, ntau, x, lev, lev2, lod, tsf, &
+                                 lmmax, flms, nl, klm, lm, clm, nlm, lxi, &
+                                 pq, nnsub, lmax1, xh, flm, lay, lat, point)
+    !> ntau * lmmax.
+    integer, intent(in) :: lmt
+    !> Number of chemical elements.
+    integer, intent(in) :: ntau
+    !> (lmax + 1) * (lmax + 2) / 2: dimension of the even-l+m block.
+    integer, intent(in) :: lev
+    !> 2 * lev.
+    integer, intent(in) :: lev2
+    !> lmmax - lev: dimension of the odd-l+m block.
+    integer, intent(in) :: lod
+    integer, intent(in) :: nnsub, lmax1
+    !> (lmax + 1)**2.
+    integer, intent(in) :: lmmax
+    !> Number of sublattices of the lattice sums.
+    integer, intent(in) :: nl
+    integer, intent(in) :: klm
+    !> lmax + 1.
+    integer, intent(in) :: lm
+    !> Dimension of clm.
+    integer, intent(in) :: nlm
+    !> Output: tau matrices.
+    complex(sp), intent(inout) :: tau(lmt, lev)
+    !> Work array.
+    complex(sp), intent(out) :: x(lev, lev2)
+    !> Atomic t-matrix elements.
+    complex(sp), intent(in) :: tsf(nnsub, lmax1)
+    !> Lattice sums, from the layer-matrix routines.
+    complex(sp), intent(in) :: flms(nl, klm)
+    !> Clebsch-Gordan coefficients.
+    real(sp), intent(in) :: clm(nlm)
+    !> Permutation of the (l,m) sequence.
+    integer, intent(in) :: lxi(lmmax)
+    !> Parallel momentum of the first beam of the current beam set.
+    real(sp), intent(in) :: pq(2)
+    !> Work array of the linear solver.
+    complex(sp), intent(out) :: xh(lev)
+    !> Work array: total lattice sum.
+    complex(sp), intent(out) :: flm(klm)
+    !> 1 for an overlayer, otherwise a substrate layer.
+    integer, intent(in) :: lay
+    !> Lattices; uses substrate_vector and repetitions.
+    type(lattice), intent(in) :: lat
+    !> Energy and imaginary potential.
+    type(energy_point), intent(in) :: point
+
+    integer :: i, j, k, it, il, is, l, ld, ld1, ll, js, clm_index, lmax
+    real(sp) :: bk2, bk3, s1, s2, adr1, adr2, abr
+    complex(sp) :: ak, cz, ci, xa
+
+    lmax = lm - 1
+    cz = cmplx(0.0_sp, 0.0_sp, sp)
+    ci = cmplx(0.0_sp, 1.0_sp, sp)
+    ak = -0.5_sp / sqrt(cmplx(2.0_sp * point%energy, &
+                              -2.0_sp * point%imaginary_potential &
+                              + 0.000001_sp, sp))
+    flm = cz
+    bk2 = pq(1)
+    bk3 = pq(2)
+
+    ! Total lattice sum: the sum over the sublattices with phase factors
+    ! (only the first term for an overlayer)
+    js = 1
+    s1 = 0.0_sp
+    sublattices: do j = 1, lat%repetitions(1)
+      s2 = 0.0_sp
+      do k = 1, lat%repetitions(2)
+        adr1 = s1 * lat%substrate_vector(1, 1) + s2 * lat%substrate_vector(1, 2)
+        adr2 = s1 * lat%substrate_vector(2, 1) + s2 * lat%substrate_vector(2, 2)
+        abr = adr1 * bk2 + adr2 * bk3
+        xa = exp(abr * ci)
+        do i = 1, klm
+          flm(i) = flm(i) + flms(js, i) * xa
+        end do
+        if (lay == 1) exit sublattices
+        js = js + 1
+        s2 = s2 + 1.0_sp
+      end do
+      s1 = s1 + 1.0_sp
+    end do sublattices
+
+    do it = 1, ntau
+      do il = 1, 2
+        x = cz
+        ll = lod
+        if (il == 2) ll = lev
+        ! Matrix 1 - X for odd l+m (il = 1), then for even l+m (il = 2).
+        ! clm_index runs on from the first call to the second
+        call multiple_scattering_matrix(il, flm, x, lev, ll, tsf, it, lm, &
+                                        lxi, lmmax, klm, clm, nlm, clm_index, &
+                                        nnsub, lmax1)
+
+        ! Quantities into which the inverse of 1 - X is multiplied: the
+        ! diagonal blocks, first those of l = 0 (1), 2 (3), ... then those
+        ! of l = 1 (2), 3 (4), ... for even (odd) l+m
+        ld1 = 0
+        do is = 0, 1
+          if (il == 2) then
+            do l = is, lmax, 2
+              ld = ld1 + 1
+              ld1 = ld + l
+              do i = ld, ld1
+                x(i, i + lev) = ak * tsf(it, l + 1)
+              end do
+            end do
+          else
+            do l = 1 + is, lmax, 2
+              ld = ld1 + 1
+              ld1 = ld + l - 1
+              do i = ld, ld1
+                x(i, i + lod) = ak * tsf(it, l + 1)
+              end do
+            end do
+          end if
+        end do
+
+        ! Inversion and multiplication
+        call solve_pivoted(x, lev, ll, ll, xh)
+
+        ld = (it - 1) * lmmax
+        if (il == 1) ld = ld + lev
+        do j = 1, ll
+          do i = 1, ll
+            tau(ld + i, j) = x(i, j + ll)
+          end do
+        end do
+      end do
+    end do
+  end subroutine subplane_scattering
+
+  !> Intra-layer multiple-scattering matrix 1 - X for subplane_scattering
+  !! (legacy XMT), in the Tong convention, from input in the Pendry
+  !! convention. Author: Pendry.
+  !!
+  !! It must be called twice, first for odd l+m (il = 1), then for even l+m
+  !! (il = 2); clm_index, the running index of clm, is set by the first call
+  !! and must not be changed in between.
+  !! x is the output matrix 1 - X, block-diagonalized, with the second block
+  !! left-adjusted.
+  subroutine multiple_scattering_matrix(il, flm, x, lev, ll, tsf, it, lm, lxi, &
+                                        lmmax, klm, clm, nlm, clm_index, &
+                                        nnsub, lmax1)
+    !> 1 for odd l+m, 2 for even l+m.
+    integer, intent(in) :: il
+    integer, intent(in) :: lev, lmmax, klm, nlm, nnsub, lmax1
+    !> lev for even l+m, otherwise lod.
+    integer, intent(in) :: ll
+    !> Index of the current chemical element.
+    integer, intent(in) :: it
+    !> lmax + 1.
+    integer, intent(in) :: lm
+    !> Total lattice sum.
+    complex(sp), intent(in) :: flm(klm)
+    !> The leading ll columns of the work array of subplane_scattering.
+    complex(sp), intent(inout) :: x(lev, ll)
+    complex(sp), intent(in) :: tsf(nnsub, lmax1)
+    integer, intent(in) :: lxi(lmmax)
+    real(sp), intent(in) :: clm(nlm)
+    !> Running index of clm: set to 1 if il = 1, advanced by every call.
+    integer, intent(inout) :: clm_index
+
+    integer :: lmax, l2max, jset, mm, j, k, l, m, lpp, mpp, mpa, lpa
+    integer :: mp1, lp1, jlm, jx, kx
+    complex(sp) :: acc, ci, st, su, ru
+
+    lmax = lm - 1
+    ru = cmplx(1.0_sp, 0.0_sp, sp)
+    ci = cmplx(0.0_sp, 1.0_sp, sp)
+    l2max = lmax + lmax
+    if (il < 2) then  ! odd l+m only
+      jset = 1
+      mm = lev
+      clm_index = 1
+    else  ! even l+m only
+      jset = 0
+      mm = 0
+    end if
+
+    j = 1
+    l = jset
+    l_loop: do
+      m = -l + jset
+      st = (-ci)**mod(l, 4)
+      m_loop: do
+        k = 1
+        lpp = jset
+        lpp_loop: do
+          mpp = -lpp + jset
+          su = ((-ci)**mod(lpp, 4)) / st
+          mpp_loop: do
+            mpa = abs(mpp - m)
+            lpa = abs(lpp - l)
+            if (lpa > mpa) mpa = lpa
+            mp1 = mpp - m + l2max + 1
+            lp1 = l + lpp + 1
+            acc = cmplx(0.0_sp, 0.0_sp, sp)
+            do
+              jlm = (lp1 * lp1 + mp1 - l2max) / 2
+              acc = acc + clm(clm_index) * flm(jlm)
+              clm_index = clm_index + 1
+              lp1 = lp1 - 2
+              if (lp1 - 1 - mpa < 0) exit
+            end do
+            jx = lxi(j + mm)
+            kx = lxi(k + mm)
+            x(kx, jx) = -acc * tsf(it, lpp + 1) * su
+            if (j == k) x(kx, jx) = x(kx, jx) + ru
+            k = k + 1
+            mpp = mpp + 2
+            if (lpp - mpp < 0) exit mpp_loop
+          end do mpp_loop
+          lpp = lpp + 1
+          if (lmax - lpp < 0) exit lpp_loop
+        end do lpp_loop
+        j = j + 1
+        m = m + 2
+        if (l - m < 0) exit m_loop
+      end do m_loop
+      l = l + 1
+      if (lmax - l < 0) exit l_loop
+    end do l_loop
+  end subroutine multiple_scattering_matrix
+
+  !> Solves a set of linear equations by Gaussian elimination with partial
+  !! pivoting (legacy CXMTXT, option "system solution"). Author: Pendry.
+  !!
+  !! The coefficient matrix is a(1:nr, 1:nr), the nsys constant vectors are
+  !! the columns a(1:nr, nr+1:nr+nsys). The matrix is destroyed (it becomes
+  !! upper triangular) and the solutions overwrite the constant vectors.
+  !! The pivot search and the threshold below which an element is not
+  !! eliminated use the real moduli; singularity is not checked.
+  subroutine solve_pivoted(a, nc, nr, nsys, work)
+    !> First dimension of a, at least nr.
+    integer, intent(in) :: nc
+    !> Order of the matrix.
+    integer, intent(in) :: nr
+    !> Number of systems.
+    integer, intent(in) :: nsys
+    complex(sp), intent(inout) :: a(nc, nr + nsys)
+    !> Work array, at least nc long.
+    complex(sp), intent(out) :: work(nc)
+
+    integer :: i, j, k, l, kmax, nplsy
+    real(sp) :: amax, qz
+    complex(sp) :: temp, const
+
+    nplsy = nr + nsys
+
+    ! Triangularize
+    do i = 1, nr - 1
+      ! Pivot element
+      kmax = i
+      amax = abs(a(i, i))
+      do k = i + 1, nr
+        qz = abs(a(k, i))
+        if (amax - qz < 0.0_sp) then
+          kmax = k
+          amax = abs(a(k, i))
+        end if
+      end do
+      if (kmax /= i) then  ! interchange rows
+        do l = i, nplsy
+          temp = a(i, l)
+          a(i, l) = a(kmax, l)
+          a(kmax, l) = temp
+        end do
+      end if
+      ! Eliminate a(i+1, i) to a(nr, i)
+      do j = i + 1, nr
+        temp = a(j, i)
+        qz = abs(temp)
+        if (qz < 1.0e-10_sp) cycle
+        const = -temp / a(i, i)
+        do l = i, nplsy
+          a(j, l) = a(j, l) + a(i, l) * const
+        end do
+      end do
+    end do
+
+    ! Back substitution
+    do i = nr + 1, nplsy
+      do k = nr, 1, -1
+        temp = a(k, i)
+        do j = k + 1, nr
+          temp = temp - a(k, j) * work(j)
+        end do
+        work(k) = temp / a(k, k)
+      end do
+      do l = 1, nr
+        a(l, i) = work(l)
+      end do
+    end do
+  end subroutine solve_pivoted
 
   !> Direct-lattice sum for the propagators between two subplanes of a
   !! composite layer (legacy GHD). The subplanes may be coplanar.

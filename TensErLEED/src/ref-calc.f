@@ -55,7 +55,8 @@ C  modules of the setup routines
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
      +                         bravais_layer_matrices
       USE composite_layer, ONLY: sort_subplanes,
-     +                           interplanar_propagators
+     +                           interplanar_propagators,
+     +                           subplane_scattering
 
 C  include parameter statements for dimensions etc
 
@@ -1177,12 +1178,17 @@ C  copy sublayer positions onto correct grid POS
      +                          L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
      +                          NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
 
+            CALL SUBPLANE_SCATTERING(TAU, LMT, NTAU, XEV, LEV, LEV2,
+     +                         LOD, TSF, LMMAX, FLMS, NL, KLM, L1, CLM,
+     +                         NLM, LXI, PQ(:,1+NA), NNSUB, LMAX1, XH,
+     +                         FLM, LAY, LAT, EPT)
+
             CALL RTINV_SIMPLE(
-     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
-     +         FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
+     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT,
+     +         LT, LXM, LMMAX, LEV,
+     +         TAU, LMT, TAUG, TAUGM, POSS, MGH, NLAY,
      +         GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
-     +         IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH,
+     +         IPL, LPSS, NORD, NNSUB,
      +         RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +         )
 
@@ -1203,12 +1209,17 @@ C  copy sublayer positions onto correct grid POS
      +                            L2M*L2M, DRL, TV1, LXM, DCUTS, CAA,
      +                            NCAA, LAY, HGHD, PQ(:,1+NA), LAT, EPT)
 
+              CALL SUBPLANE_SCATTERING(TAU, LMT, NTAU, XEV, LEV, LEV2,
+     +                          LOD, TSF, LMMAX, FLMS, NL, KLM, L1, CLM,
+     +                          NLM, LXI, PQ(:,1+NA), NNSUB, LMAX1, XH,
+     +                          FLM, LAY, LAT, EPT)
+
               CALL RTINV_SIMPLE(
-     +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
-     +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +           TAU, LMT, TAUG, TAUGM, CLM, NLM, POSS, MGH, NLAY,
+     +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT,
+     +           LT, LXM, LMMAX, LEV,
+     +           TAU, LMT, TAUG, TAUGM, POSS, MGH, NLAY,
      +           GH, LMG, RG, RG_PERP, TS, LMN, LM2N, VT, TH, LMNI,
-     +           IPL, TSF, LPSS, NORD, NNSUB, LMAX1, XH,
+     +           IPL, LPSS, NORD, NNSUB,
      +           RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
      +           )
 

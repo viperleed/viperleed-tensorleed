@@ -57,7 +57,8 @@ program refcalc_routines_driver
   use bravais_layer, only: sublattice_equivalences, lattice_sums, &
                            spherical_harmonics, bravais_layer_matrices, &
                            beams_ylm
-  use composite_layer, only: sort_subplanes, interplanar_propagators
+  use composite_layer, only: sort_subplanes, interplanar_propagators, &
+                             subplane_scattering
   use kinds, only: sp, dp
   use leed_types, only: lattice, energy_point
   implicit none
@@ -508,7 +509,7 @@ contains
     type(energy_point) :: point
     integer :: nl, lmax, klm, l1, lmmax, lev, lod, lev2, nlm, ncaa
     integer :: mlmax, mnsub, nlay, layt, nltype, iltype, nnsub, lmax1
-    integer :: nlay2, lmg, lmn, lm2n, lmni, l2m, lms, lmt, ntauv, nll
+    integer :: nlay2, lmg, lmn, lm2n, lmni, l2m, lms, lmt, ntauv
     integer :: knbs, knt, npun, nt, np, mpu, ncalls, k, naa, mlmmax
     real(sp) :: tstb
     character(len=1) :: mode
@@ -536,7 +537,7 @@ contains
     common /ms/ lmax_c, eps_c, liter_c
     common /mpt/ na_c, ns_c, id_c, lay_c, lm_c, ntau_c, tsts_c, tv1_c, dcuts_c, &
                  nopt_c, new_c
-    external :: taumat, rtinv_simple, copypos
+    external :: rtinv_simple, copypos
 
     call set_up_lattice(lat, nl, lmax, klm, v, jjs, flms)
     sl_vectors(:, 1:2) = lat%substrate_vector
@@ -573,7 +574,6 @@ contains
     lmn = nlay * lmmax
     lm2n = 2 * lmn
     lmni = lmn
-    nll = merge(1, nl, layt == 1)
     point = energy_point(e_c, [ak2_c, ak3_c], vpi_c)
     dcuts_c = -5.0_sp * sqrt(2.0_sp * e_c) / (min(vpi_c, -0.05_sp))
 
@@ -667,9 +667,10 @@ contains
                                      pq(:, 1 + na_c), lat, point)
         call write_complex(numbered('GH', k), reshape(gh, [lmg * lmmax]))
       case ('TAUMAT')
-        call taumat(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, lmmax, lmax, &
-                    flms, nl, klm, lm_c, clm, nlm, lxi, nt, pq, na_c, nll, flm, &
-                    nnsub, lmax1, xh)
+        call subplane_scattering(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, &
+                                 lmmax, flms, nl, klm, lm_c, clm, nlm, lxi, &
+                                 pq(:, 1 + na_c), nnsub, lmax1, xh, flm, &
+                                 lay_c, lat, point)
         call write_complex(numbered('TAU', k), reshape(tau, [lmt * lev]))
         call write_complex(numbered('FLM', k), flm)
       case default
@@ -679,12 +680,14 @@ contains
                                      test, vt, l2m, lm_c, tg, lms, drl, tv1_c, &
                                      lxm, dcuts_c, caa, ncaa, lay_c, hghd, &
                                      pq(:, 1 + na_c), lat, point)
+        call subplane_scattering(tau, lmt, ntau_c, xev, lev, lev2, lod, tsf, &
+                                 lmmax, flms, nl, klm, lm_c, clm, nlm, lxi, &
+                                 pq(:, 1 + na_c), nnsub, lmax1, xh, flm, &
+                                 lay_c, lat, point)
         call rtinv_simple(rtop, ttop, rbot, tbot, naa, amult, cylm, pq, nt, &
-                          flms, flm, nl, lxi, lt, lxm, lmmax, klm, xev, lev, &
-                          lev2, tau, lmt, taug, taugm, clm, nlm, poss, mgh, &
-                          nlay, gh, lmg, rg, rgp, ts, lmn, lm2n, vt, th, lmni, &
-                          ipl, tsf, lpss, nord, nnsub, lmax1, xh, rg1, rg2, &
-                          tstore)
+                          lt, lxm, lmmax, lev, tau, lmt, taug, taugm, poss, &
+                          mgh, nlay, gh, lmg, rg, rgp, ts, lmn, lm2n, vt, th, &
+                          lmni, ipl, lpss, nord, nnsub, rg1, rg2, tstore)
       end select
       if (mode == 'B') then
         na_c = na_c + naa
