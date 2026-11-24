@@ -269,6 +269,31 @@ def _n_beam_sets(fin):
     return sum(1 for l in lines[6:tst] if re.fullmatch(r"\s*\d+\s*", l))
 
 
+def _n_bravais_tensor_layers(fin):
+    """Layers of the stacking with one Bravais sublayer, overlayer periodicity
+    (LAY = 1) and tensor output."""
+    types, cur = {}, None
+    stack, cur_layer = [], None
+    for line in fin.splitlines():
+        m = re.match(r"^-\s+layer type (\d+)", line)
+        if m:
+            cur = types.setdefault(int(m.group(1)), {})
+        elif cur is not None and "LAY = " in line:
+            cur["lay"] = int(line.split()[0])
+        elif cur is not None and "number of Bravais sublayers" in line:
+            cur["nsub"] = int(line.split()[0])
+        elif "define bulk stacking" in line:
+            cur = None
+        m = re.search(r"layer \d+: layer type (\d+)", line)
+        if m:
+            cur_layer = int(m.group(1))
+        elif "Tensor output is required" in line and cur_layer is not None:
+            stack.append((cur_layer, int(line.split()[0])))
+            cur_layer = None
+    return sum(1 for t, flag in stack
+               if flag and types[t].get("nsub") == 1 and types[t].get("lay") == 1)
+
+
 def check_coverage(fin, checks):
     """Evaluate the named coverage checks on the text of a FIN file.
 
@@ -311,6 +336,10 @@ def check_coverage(fin, checks):
             v1, v2 = ([float(x) for x in l.split()[:2]] for l in (a1, a2))
             cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (math.hypot(*v1) * math.hypot(*v2))
             ok = abs(abs(cos) - 0.5) < 1e-4
+        elif check.startswith("beam_sets="):
+            ok = _n_beam_sets(fin) == int(check.split("=")[1])
+        elif check.startswith("bravais_tensor_layers>="):
+            ok = _n_bravais_tensor_layers(fin) >= int(check.split(">=")[1])
         elif check == "beam_sets_gt_1":
             ok = _n_beam_sets(fin) > 1
         else:
