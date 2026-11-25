@@ -341,9 +341,6 @@ contains
   !! ylm((l + 1)**2 - l + m) is Y(l, m); lmmax = (lmax + 1)**2. The
   !! argument of the harmonics is given by ct = cos(theta), st = sin(theta)
   !! and cf = exp(i * phi), all complex.
-  !!
-  !! The legacy copy in lib.tleed.f is still used by RTINV_SIMPLE, which
-  !! cannot use this module; this routine is a temporary duplicate of it.
   subroutine spherical_harmonics(lmax, ylm, lmmax, ct, st, cf)
     !> Largest angular momentum.
     integer, intent(in) :: lmax
@@ -432,11 +429,8 @@ contains
   !!
   !! Rows n + 1 ... nt of cylm are left unchanged. xa(ig) returns the
   !! complex perpendicular wave-vector component of beam n_offset + ig inside
-  !! the crystal. Used by bravais_layer_matrices.
-  !!
-  !! The legacy copy in lib.tleed.f is kept for the legacy callers in
-  !! ref-calc.f (RTINV_SIMPLE and the call before FINAL1) until they are
-  !! ported.
+  !! the crystal. Used by bravais_layer_matrices, by composite_layer_matrices
+  !! (one beam set) and by the driver (all beams, before FINAL1).
   subroutine beams_ylm(cylm, xa, pq, nt, n, n_offset, point, lmax, lmmax, ylm)
     !> Total number of beams at the current energy
     integer, intent(in) :: nt

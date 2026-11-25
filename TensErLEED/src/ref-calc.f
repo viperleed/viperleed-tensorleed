@@ -53,7 +53,9 @@ C  modules of the setup routines
      +                             accumulate_atomic_tmatrix
       USE beam_selection, ONLY: select_beams
       USE bravais_layer, ONLY: sublattice_equivalences, lattice_sums,
-     +                         bravais_layer_matrices
+     +                         bravais_layer_matrices, beams_ylm
+      USE composite_layer, ONLY: copy_subplane_positions,
+     +                           composite_layer_matrices
 
 C  include parameter statements for dimensions etc
 
@@ -245,7 +247,7 @@ C  NCAA : dimension for composite layer Clebsh-Gordans, from composite_layer_coe
 C  CAA  : Clebsh-Gordon-coefficients for composite layer
 C  NLM  : dimension of CLM (as NLMS)
 C  NLMS : lmax-dependent dimension of X and TAU Clebsh-Gordans CLM
-C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (RSMF,RTINV)
+C  CLM  : Clebsh-Gordan coefficients for matrices X and TAU (bravais_layer_matrices, composite_layer_matrices)
 C  NFAC : variable dimension for array FAC
 C  FAC  : array that contains values n! - formerly dragged through code
 C         via a common block
@@ -304,7 +306,7 @@ C         if ever used, please set in input!
 C  DRPER,DRPAR: working vibrational amplitudes for TSCATF
 C  AF,CAF : zero-temperature and temperature-corrected atomic
 C         t-matrices for current element IEL in tscatf; used differently
-C         in RSMF
+C         in bravais_layer_matrices
 C  PHS,DEL,CTAB,SUM,BJ: working spaces for TSCATF and PSTEMP
 C  TMAT : storage array for site-specific atomic t-matrices including ATA
 
@@ -374,25 +376,23 @@ C  FLMS : output lattice sums F_s(l,m) from lattice_sums
       COMPLEX FLMS
       DIMENSION FLMS(MNL,MKLM)
 
-C  subroutine bravais_layer_matrices (and rtinv)
+C  subroutine bravais_layer_matrices (and composite_layer_matrices)
 
 C  IT   : leave set to zero
-C  ID   : compute scattering matrices for registries 1, ..., ID - currently
-C         not enabled. Might be useful for substrate type layer in subref, hcp stacking
 C  LAY  : substrate (1) or overlayer (2) type layer - LAY = LATT(ILTYPE)
 C  NLL  : number of sublattices for bravais_layer_matrices (NL for substrate, 1 for overlayer)
-C  NA   : offset in beam list PQ for subsequent rsmf (to treat beam sets separately)
-C  NS   : offset in scattering matrices for subsequent rsmf (to treat beam sets separately)
-C  NM   : internal layer diffraction matrix dimension for rsmf
-C  NAA  : number of beams in subsequent rsmf calculation
-C  ROP,TOP: reflection and transmission matrices for bravais layer by rsmf
+C  NA   : offset in beam list PQ for subsequent bravais_layer_matrices (to treat beam sets separately)
+C  NS   : offset in scattering matrices for subsequent bravais_layer_matrices (to treat beam sets separately)
+C  NM   : internal layer diffraction matrix dimension for bravais_layer_matrices
+C  NAA  : number of beams in subsequent bravais_layer_matrices calculation
+C  ROP,TOP: reflection and transmission matrices for bravais layer by bravais_layer_matrices
 C  AMULT,CYLM: complex working spaces
 C  FLM  : total lattice sum, added from individual FLMS
 C  XEV,XOD: meant to be even and odd (lm)-components of X-matrix - note XEV has confusing
-C         dimensions since also used in rtinv in a different fashion
+C         dimensions since also used in composite_layer_matrices in a different fashion
 C  YLM  : used as Y-function & aux. array
 C  YLME,YLMO: working spaces (angular eigenfunctions etc)
-C  XEVST,XODST: intermediate storage for X-matrix from rsmf
+C  XEVST,XODST: intermediate storage for X-matrix from bravais_layer_matrices
 C  IPLE,IPLO: also "working spaces"
 C  REPSTO,TRAPSTO,REMSTO,TRAMSTO: storage arrays for layer diffraction matrices
 C         (reflection, incidence from +x, transmission, inc. +x,
@@ -401,7 +401,7 @@ C  XEVSTO,XODSTO: permanent storage array for msmf x-matrices for each layer
 C         unlike TENSOV, these must not be used as pointers.
 
       INTEGER IT
-      INTEGER ID,LAY,NLL,NA,NS,NM,NAA
+      INTEGER LAY,NLL,NA,NS,NM,NAA
       COMPLEX ROP,TOP
       DIMENSION ROP(MKNT,MKNT),TOP(MKNT,MKNT)
       COMPLEX AMULT,CYLM,FLM
@@ -420,47 +420,42 @@ C         unlike TENSOV, these must not be used as pointers.
       COMPLEX XEVSTO,XODSTO
       DIMENSION XEVSTO(MLEV,MLEV,MNBRAV2),XODSTO(MLOD,MLOD,MNBRAV2)
 
-C  subroutine rtinv
+C  subroutine composite_layer_matrices
 
-C  NOPT : 1 should be default (calc matrix for all beams) - 2 would assume a symmetric
-C         layer, 3 just 1 inc beam. 2 and 3 can not be used in Tensor LEED calculation.
-C  NEW  : would save computing time for tau-matrices, but can be a dangerous bug unless
-C         set to 1
-C  NLAY : dimension - number of sublayers in current rtinv
-C  NLAY2,LMG,L2M: variable dimensions for rtinv
-C  NTAU : number of different site types (t-matrices) in next rtinv call
-C  TAUNO: ID of site type ISITE in current rtinv (t-matrices are passed via LPS and TSF,
+C  NLAY : dimension - number of sublayers in current composite_layer_matrices
+C  NLAY2,LMG,L2M: variable dimensions for composite_layer_matrices
+C  NTAU : number of different site types (t-matrices) in next composite_layer_matrices call
+C  TAUNO: ID of site type ISITE in current composite_layer_matrices (t-matrices are passed via LPS and TSF,
 C         contracted versions of STYPE and TMAT, to avoid unnecessary calls to TAUMAT)
-C  TSF  : temperature-corrected atomic t-matrices for use in RTINV
-C         - contains only t-matrices actually used in next rtinv
+C  TSF  : temperature-corrected atomic t-matrices for use in composite_layer_matrices
+C         - contains only t-matrices actually used in next composite_layer_matrices
 C  LPS  : contains ID of t-matrix TSF(LPS(ISUB),...) belonging to subplane ISUB
-C  LPSS : later storage array for reordered sublayer chemistry (subroutine srtlay)
+C  LPSS : later storage array for reordered sublayer chemistry (subroutine sort_subplanes)
 C  NORD : map between input sublayer number NORD(ILAY) and sublayer number ILAY
-C         after srtlay reordering
-C  POS  : internal array for RTINV that contains positions of sublayers of current layer
+C         after sort_subplanes reordering
+C  POS  : internal array for composite_layer_matrices that contains positions of sublayers of current layer
 C  POSS : same as POS, but ordered by rising z (sim. to LPSS)
-C  LMT  : variable dimension for tau-matrix in rtinv (should be NTAU*LMMAX)
+C  LMT  : variable dimension for tau-matrix in composite_layer_matrices (should be NTAU*LMMAX)
 C  TV1  : unit cell area of composite layer
 C  ROM,TOM: reflection and transmission matrix for composite layer, but incidence from
-C           -x (cf. ROP TOP, declared for rsmf)
-C  TAU  : contains tau-matrices for the sublayers of rtinv
-C  TAUG,TAUGM: derivates of tau matrix used during rtinv
+C           -x (cf. ROP TOP, declared for bravais_layer_matrices)
+C  TAU  : contains tau-matrices for the sublayers of composite_layer_matrices
+C  TAUG,TAUGM: derivates of tau matrix used during composite_layer_matrices
 C  MGH  : contains identification of sublayer propagator positions in matrix GH
-C  DRL,SDRL: inter-subplanar vectors after reordering by srtlay, and (superfluous) storage
-C  TEST : cutoff for rec. lattice sum in rtinv
+C  DRL  : inter-subplanar vectors after reordering by sort_subplanes
+C  TEST : cutoff for rec. lattice sum in composite_layer_matrices
 C  GH   : matrix containing inter-subplanar propagators for composite layer
 C  RG   : inter-subplanar plane-wave phase shifts
-C  TS,TG,VT,TH: working spaces for rtinv
+C  TS,TG,VT,TH: working spaces for composite_layer_matrices
 C  IPL  : working space for matrix inversions
-C  XH   : working space for subroutine CXMTXT
-C  HGHD : working space for subroutine GHD
-C  RG1,RG2: working spaces for subroutine MFOLT
+C  XH   : working space for subroutine solve_pivoted
+C  HGHD : working space for subroutine interplanar_propagators
+C  RG1,RG2: working spaces for subroutine reflection_transmission_element
 C  TENSOV: storage for intra-layer wavefield components of composite layer type
 C         LCOMP(ILTYPE). In subroutines, Tensov is used as a pointer to the current
 C         Tensor location. While not conforming to structured programming, this
 C         method saves a considerable amount of time.
 
-      INTEGER NOPT,NEW
       INTEGER NLAY,NLAY2,LMG,NTAU,L2M
       INTEGER TAUNO
       DIMENSION TAUNO(MNSITE)
@@ -477,15 +472,15 @@ C         method saves a considerable amount of time.
       DIMENSION TAU(MLMT,MLEV),TAUG(MLMT),TAUGM(MLMT)
       INTEGER MGH
       DIMENSION MGH(MNSUB,MNSUB)
-      REAL DRL,SDRL
-      DIMENSION DRL(MNSUB2,3),SDRL(MNSUB2,3)
-      INTEGER NUGH,NGEQ,NGOL
-      DIMENSION NUGH(MNSUB2),NGEQ(MNSUB2),NGOL(MNSUB2)
+      REAL DRL
+      DIMENSION DRL(MNSUB2,3)
+      INTEGER NUGH,NGEQ
+      DIMENSION NUGH(MNSUB2),NGEQ(MNSUB2)
       REAL TEST
       DIMENSION TEST(MNSUB2)
       COMPLEX GH,RG,TS,TG,VT,TH
       COMPLEX RG_PERP ! Added MRiva 22021-09-21. Replaces the last 'row' of RG, which is now 2 instead of 3
-      DIMENSION GH(MLMG,MLMMAX),RG(2,MNSUB,MKNT),TS(MLMN),TG(2,MLM2N) !make GH, RG allocatable
+      DIMENSION GH(MLMG,MLMMAX),RG(2,MNSUB,MKNT),TS(MLMN),TG(2*MLM2N) !make GH, RG allocatable
       DIMENSION RG_PERP(MKNT)
       DIMENSION VT(MLM2N),TH(MLMNI,MLMNI)
       INTEGER IPL
@@ -599,7 +594,6 @@ C  common blocks
       COMMON /MS/LMAX,EPS,LITER
       COMMON /ADS/ASE,VPIS,VPIO,VV
       COMMON /BT/IT,T,T0,DRPER,DRPAR,DR0
-      COMMON /MPT/ NA,NS,ID,LAY,L1,NTAU,TSTS,TV1,DCUTS,NOPT,NEW  ! Used only by RTINV. MRiva: ID is unnecessary and can be removed completely from the whole code. Same is true for NOPT.
 	  COMMON /INPOT/EM,C1,C2,C3,C4,C5,C6,C7,C8, WORKFN
 
 
@@ -1037,7 +1031,6 @@ C  DRPER,DRPAR,DR0 not used - leave IT = 0 !
             AF(IL) = TMAT(STYPE(ILTYPE,1),IL)
           ENDDO
 
-          ID  = 1
           NM  = NT
           LAY = LATT(ILTYPE)
 
@@ -1110,14 +1103,10 @@ C  store X-matrix separately
             ENDDO
           END IF
 
-        ELSE  ! NSUB(ILTYPE) == 2, i.e., composite layer
+        ELSE  ! NSUB(ILTYPE) > 1, i.e., composite layer
 
-C  For a composite layer use RTINV instead of RSMF
+C  For a composite layer use composite_layer_matrices instead of bravais_layer_matrices
 C  set some default quantities
-
-          ID   = 1
-          NOPT = 1
-          NEW  = 1
 
           NM   = NT
 
@@ -1126,7 +1115,6 @@ C  set some default quantities
           LMG  = NLAY2*LMMAX*2
           LMN  = NLAY * LMMAX
           LM2N = 2 * LMN
-          LMNI = NLAY*LMMAX
           L2M  = MN
 
 C  set sublattice characterisation
@@ -1156,7 +1144,8 @@ C  set sublattice characterisation
 
 C  copy sublayer positions onto correct grid POS
 
-          CALL COPYPOS(POS,SUBPOS,NLTYPE,NNSUB,NLAY,ILTYPE)
+          CALL copy_subplane_positions(POS,SUBPOS,NLTYPE,NNSUB,NLAY,
+     +                                 ILTYPE)
 
           LMT = NTAU*LMMAX
           LAY = LATT(ILTYPE)
@@ -1164,18 +1153,19 @@ C  copy sublayer positions onto correct grid POS
           IF (LAY.eq.1) THEN              ! 'overlayer'
 
             TV1 = TVB
-            NA  = 0  ! used in RTINV via COMMON
-            NS  = 0  ! used in RTINV via COMMON
+            NA  = 0
+            NS  = 0
             NAA = NT
 
-            CALL RTINV_SIMPLE(
-     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
-     +         FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +         TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY,
-     +         DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST, GH, LMG, RG,
-     +         RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +         IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
-     +         L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+            CALL composite_layer_matrices(
+     +         ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS, FLM,
+     +         NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU, LMT,
+     +         TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL, NLAY2,
+     +         NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN, TG,
+     +         LM2N, VT, CAA, NCAA, TH, IPL, TSF, LPS, LPSS, NORD,
+     +         NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
+     +         TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
+     +         TV1, DCUTS, LMAX, LAT, EPT
      +         )
 
           ELSE IF (LAY.eq.2) THEN        ! bulk
@@ -1188,14 +1178,15 @@ C  copy sublayer positions onto correct grid POS
 
               NAA = NB(IBS)
 
-              CALL RTINV_SIMPLE(
+              CALL composite_layer_matrices(
      +           ROP, TOP, ROM, TOM, NAA, AMULT, CYLM, PQ, NT, FLMS,
-     +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2,
-     +           TAU, LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY,
-     +           DRL, SDRL, NUGH, NGEQ, NGOL, NLAY2, TEST, GH, LMG, RG,
-     +           RG_PERP, TS, LMN, TG, LM2N, VT, CAA, NCAA, TH, LMNI,
-     +           IPL, TSF, LPS, LPSS, NORD, NNSUB, LMAX1, XH, HGHD,
-     +           L2M, RG1, RG2, TENSOV(1,1,1,LCOMP(ILTYPE))
+     +           FLM, NL, LXI, LT, LXM, LMMAX, KLM, XEV, LEV, LEV2, TAU,
+     +           LMT, TAUG, TAUGM, CLM, NLM, POS, POSS, MGH, NLAY, DRL,
+     +           NLAY2, NUGH, NGEQ, TEST, GH, LMG, RG, RG_PERP, TS, LMN,
+     +           TG, LM2N, VT, CAA, NCAA, TH, IPL, TSF, LPS, LPSS,
+     +           NORD, NNSUB, LMAX1, XH, HGHD, L2M, RG1, RG2,
+     +           TENSOV(:,:,:,LCOMP(ILTYPE)), NA, NS, LAY, NTAU, TSTS,
+     +           TV1, DCUTS, LMAX, LAT, EPT
      +           )
 
               NA  = NA + NB(IBS)
@@ -1223,13 +1214,12 @@ c          call OUTMAT(ROP,TOP,ROM,TOM,NOUT,NT)
       ENDDO  ! ILTYPE, loop through layers to construct R,T matrices
 
 C  FINAL1 needs CYLM for all NT beams. With KNBS > 1, bravais_layer_matrices
-C  and RTINV_SIMPLE leave only rows 1..NB of the last beam set
+C  and composite_layer_matrices leave only rows 1..NB of the last beam set
 C  (without the offset NA), so compute all NT rows here, if any
 C  tensor is requested. AMULT is working space.
 
       IF (ANY_TENS.EQ.1) THEN
-        CALL BEAMS_YLM(CYLM,AMULT,PQ,NT,NT,0,E,AK21,AK31,VPI,LMAX,
-     +                 LMMAX,YLM)
+        CALL beams_ylm(CYLM,AMULT,PQ,NT,NT,0,EPT,LMAX,LMMAX,YLM)
       ENDIF
 
 C*************************************************************

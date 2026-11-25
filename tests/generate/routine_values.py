@@ -104,9 +104,11 @@ def _case_entry(case_id, what, stdin, result, live_arrays):
     missing = [name for name in live_arrays if name not in result]
     if missing:
         raise GeneratorError(f"{case_id}: live arrays {missing} are not in its results")
+    # the arrays printed per beam set carry a two-digit set number
+    is_live = lambda name: name in live_arrays or name.rsplit("_", 1)[0] in live_arrays
     entry["expected"] = {name: summary for name, summary in result.items()
-                         if name not in live_arrays}
-    entry["live"] = list(live_arrays)
+                         if not is_live(name)}
+    entry["live"] = [name for name in result if is_live(name)]
     return entry
 
 

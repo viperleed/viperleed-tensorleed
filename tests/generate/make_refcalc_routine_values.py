@@ -22,20 +22,33 @@ offsets, rows of CYLM beyond the set untouched) and for a window of the
 list, at normal and oblique incidence; FMAT for the SLIND lattices and every
 IDEG that fits them, at two energies and k-parallel values; and BEAMS, FMAT and
 RSMF_SIMPLE (with XM and MFOLD_SIMPLE) chained as in ref-calc, for one and
-for several beam sets (RA, TA, AMULT, CYLM, XEVST, XODST). Phase shifts and
-beam lists are those of the tier-1 cases in tests/cases. Arrays are
+for several beam sets (RA, TA, AMULT, CYLM, XEVST, XODST); the composite
+layer: SRTLAY with GHMAT (GHD, SH, SB, GHSC), TAUMAT (XMT, CXMTXT) and
+RTINV_SIMPLE (THMAT, TAUY_SIMPLE, MFOLT_SIMPLE; R/T top and bottom, TSTORE)
+on sublayer stacks of Ir(100)-(2x1)-O (three sublayers; coplanar sublayers
+in arrays for three; four sublayers with equal interplanar vectors, and with
+vectors that differ only in the third or only in the first (normal)
+component;
+sublayers out of order along the normal; t-matrices scaled up so that the
+elimination of CXMTXT interchanges rows, also from the last row and among
+several candidates), at normal and oblique incidence,
+for LMAX < MLMAX, for one call over all beams and for one call per beam set
+(offsets NA, NS > 0), as overlayer and as bulk layer; and FMAT with a
+superlattice vector 0.15 % longer than the substrate vector (first and second). Phase shifts
+and beam lists are those of the tier-1 cases in tests/cases. Arrays are
 summarized by their count, a SHA-256 of their bits and their first values
 (harness/routine_blocks.py).
 
-The results RA and TA of the cases of RSMF_SIMPLE (ids starting with
-LIVE_PREFIX) are live: of the routines driven here only RSMF_SIMPLE calls
-BLAS/LAPACK (CGETRF, CGETRS), and its RA and TA differ in the last bit
-between OpenBLAS and the reference BLAS (all other arrays, of these and of
-all other cases, are bit-identical under both). values.json holds the other
-arrays of these cases and lists RA and TA under "live"; the tier-1 test
-builds this driver from the baseline tree (build_legacy_driver) and
-compares RA and TA with its output, run with the same BLAS/LAPACK as the
-driver under test.
+The results of the cases whose ids start with a key of LIVE_ARRAYS are
+live for the arrays it lists: of the routines driven here only
+RSMF_SIMPLE (RA, TA) and RTINV_SIMPLE (R_TOP, T_TOP, R_BOT, T_BOT, TSTORE)
+call BLAS/LAPACK (CGETRF, CGETRS), and these results can differ in the last
+bit between OpenBLAS and the reference BLAS (all other arrays, of these and
+of all other cases, are bit-identical under both; TAUMAT inverts with its
+own elimination, CXMTXT). values.json holds the other arrays of these cases
+and lists the live ones under "live"; the tier-1 test builds this driver
+from the baseline tree (build_legacy_driver) and compares them with its
+output, run with the same BLAS/LAPACK as the driver under test.
 
 Result of the -O2 versus -O0 comparison (gfortran 15.2): every array of
 every case is bit-identical in the two builds; the generator stops with an
@@ -54,6 +67,7 @@ __created__ = '2026-11-11'
 __license__ = 'GPLv3+'
 
 import json
+import struct
 import subprocess
 from pathlib import Path
 
@@ -70,8 +84,10 @@ VALUES = TESTS_DIR / "tier1" / "refcalc_routines" / "values.json"
 LINK = ["-llapack", "-lblas"]
 # cases with legacy results that depend on the BLAS/LAPACK the driver runs
 # with, and those results
-LIVE_PREFIX = "rsmf_"
-LIVE_ARRAYS = ("RA", "TA")
+LIVE_ARRAYS = {
+    "rsmf_": ("RA", "TA"),
+    "rtinv_": ("R_TOP", "T_TOP", "R_BOT", "T_BOT", "TSTORE"),
+    }
 LMAX_RANGE = range(2, 19)  # the range of the DATA tables NCA and NLMS
 
 _F32 = np.float32
@@ -111,7 +127,7 @@ LATTICES = [
 def _reciprocal(a):
     """Reciprocal vectors of the cell a (rows: first and second basis vector) as
     read_input of ref-calc computes them, in 32-bit arithmetic."""
-    area = abs(a[0][0] * a[1][1] - a[1][0] * a[0][1])
+    area = _area(a)
     atv = _F32(2) * _PI / area
     return [(a[1][1] * atv, -a[1][0] * atv), (-a[0][1] * atv, a[0][0] * atv)]
 
@@ -258,12 +274,16 @@ def _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, lmax,
     return lines
 
 
+def _area(cell):
+    """The area of the unit cell spanned by the vectors cell[0], cell[1]."""
+    return abs(cell[0][0] * cell[1][1] - cell[1][0] * cell[0][1])
+
+
 def _rsmf_stdin(fin, ideg, nl1, nl2, lmax, ev, angles, mode):
     """RSMF input: the lattices and beam list of fin at the energy ev (eV);
     the atomic t-matrix of its first phase shifts, as sin(d) exp(i d)."""
     cells = _bohr_cell(fin["cells"])
-    area = lambda cell: abs(cell[0][0] * cell[1][1] - cell[1][0] * cell[0][1])
-    tv = area(cells[2:] if mode == "O" else cells[:2])
+    tv = _area(cells[2:] if mode == "O" else cells[:2])
     ak2, ak3 = _k_parallel(ev, *angles)
     delta = [fin["phases"][0][0][l] if l < len(fin["phases"][0][0]) else _F32(0)
              for l in range(lmax + 1)]
@@ -274,6 +294,71 @@ def _rsmf_stdin(fin, ideg, nl1, nl2, lmax, ev, angles, mode):
             str(lmax),
             *map(_hex, [_crystal_energy(ev), _VPI, ak2, ak3, tv]), mode,
             *map(_hex, tmat), *head, _hex(_TST), *map(_hex, spq), *map(_hex, spqf)]
+
+
+def _read_layers(case, run):
+    """The layer types of a tier-1 input: [{"lay": LAY, "subs": [(site
+    type, x, y, z)]}] with the coordinates in Angstrom (x along the surface
+    normal)."""
+    lines = (CASES_DIR / case / "inputs" / f"FIN_{run}").read_text().splitlines()
+    i = next(k for k, ln in enumerate(lines) if "NLTYPE" in ln)
+    layers = []
+    for _ in range(int(lines[i].split()[0])):
+        i += 1
+        while lines[i].startswith("-"):
+            i += 1
+        nsub = int(lines[i + 1].split()[0])
+        subs = [(int(w[0]), *(float(x) for x in w[1:4]))
+                for w in (ln.split() for ln in lines[i + 2:i + 2 + nsub])]
+        layers.append({"lay": int(lines[i].split()[0]), "subs": subs})
+        i += 1 + nsub
+    return layers
+
+
+def _sublayer(layer, isub):
+    """Sublayer isub (0-based) of a layer type, zeros beyond its last one."""
+    return layer["subs"][isub] if isub < len(layer["subs"]) else (0, 0.0, 0.0, 0.0)
+
+
+def _composite_stdin(name, fin, layers, setup):
+    """The stdin of a composite-layer case (GHMAT, TAUMAT or RTINV): the
+    layer type setup["layer"] (1-based) of layers on the lattice of fin, as
+    ref-calc sets it up: the t-matrices of its site types contracted to
+    those in use (TSF, LPS), the sublayer positions of all layer types
+    (SUBPOS(layer type, sublayer, 3), in bohr), the incidence, and the beam
+    list of fin. In mode O one call covers all beams, in mode B one call
+    per beam set."""
+    lmax, mlmax, mnsub = setup["lmax"], setup["mlmax"], setup["mnsub"]
+    layer = layers[setup["layer"] - 1]
+    lay = layer["lay"]
+    cells = _bohr_cell(fin["cells"])
+    tv = _area(cells[2:] if lay == 1 else cells[:2])
+    ak2, ak3 = _k_parallel(setup["ev"], *setup["angles"])
+    subpos = [_F32(_sublayer(lay_, isub)[1 + k]) / _BOHR for k in range(3)
+              for isub in range(mnsub) for lay_ in layers]
+    sites = {}
+    lps = []
+    tsf = [[(_F32(0), _F32(0))] * (mlmax + 1) for _ in range(mnsub)]
+    for site, *_ in layer["subs"]:
+        if site not in sites:
+            sites[site] = len(sites) + 1
+            for l in range(lmax + 1):
+                d = fin["phases"][0][site - 1][l]
+                tsf[sites[site] - 1][l] = (np.sin(d) * np.cos(d), np.sin(d) * np.sin(d))
+                scale = setup.get("tsf_scale", 1)
+                if isinstance(scale, dict):
+                    scale = scale.get(site, 1)
+                tsf[sites[site] - 1][l] = tuple(_F32(scale) * x for x in tsf[sites[site] - 1][l])
+        lps.append(sites[site])
+    tsf_flat = [x for l in range(mlmax + 1) for row in tsf for x in row[l]]
+    head, spq, spqf = _beam_lines(fin)
+    return [name, *_lattice_lines(fin["cells"][:2], fin["cells"][2:], setup["ideg"],
+                                  setup["nl1"], setup["nl2"]),
+            str(lmax), f"{mlmax} {mnsub} {len(layer['subs'])} {lay} {len(layers)} "
+            f"{setup['layer']}", setup["mode"],
+            *map(_hex, [_crystal_energy(setup["ev"]), _VPI, ak2, ak3, tv, _F32(0.001)]),
+            *map(_hex, subpos), str(len(sites)), " ".join(map(str, lps)),
+            *map(_hex, tsf_flat), *head, _hex(_TST), *map(_hex, spq), *map(_hex, spqf)]
 
 
 _AG = _read_fin("ag100_mix", "E141_L08")
@@ -393,6 +478,112 @@ _RSMF_CASES = [
      4, 2, 2, 6, 100.0, (12.0, 33.0), "B"),
 ]
 
+
+_IR_LAYERS = _read_layers("ir100_2x1_o", "E118_L07")
+_UNSORTED_LAYERS = _read_layers("ir100_2x1_o_unsorted", "E118_L07")
+_THICK_LAYERS = _read_layers("ir100_2x1_o_thick", "E118_L07")
+# a composite bulk layer: two sublayers of the substrate 2.7116 Angstrom
+# square cell, 1.9174 Angstrom apart along the normal, shifted by half a cell
+_BULK_LAYERS = [{"lay": 2, "subs": [(3, 0.0, 0.0, 0.0), (3, 1.9174, 1.3558, 1.3558)]}]
+# the thick layer with its last sublayer moved to (1.9174, 0, 2.7116): the
+# interplanar vectors to it and to the one before differ only in the third
+# component (z of the layer files, in the surface plane)
+_COMP3_ONLY_LAYERS = [
+    *_THICK_LAYERS[:1],
+    {**_THICK_LAYERS[1], "subs": [*_THICK_LAYERS[1]["subs"][:3],
+                                  (3, 1.9174, 0.0, 2.7116)]},
+    *_THICK_LAYERS[2:],
+]
+# the thick layer with its last sublayer moved to (2.75, 2.7116, 1.3558), 0.8326
+# Angstrom further along the normal: its vector from the first sublayer and
+# that from the second to the third have equal in-plane components and
+# differ only in the first (normal) component
+_NORMAL_ONLY_LAYERS = [
+    *_THICK_LAYERS[:1],
+    {**_THICK_LAYERS[1], "subs": [*_THICK_LAYERS[1]["subs"][:3],
+                                  (3, 2.75, 2.7116, 1.3558)]},
+    *_THICK_LAYERS[2:],
+]
+# a composite bulk layer of two coplanar sublayers (direct lattice sum only)
+_BULK_COPLANAR_LAYERS = [{"lay": 2, "subs": [(3, 0.0, 0.0, 0.0), (3, 0.0, 1.3558, 1.3558)]}]
+_IR_LATTICE = {"ideg": 2, "nl1": 2, "nl2": 1}
+# (id, what, input data, layer types, setup): setup holds the layer type, LMAX
+# and MLMAX (the PARAM size: it sets L2M = 2 * MLMAX + 1), MNSUB (the size of
+# the sublayer arrays), the energy and angles of incidence, the mode (one call
+# for all beams, O, or one per beam set, B) and the lattice
+_COMPOSITE_SETUPS = [
+    ("ir100_top_normal", "the three sublayers of the top layer of Ir(100)-(2x1)-O "
+     "(O and two Ir at different heights), overlayer-type, normal incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=7, mlmax=7, mnsub=3, ev=100.0, angles=(0.0, 0.0),
+                           mode="O", **_IR_LATTICE)),
+    ("ir100_top_oblique", "the same layer, oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=7, mlmax=7, mnsub=3, ev=118.0, angles=(20.0, 10.0),
+                           mode="O", **_IR_LATTICE)),
+    ("ir100_unsorted_oblique", "the sublayers of that layer listed out of order along "
+     "the normal, oblique incidence, LMAX 6",
+     _IR, _UNSORTED_LAYERS, dict(layer=1, lmax=6, mlmax=6, mnsub=3, ev=80.0,
+                                 angles=(15.0, 40.0), mode="O", **_IR_LATTICE)),
+    ("ir100_coplanar", "two coplanar Ir sublayers (direct lattice sum only) in arrays "
+     "for three (NLAY < MNSUB)",
+     _IR, _IR_LAYERS, dict(layer=3, lmax=6, mlmax=6, mnsub=3, ev=100.0, angles=(0.0, 0.0),
+                           mode="O", **_IR_LATTICE)),
+    ("ir100_thick_equal_vectors", "four Ir sublayers with equal interplanar vectors "
+     "(NGEQ), oblique incidence",
+     _IR, _THICK_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                              angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_bulk_coplanar", "a bulk-type layer of two coplanar sublayers (direct "
+     "lattice sum only), oblique incidence, in arrays for three sublayers",
+     _IR, _BULK_COPLANAR_LAYERS, dict(layer=1, lmax=6, mlmax=6, mnsub=3, ev=100.0,
+                                      angles=(20.0, 10.0), mode="O", **_IR_LATTICE)),
+    ("ir100_thick_comp3_only_vectors", "the same four sublayers with the last one moved "
+     "so that some interplanar vectors differ only in the third component, oblique "
+     "incidence",
+     _IR, _COMP3_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                                   angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_thick_normal_only_vectors", "the same four sublayers with the last one moved "
+     "so that two interplanar vectors differ only in the first (normal) component, "
+     "oblique incidence",
+     _IR, _NORMAL_ONLY_LAYERS, dict(layer=2, lmax=5, mlmax=5, mnsub=4, ev=100.0,
+                                    angles=(10.0, 20.0), mode="O", **_IR_LATTICE)),
+    ("ir100_strong_scatterers", "the top layer with t-matrices 20 times as large "
+     "(not physical: the pivot search of the elimination in CXMTXT interchanges rows), "
+     "oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(20.0, 10.0),
+                           mode="O", tsf_scale=20, **_IR_LATTICE)),
+    ("ir100_pivot_last_row", "the top layer with the t-matrices of the O site 3000 times "
+     "as large (not physical: the elimination in CXMTXT takes the last row as pivot "
+     "and finds several candidate rows in a column), oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(20.0, 10.0),
+                           mode="O", tsf_scale={2: 3000}, **_IR_LATTICE)),
+    ("ir100_lmax5_mlmax7", "the top layer at LMAX 5 with arrays for MLMAX 7 "
+     "(LMAX < MLMAX), oblique incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=7, mnsub=3, ev=90.0, angles=(12.0, 33.0),
+                           mode="O", **_IR_LATTICE)),
+    ("ir100_overlayer_sets", "the top layer, one call per beam set (offset > 0), "
+     "normal incidence",
+     _IR, _IR_LAYERS, dict(layer=1, lmax=5, mlmax=5, mnsub=3, ev=100.0, angles=(0.0, 0.0),
+                           mode="B", **_IR_LATTICE)),
+    ("ir100_bulk_sets", "a bulk-type layer of two sublayers, one call per beam set "
+     "(offset > 0), oblique incidence, in arrays for three sublayers",
+     _IR, _BULK_LAYERS, dict(layer=1, lmax=6, mlmax=6, mnsub=3, ev=100.0,
+                             angles=(20.0, 10.0), mode="B", **_IR_LATTICE)),
+]
+_COMPOSITE_ROUTINES = (
+    ("GHMAT", "SRTLAY and GHMAT (GHD, SH, SB and GHSC)"),
+    ("TAUMAT", "TAUMAT (XMT and CXMTXT)"),
+    ("RTINV", "RTINV_SIMPLE (TAUMAT, SRTLAY, GHMAT, THMAT, TAUY_SIMPLE, MFOLT_SIMPLE)"),
+)
+# FMAT with a superlattice vector 0.15 % longer than the substrate vector: the
+# second sublattice vector, equal to the substrate vector, is at 0.9985 of it,
+# in (0.998, 0.999], for the first and for the second superlattice vector
+_FMAT_FOLD_015 = [
+    ("square_fold_015", "square lattice with a first superlattice vector 0.15 % longer "
+     "than the substrate vector", _SQ, ((2.8843, 0.0), (0.0, 2.88)), 1, 2, 1),
+    ("square_fold_015_second", "square lattice with a second superlattice vector 0.15 % "
+     "longer than the substrate vector", _SQ, ((2.88, 0.0), (0.0, 2.8843)), 1, 1, 2),
+]
+_FOLD_015_INCIDENCES = ((50.0, (0.0, 0.0)), (120.0, (15.0, 25.0)))
+
 # (id, what it covers, stdin lines of the driver)
 CASES = [
     (f"angular_lmax{lmax:02d}", f"CAAA, CELMG, LXGENT and CPPP at LMAX = {lmax}",
@@ -434,6 +625,17 @@ CASES = [
     (f"rsmf_{ident}", f"BEAMS, FMAT and RSMF_SIMPLE, {what}, LMAX = {lmax}, "
      f"{energy:g} eV", _rsmf_stdin(fin, ideg, nl1, nl2, lmax, energy, angles, mode))
     for ident, what, fin, ideg, nl1, nl2, lmax, energy, angles, mode in _RSMF_CASES
+] + [
+    (f"{name.lower()}_{ident}", f"{routines}, {what}, LMAX = {setup['lmax']}, "
+     f"MLMAX = {setup['mlmax']}, mode {setup['mode']}, {setup['ev']:g} eV, "
+     f"{setup['angles'][0]:g} degrees", _composite_stdin(name, fin, layers, setup))
+    for name, routines in _COMPOSITE_ROUTINES
+    for ident, what, fin, layers, setup in _COMPOSITE_SETUPS
+] + [
+    (f"fmat_{ident}", f"FMAT, {what}, NL1 x NL2 = {nl1} x {nl2}, IDEG {ideg}, LMAX = 4, "
+     "50 eV, 0 degrees and 120 eV, 15 degrees",
+     _fmat_stdin(substrate, superlattice, ideg, nl1, nl2, 4, _FOLD_015_INCIDENCES))
+    for ident, what, substrate, superlattice, ideg, nl1, nl2 in _FMAT_FOLD_015
 ]
 
 # (case id, array, index of the first value in the leading ones, count): values
@@ -460,6 +662,43 @@ def run_legacy_driver(exe, stdin):
     return summarize(run_driver(exe, stdin))
 
 
+def _differ_only_in(component, poss_bits):
+    """Whether two interplanar vectors of the sublayer positions POSS (bits,
+    column-major, one row per sublayer) differ only in the given component
+    (0-based) by more than the 0.001 of the equal-vector test of SRTLAY."""
+    poss = [struct.unpack(">f", bytes.fromhex(bits))[0] for bits in poss_bits]
+    nsub = len(poss) // 3
+    vectors = [[poss[c * nsub + i] - poss[c * nsub + j] for c in range(3)]
+               for i in range(nsub) for j in range(i + 1, nsub)]
+    return any(abs(u[component] - v[component]) > 0.001
+               and all(abs(u[c] - v[c]) <= 0.001 for c in range(3) if c != component)
+               for n, u in enumerate(vectors) for v in vectors[:n])
+
+
+def _check_composite_cases():
+    """Raise GeneratorError unless the GHMAT cases show what they are for:
+    equal interplanar vectors (NGEQ), interplanar vectors that differ only in
+    the third component, and others only in the first (normal) component, and
+    are not equal (all NGEQ zero), sublayers sorted by
+    SRTLAY (NORD), and coplanar sublayers (the x component of the interplanar
+    vector is zero)."""
+    cases = {case["id"]: case["expected"] for case in json.loads(VALUES.read_text())["cases"]}
+    heads = lambda case_id, array: cases[f"ghmat_ir100_{case_id}"][array]["head"]
+    checks = [
+        ("thick_equal_vectors", any(n != "0" for n in heads("thick_equal_vectors", "NGEQ"))),
+        ("thick_comp3_only_vectors",
+         all(n == "0" for n in heads("thick_comp3_only_vectors", "NGEQ"))),
+        ("thick_normal_only_vectors",
+         all(n == "0" for n in heads("thick_normal_only_vectors", "NGEQ"))
+         and _differ_only_in(0, heads("thick_normal_only_vectors", "POSS"))),
+        ("unsorted_oblique", heads("unsorted_oblique", "NORD") != ["1", "2", "3"]),
+        ("coplanar", heads("coplanar", "DRL")[0] == "00000000"),
+        ]
+    failed = [case_id for case_id, ok in checks if not ok]
+    if failed:
+        raise GeneratorError(f"the cases {failed} do not show what they are for")
+
+
 def _check_pstemp_exit():
     """Raise GeneratorError unless the TSCATF cases exercise the early exit
     of PSTEMP (the DEL of the highest L stay zero) and its absence."""
@@ -476,8 +715,10 @@ def _generate(argv=None):
     """Generate tier1/refcalc_routines/values.json from the baseline."""
     generate(argv, __doc__.splitlines()[0], build_legacy_driver, run_legacy_driver,
              CASES, VALUES, "lib/lib.tleed.f",
-             live=lambda case_id: LIVE_ARRAYS if case_id.startswith(LIVE_PREFIX) else ())
+             live=lambda case_id: next((arrays for prefix, arrays in LIVE_ARRAYS.items()
+                                        if case_id.startswith(prefix)), ()))
     _check_pstemp_exit()
+    _check_composite_cases()
 
 
 if __name__ == "__main__":
